@@ -1,17 +1,21 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  decimal,
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  json,
+  date,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +29,128 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Employees table - stores employee information for the attendance system
+ */
+export const employees = mysqlTable("employees", {
+  id: int("id").autoincrement().primaryKey(),
+  username: varchar("username", { length: 64 }).notNull().unique(),
+  password: varchar("password", { length: 255 }).notNull(),
+  fullName: varchar("fullName", { length: 128 }).notNull(),
+  role: mysqlEnum("role", ["admin", "employee"]).default("employee").notNull(),
+  employeeType: mysqlEnum("employeeType", ["full_time", "part_time"]).default("full_time").notNull(),
+  jobTitle: varchar("jobTitle", { length: 64 }),
+  phone: varchar("phone", { length: 32 }),
+  needsSetup: boolean("needsSetup").default(true).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Employee = typeof employees.$inferSelect;
+export type InsertEmployee = typeof employees.$inferInsert;
+
+/**
+ * Attendance records table
+ */
+export const attendance = mysqlTable("attendance", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  date: date("date").notNull(),
+  clockInTime: timestamp("clockInTime"),
+  clockOutTime: timestamp("clockOutTime"),
+  clockInLocation: varchar("clockInLocation", { length: 255 }),
+  clockOutLocation: varchar("clockOutLocation", { length: 255 }),
+  clockInLat: decimal("clockInLat", { precision: 10, scale: 8 }),
+  clockInLng: decimal("clockInLng", { precision: 11, scale: 8 }),
+  clockOutLat: decimal("clockOutLat", { precision: 10, scale: 8 }),
+  clockOutLng: decimal("clockOutLng", { precision: 11, scale: 8 }),
+  shiftLabel: varchar("shiftLabel", { length: 64 }),
+  status: mysqlEnum("status", ["normal", "late", "early_leave", "absent"]).default("normal"),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Attendance = typeof attendance.$inferSelect;
+export type InsertAttendance = typeof attendance.$inferInsert;
+
+/**
+ * Work shift templates
+ */
+export const workShifts = mysqlTable("workShifts", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 64 }).notNull(),
+  startTime: varchar("startTime", { length: 8 }).notNull(), // HH:MM format
+  endTime: varchar("endTime", { length: 8 }).notNull(),
+  isDefaultWeekday: boolean("isDefaultWeekday").default(false).notNull(),
+  isDefaultHoliday: boolean("isDefaultHoliday").default(false).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type WorkShift = typeof workShifts.$inferSelect;
+export type InsertWorkShift = typeof workShifts.$inferInsert;
+
+/**
+ * Employee schedules - daily shift assignments
+ */
+export const schedules = mysqlTable("schedules", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  date: date("date").notNull(),
+  shifts: json("shifts").notNull().$type<Array<{ startTime: string; endTime: string; label: string }>>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Schedule = typeof schedules.$inferSelect;
+export type InsertSchedule = typeof schedules.$inferInsert;
+
+/**
+ * Registered devices for clock-in
+ */
+export const devices = mysqlTable("devices", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  deviceId: varchar("deviceId", { length: 255 }).notNull(),
+  deviceName: varchar("deviceName", { length: 128 }),
+  platform: varchar("platform", { length: 32 }),
+  registeredAt: timestamp("registeredAt").defaultNow().notNull(),
+});
+
+export type Device = typeof devices.$inferSelect;
+export type InsertDevice = typeof devices.$inferInsert;
+
+/**
+ * System settings (key-value store)
+ */
+export const settings = mysqlTable("settings", {
+  id: int("id").autoincrement().primaryKey(),
+  key: varchar("key", { length: 64 }).notNull().unique(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Setting = typeof settings.$inferSelect;
+export type InsertSetting = typeof settings.$inferInsert;
+
+/**
+ * Leave requests
+ */
+export const leaveRequests = mysqlTable("leaveRequests", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  startDate: date("startDate").notNull(),
+  endDate: date("endDate").notNull(),
+  leaveType: mysqlEnum("leaveType", ["annual", "sick", "personal", "other"]).notNull(),
+  reason: text("reason"),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  reviewedBy: int("reviewedBy"),
+  reviewNote: text("reviewNote"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LeaveRequest = typeof leaveRequests.$inferSelect;
+export type InsertLeaveRequest = typeof leaveRequests.$inferInsert;
