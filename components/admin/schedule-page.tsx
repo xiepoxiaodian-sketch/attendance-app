@@ -69,8 +69,8 @@ function WeekTab() {
   });
   const [alertMsg, setAlertMsg] = useState<{ title: string; message: string } | null>(null);
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState(false);
-  const [showStaffingView, setShowStaffingView] = useState(false);
   const [staffingPopup, setStaffingPopup] = useState<{ dateStr: string; hour: number; names: string[] } | null>(null);
+  const [showStaffingView, setShowStaffingView] = useState(true);
 
   const weekDates = getWeekDates(weekOffset);
   const startDate = toDateStr(weekDates[0]);
@@ -274,112 +274,159 @@ function WeekTab() {
         </View>
       </View>
 
-      {/* Staffing View Toggle */}
-      <TouchableOpacity
-        onPress={() => setShowStaffingView(v => !v)}
-        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B" }}>⏱ 時段人力視圖</Text>
-          <Text style={{ fontSize: 11, color: "#94A3B8" }}>每小時在班人數</Text>
-        </View>
-        <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "600" }}>{showStaffingView ? "收起 ▲" : "展開 ▼"}</Text>
-      </TouchableOpacity>
+      {/* Staffing View - Bar Chart Design */}
+      <View style={{ backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
+        {/* Header - 點擊展開/收起 */}
+        <TouchableOpacity
+          onPress={() => setShowStaffingView(v => !v)}
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12, paddingBottom: showStaffingView ? 8 : 12 }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>⏱ 時段人力視圖</Text>
+            <View style={{ backgroundColor: "#EFF6FF", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 10, color: "#2563EB", fontWeight: "600" }}>每小時在班人數</Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {showStaffingView && <Text style={{ fontSize: 11, color: "#94A3B8" }}>點擊直條查看人員</Text>}
+            <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "600" }}>{showStaffingView ? "收起 ▲" : "展開 ▼"}</Text>
+          </View>
+        </TouchableOpacity>
 
-      {/* Staffing Heatmap */}
-      {showStaffingView && (
-        <View style={{ backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
-          {/* Popup overlay */}
-          {staffingPopup && (
-            <TouchableOpacity
-              onPress={() => setStaffingPopup(null)}
-              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}
-              activeOpacity={1}
-            >
-              <View style={{ position: "absolute", top: 8, left: 16, right: 16, backgroundColor: "white", borderRadius: 12, padding: 14, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 8, elevation: 8, borderWidth: 1, borderColor: "#E2E8F0", zIndex: 101 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>
-                    {staffingPopup.dateStr.slice(5).replace("-", "/")} {staffingPopup.hour}:00–{staffingPopup.hour + 1}:00
+        {/* Content - only shown when expanded */}
+        {showStaffingView && (
+        <View>
+        {/* Popup Modal */}
+        {staffingPopup && (
+          <View style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "#EFF6FF", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "#BFDBFE" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ backgroundColor: "#2563EB", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>
+                    {staffingPopup.hour}:00 – {staffingPopup.hour + 1}:00
                   </Text>
-                  <Text style={{ fontSize: 12, color: "#2563EB", fontWeight: "600" }}>{staffingPopup.names.length} 人在班</Text>
                 </View>
-                {staffingPopup.names.length === 0 ? (
-                  <Text style={{ fontSize: 13, color: "#94A3B8" }}>無人排班</Text>
-                ) : (
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                    {staffingPopup.names.map((name, i) => (
-                      <View key={i} style={{ backgroundColor: "#EFF6FF", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
-                        <Text style={{ fontSize: 12, color: "#1D4ED8", fontWeight: "600" }}>{name}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
+                <Text style={{ fontSize: 13, color: "#475569" }}>
+                  {["日","一","二","三","四","五","六"][new Date(staffingPopup.dateStr).getDay()]} {staffingPopup.dateStr.slice(5).replace("-", "/")}
+                </Text>
               </View>
-            </TouchableOpacity>
-          )}
-          <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ paddingVertical: 8 }}>
-            <View>
-              {/* Hour labels */}
-              <View style={{ flexDirection: "row", marginLeft: 48, marginBottom: 2 }}>
-                {Array.from({ length: 18 }, (_, i) => i + 6).map(h => (
-                  <View key={h} style={{ width: 28, alignItems: "center" }}>
-                    <Text style={{ fontSize: 8, color: "#94A3B8" }}>{h}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#1D4ED8" }}>{staffingPopup.names.length} 人在班</Text>
+                <TouchableOpacity onPress={() => setStaffingPopup(null)} style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 12, color: "#2563EB", fontWeight: "700" }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            {staffingPopup.names.length === 0 ? (
+              <Text style={{ fontSize: 13, color: "#94A3B8" }}>此時段無人排班</Text>
+            ) : (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {staffingPopup.names.map((name, i) => (
+                  <View key={i} style={{ backgroundColor: "white", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: "#BFDBFE" }}>
+                    <Text style={{ fontSize: 13, color: "#1D4ED8", fontWeight: "600" }}>{name}</Text>
                   </View>
                 ))}
               </View>
-              {/* Day rows */}
-              {weekDates.map((d, di) => {
-                const dateStr = toDateStr(d);
-                const isToday = dateStr === todayStr;
-                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                return (
-                  <View key={di} style={{ flexDirection: "row", alignItems: "center", marginBottom: 3 }}>
-                    {/* Day label */}
-                    <View style={{ width: 48, flexDirection: "row", alignItems: "center", gap: 2, paddingLeft: 8 }}>
-                      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: isToday ? "#2563EB" : "transparent", alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ fontSize: 9, fontWeight: "700", color: isToday ? "white" : isWeekend ? "#94A3B8" : "#475569" }}>{WEEKDAYS[d.getDay()]}</Text>
-                      </View>
-                      <Text style={{ fontSize: 8, color: isWeekend ? "#94A3B8" : "#64748B" }}>{d.getDate()}</Text>
+            )}
+          </View>
+        )}
+
+        {/* Bar Chart - one tab per day */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingBottom: 12 }}>
+          <View style={{ flexDirection: "row", paddingHorizontal: 12, gap: 8 }}>
+            {weekDates.map((d, di) => {
+              const dateStr = toDateStr(d);
+              const isToday = dateStr === todayStr;
+              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+              const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6~23
+              const dayData = HOURS.map(h => ({
+                h,
+                names: staffingByDayHour[dateStr]?.[h] ?? [],
+                count: (staffingByDayHour[dateStr]?.[h] ?? []).length,
+              }));
+              const dayMax = Math.max(...dayData.map(x => x.count), 1);
+              const BAR_MAX_H = 60;
+              const isSelected = staffingPopup?.dateStr === dateStr;
+
+              return (
+                <View
+                  key={di}
+                  style={{
+                    width: 110,
+                    backgroundColor: isToday ? "#EFF6FF" : isWeekend ? "#F8FAFC" : "#FAFAFA",
+                    borderRadius: 10,
+                    borderWidth: isToday ? 1.5 : isSelected ? 1 : 0,
+                    borderColor: isToday ? "#2563EB" : "#BFDBFE",
+                    padding: 8,
+                    paddingBottom: 6,
+                  }}
+                >
+                  {/* Day header */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 }}>
+                    <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: isToday ? "#2563EB" : isWeekend ? "#F1F5F9" : "#E2E8F0", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: isToday ? "white" : isWeekend ? "#94A3B8" : "#475569" }}>{WEEKDAYS[d.getDay()]}</Text>
                     </View>
-                    {/* Hour cells */}
-                    {Array.from({ length: 18 }, (_, i) => i + 6).map(h => {
-                      const names = staffingByDayHour[dateStr]?.[h] ?? [];
-                      const count = names.length;
-                      const intensity = maxStaff > 0 ? count / maxStaff : 0;
-                      const bg = count === 0
-                        ? (isWeekend ? "#F8FAFC" : "#F1F5F9")
-                        : intensity < 0.33 ? "#DBEAFE"
-                        : intensity < 0.66 ? "#93C5FD"
-                        : "#2563EB";
-                      const textColor = intensity >= 0.66 ? "white" : "#1D4ED8";
+                    <Text style={{ fontSize: 11, color: isWeekend ? "#94A3B8" : "#64748B", fontWeight: "500" }}>{d.getMonth() + 1}/{d.getDate()}</Text>
+                    {isToday && <View style={{ backgroundColor: "#2563EB", borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 }}><Text style={{ fontSize: 8, color: "white", fontWeight: "700" }}>今</Text></View>}
+                  </View>
+
+                  {/* Bars */}
+                  <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 1, height: BAR_MAX_H + 16 }}>
+                    {dayData.map(({ h, names, count }) => {
+                      const barH = count === 0 ? 2 : Math.max(8, Math.round((count / dayMax) * BAR_MAX_H));
+                      const isActiveBar = staffingPopup?.dateStr === dateStr && staffingPopup?.hour === h;
+                      const barColor = count === 0 ? "#E2E8F0"
+                        : count / dayMax < 0.4 ? "#93C5FD"
+                        : count / dayMax < 0.7 ? "#3B82F6"
+                        : "#1D4ED8";
                       return (
-                        <TouchableOpacity
-                          key={h}
-                          onPress={() => setStaffingPopup({ dateStr, hour: h, names })}
-                          style={{ width: 28, height: 22, backgroundColor: bg, borderRadius: 3, marginHorizontal: 0.5, alignItems: "center", justifyContent: "center" }}
-                        >
-                          {count > 0 && <Text style={{ fontSize: 9, fontWeight: "700", color: textColor }}>{count}</Text>}
-                        </TouchableOpacity>
+                        <View key={h} style={{ flex: 1, alignItems: "center" }}>
+                          {/* Count label above bar */}
+                          {count > 0 && (
+                            <Text style={{ fontSize: 8, fontWeight: "700", color: isActiveBar ? "#1D4ED8" : "#64748B", marginBottom: 1 }}>{count}</Text>
+                          )}
+                          <TouchableOpacity
+                            onPress={() => setStaffingPopup(staffingPopup?.dateStr === dateStr && staffingPopup?.hour === h ? null : { dateStr, hour: h, names })}
+                            style={{
+                              width: "100%",
+                              height: barH,
+                              backgroundColor: isActiveBar ? "#1D4ED8" : barColor,
+                              borderRadius: 2,
+                              borderTopLeftRadius: 3,
+                              borderTopRightRadius: 3,
+                            }}
+                          />
+                          {/* Hour label below bar */}
+                          {h % 3 === 0 && (
+                            <Text style={{ fontSize: 7, color: "#94A3B8", marginTop: 2 }}>{h}</Text>
+                          )}
+                        </View>
                       );
                     })}
                   </View>
-                );
-              })}
-              {/* Legend */}
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 6 }}>
-                <Text style={{ fontSize: 9, color: "#94A3B8" }}>人數：</Text>
-                {[{ bg: "#F1F5F9", label: "0" }, { bg: "#DBEAFE", label: "少" }, { bg: "#93C5FD", label: "中" }, { bg: "#2563EB", label: "多" }].map((item, i) => (
-                  <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                    <View style={{ width: 12, height: 12, backgroundColor: item.bg, borderRadius: 2 }} />
-                    <Text style={{ fontSize: 9, color: "#94A3B8" }}>{item.label}</Text>
-                  </View>
-                ))}
-                <Text style={{ fontSize: 9, color: "#94A3B8", marginLeft: 4 }}>（點擊格子查看人員）</Text>
-              </View>
-            </View>
-          </ScrollView>
+
+                  {/* Peak info */}
+                  {(() => {
+                    const peak = dayData.reduce((a, b) => a.count >= b.count ? a : b);
+                    return peak.count > 0 ? (
+                      <View style={{ marginTop: 4, flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <Text style={{ fontSize: 9, color: "#94A3B8" }}>尖峰</Text>
+                        <Text style={{ fontSize: 9, fontWeight: "700", color: "#1D4ED8" }}>{peak.h}:00</Text>
+                        <Text style={{ fontSize: 9, color: "#94A3B8" }}>·</Text>
+                        <Text style={{ fontSize: 9, fontWeight: "700", color: "#1D4ED8" }}>{peak.count}人</Text>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 9, color: "#CBD5E1", marginTop: 4 }}>無排班</Text>
+                    );
+                  })()}
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
         </View>
-      )}
+        )}
+      </View>
 
       {/* Employee Rows */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
