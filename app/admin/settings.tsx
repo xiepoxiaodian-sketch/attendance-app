@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -78,12 +78,11 @@ function SystemSettings() {
   });
 
   const [form, setForm] = useState<Record<string, string>>({});
-  const [initialized, setInitialized] = useState(false);
-
-  if (settings && !initialized) {
-    setForm({ ...settings });
-    setInitialized(true);
-  }
+  useEffect(() => {
+    if (settings) {
+      setForm({ ...settings });
+    }
+  }, [settings]);
 
   const handleSave = () => {
     const updates = Object.entries(form).map(([key, value]) => ({ key, value }));

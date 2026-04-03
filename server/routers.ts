@@ -192,7 +192,8 @@ const attendanceRouter = router({
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input }) => {
       const today = new Date().toISOString().split("T")[0];
-      return db.getAttendanceByEmployeeAndDate(input.employeeId, today);
+      const result = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
+      return result ?? [];
     }),
 
   getHistory: publicProcedure
@@ -230,7 +231,8 @@ const attendanceRouter = router({
     }),
 
   todaySummary: publicProcedure.query(async () => {
-    return db.getTodayAttendanceSummary();
+    const result = await db.getTodayAttendanceSummary();
+    return result ?? { total: 0, clockedIn: 0, late: 0 };
   }),
 });
 
@@ -358,7 +360,8 @@ const schedulesRouter = router({
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input }) => {
       const today = new Date().toISOString().split("T")[0];
-      return db.getScheduleByEmployeeAndDate(input.employeeId, today);
+      const result = await db.getScheduleByEmployeeAndDate(input.employeeId, today);
+      return result ?? null;
     }),
 
   upsert: publicProcedure

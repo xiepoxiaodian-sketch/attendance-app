@@ -189,7 +189,7 @@ export default function ClockScreen() {
   };
 
   // Determine shift status
-  const shifts = (todaySchedule?.shifts as Array<{ startTime: string; endTime: string; label: string }>) ?? [];
+  const shifts = (todaySchedule && todaySchedule.shifts ? todaySchedule.shifts as Array<{ startTime: string; endTime: string; label: string }> : []);
   const defaultShifts = shifts.length > 0 ? shifts : [{ startTime: "09:00", endTime: "18:00", label: "班次1" }];
 
   return (

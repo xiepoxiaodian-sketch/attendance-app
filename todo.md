@@ -94,3 +94,7 @@
 - [x] 更新 app.config.ts 品牌資訊
 - [x] 底部 Tab Bar 設定（員工端：打卡/紀錄/請假/個人）
 - [x] 底部 Tab Bar 設定（管理後台：總覽/打卡紀錄/員工/排班/設定）
+
+## Bug 修復
+- [x] schedules.getToday 回傳 undefined 導致 TanStack Query 錯誤
+- [x] SystemSettings 在 render 期間直接 setState 的問題
