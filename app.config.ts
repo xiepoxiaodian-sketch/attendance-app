@@ -32,7 +32,7 @@ const env = {
   appSlug: "attendance-app",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/icon_99e0c999.png",
+  logoUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-modern-v1_1be5b98c.png",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -43,7 +43,7 @@ const config: ExpoConfig = {
   slug: env.appSlug,
   version: "1.0.0",
   orientation: "portrait",
-  icon: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/icon_99e0c999.png",
+  icon: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-modern-v1_1be5b98c.png",
   scheme: env.scheme,
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
@@ -57,7 +57,7 @@ const config: ExpoConfig = {
   android: {
     adaptiveIcon: {
       backgroundColor: "#E6F4FE",
-      foregroundImage: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/android-icon-foreground_01687023.png",
+      foregroundImage: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-modern-v1_1be5b98c.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
@@ -82,7 +82,7 @@ const config: ExpoConfig = {
   web: {
     bundler: "metro",
     output: "static",
-    favicon: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/favicon_2289a2bd.png",
+    favicon: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-modern-v1_1be5b98c.png",
   },
   plugins: [
     "expo-router",
@@ -102,7 +102,7 @@ const config: ExpoConfig = {
     [
       "expo-splash-screen",
       {
-        image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/splash-icon_eee78f19.png",
+        image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-modern-v1_1be5b98c.png",
         imageWidth: 200,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
