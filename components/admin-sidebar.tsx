@@ -11,7 +11,6 @@ const NAV_ITEMS = [
   { label: "打卡紀錄", icon: "clock.fill", path: "/admin/attendance" },
   { label: "請假審核", icon: "doc.text.fill", path: "/admin/leave-review" },
   { label: "報表統計", icon: "chart.line.uptrend.xyaxis", path: "/admin/reports" },
-  { label: "工作時段", icon: "alarm.fill", path: "/admin/work-shifts" },
   { label: "裝置管理", icon: "iphone", path: "/admin/devices" },
   { label: "系統設定", icon: "gear", path: "/admin/settings" },
 ];

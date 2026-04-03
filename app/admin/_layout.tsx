@@ -24,7 +24,6 @@ export default function AdminLayout() {
       <Stack.Screen name="attendance" />
       <Stack.Screen name="leave-review" />
       <Stack.Screen name="reports" />
-      <Stack.Screen name="work-shifts" />
       <Stack.Screen name="devices" />
       <Stack.Screen name="settings" />
     </Stack>

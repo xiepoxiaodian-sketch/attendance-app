@@ -13,11 +13,12 @@ import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
 
 function StatCard({
-  icon, label, value, iconBg,
+  icon, label, value, iconBg, onPress,
 }: {
-  icon: string; label: string; value: string | number; iconBg: string;
+  icon: string; label: string; value: string | number; iconBg: string; onPress?: () => void;
 }) {
   return (
+    <TouchableOpacity onPress={onPress} activeOpacity={onPress ? 0.7 : 1} style={{ flex: 1 }}>
     <View style={{
       flex: 1,
       backgroundColor: "white",
@@ -43,7 +44,11 @@ function StatCard({
       </View>
       <Text style={{ fontSize: 22, fontWeight: "700", color: "#1E293B", lineHeight: 26 }}>{value}</Text>
       <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{label}</Text>
+      {onPress && (
+        <Text style={{ fontSize: 10, color: "#93C5FD", marginTop: 4 }}>點擊查看 ›</Text>
+      )}
     </View>
+    </TouchableOpacity>
   );
 }
 
@@ -92,14 +97,14 @@ export default function AdminDashboard() {
         <View style={{ padding: 14, gap: 12 }}>
           {/* Stats Row 1 */}
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <StatCard icon="👥" value={`${totalEmployees} 人`} label="在職員工" iconBg="#EFF6FF" />
-            <StatCard icon="✅" value={`${presentCount} 人`} label="今日已打卡" iconBg="#F0FDF4" />
+            <StatCard icon="👥" value={`${totalEmployees} 人`} label="在職員工" iconBg="#EFF6FF" onPress={() => router.push("/admin/employees" as any)} />
+            <StatCard icon="✅" value={`${presentCount} 人`} label="今日已打卡" iconBg="#F0FDF4" onPress={() => router.push("/admin/attendance" as any)} />
           </View>
 
           {/* Stats Row 2 */}
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <StatCard icon="⚠️" value={`${lateCount} 人`} label="今日遲到" iconBg="#FEF2F2" />
-            <StatCard icon="📋" value={`${pendingLeave} 件`} label="待審請假" iconBg="#FFFBEB" />
+            <StatCard icon="⚠️" value={`${lateCount} 人`} label="今日遲到" iconBg="#FEF2F2" onPress={() => router.push("/admin/attendance" as any)} />
+            <StatCard icon="📋" value={`${pendingLeave} 件`} label="待審請假" iconBg="#FFFBEB" onPress={() => router.push("/admin/leave-review" as any)} />
           </View>
 
           {/* Today Attendance Card */}

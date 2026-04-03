@@ -373,9 +373,20 @@ const schedulesRouter = router({
         endTime: z.string(),
         label: z.string(),
       })),
+      leaveType: z.enum(["annual", "sick", "personal", "marriage", "bereavement", "official", "other"]).nullable().optional(),
+      leaveMode: z.enum(["allDay", "partial"]).nullable().optional(),
+      leaveStart: z.string().nullable().optional(),
+      leaveEnd: z.string().nullable().optional(),
+      leaveDuration: z.number().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
-      await db.upsertSchedule(input.employeeId, input.date, input.shifts);
+      await db.upsertSchedule(input.employeeId, input.date, input.shifts, {
+        leaveType: input.leaveType ?? null,
+        leaveMode: input.leaveMode ?? null,
+        leaveStart: input.leaveStart ?? null,
+        leaveEnd: input.leaveEnd ?? null,
+        leaveDuration: input.leaveDuration ?? null,
+      });
       return { success: true };
     }),
 

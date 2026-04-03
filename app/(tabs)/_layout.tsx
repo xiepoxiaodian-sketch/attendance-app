@@ -73,10 +73,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="schedule-view"
+        options={{
+          title: "排班",
+          tabBarIcon: ({ color }) => <TabItem icon="calendar" label="排班" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="leave"
         options={{
           title: "請假",
-          tabBarIcon: ({ color }) => <TabItem icon="calendar" label="請假" color={color} />,
+          tabBarIcon: ({ color }) => <TabItem icon="doc.text.fill" label="請假" color={color} />,
         }}
       />
       <Tabs.Screen

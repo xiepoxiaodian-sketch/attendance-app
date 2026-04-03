@@ -316,14 +316,34 @@ export async function getAllSchedulesByDateRange(startDate: string, endDate: str
     ));
 }
 
-export async function upsertSchedule(employeeId: number, date: string, shifts: Array<{ startTime: string; endTime: string; label: string }>) {
+type LeaveInfo = {
+  leaveType: "annual" | "sick" | "personal" | "marriage" | "bereavement" | "official" | "other" | null;
+  leaveMode: "allDay" | "partial" | null;
+  leaveStart: string | null;
+  leaveEnd: string | null;
+  leaveDuration: number | null;
+};
+
+export async function upsertSchedule(
+  employeeId: number,
+  date: string,
+  shifts: Array<{ startTime: string; endTime: string; label: string }>,
+  leave?: LeaveInfo
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const leaveFields = leave ? {
+    leaveType: leave.leaveType,
+    leaveMode: leave.leaveMode,
+    leaveStart: leave.leaveStart,
+    leaveEnd: leave.leaveEnd,
+    leaveDuration: leave.leaveDuration !== null && leave.leaveDuration !== undefined ? String(leave.leaveDuration) : null,
+  } : {};
   const existing = await getScheduleByEmployeeAndDate(employeeId, date);
   if (existing) {
-    await db.update(schedules).set({ shifts }).where(eq(schedules.id, existing.id));
+    await db.update(schedules).set({ shifts, ...leaveFields }).where(eq(schedules.id, existing.id));
   } else {
-    await db.insert(schedules).values({ employeeId, date: date as unknown as Date, shifts });
+    await db.insert(schedules).values({ employeeId, date: date as unknown as Date, shifts, ...leaveFields });
   }
 }
 
