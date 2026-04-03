@@ -53,9 +53,10 @@ export function AdminSidebar({ visible, onClose }: Props) {
       router.replace("/login" as any);
       return;
     }
-    // Push first, then close - avoids popstate triggering back navigation
-    router.push(path as any);
+    // Close sidebar first, then navigate after animation
+    // With Slot layout (no Stack history), this is safe
     onClose();
+    setTimeout(() => router.push(path as any), 250);
   };
 
   const isActive = (path: string) => {
