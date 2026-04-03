@@ -381,7 +381,7 @@ function WeekTab() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {(workShifts ?? []).filter(ws => ws.isActive).map(ws => (
-                      <TouchableOpacity key={ws.id} onPress={() => setShifts([{ startTime: ws.startTime, endTime: ws.endTime, label: ws.name }])} style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#2563EB", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}>
+                      <TouchableOpacity key={ws.id} onPress={() => setShifts(prev => [...prev, { startTime: ws.startTime, endTime: ws.endTime, label: ws.name }])} style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#2563EB", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}>
                         <Text style={{ fontSize: 13, fontWeight: "700", color: "#2563EB" }}>{ws.name}</Text>
                         <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{ws.startTime} ~ {ws.endTime}</Text>
                       </TouchableOpacity>
