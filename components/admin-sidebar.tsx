@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, Modal, Animated, Platform } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Modal, Animated } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { useRef, useEffect } from "react";
 import { useEmployeeAuth } from "@/lib/employee-auth";
@@ -50,23 +50,10 @@ export function AdminSidebar({ visible, onClose }: Props) {
     onClose();
     if (path === "__logout__") {
       await logout();
-      setTimeout(() => {
-        if (Platform.OS === "web") {
-          window.location.href = "/login";
-        } else {
-          router.replace("/login" as any);
-        }
-      }, 300);
+      setTimeout(() => router.replace("/login" as any), 300);
       return;
     }
-    // On web, use window.location for reliable navigation between admin pages
-    if (Platform.OS === "web") {
-      setTimeout(() => {
-        window.location.href = path;
-      }, 150);
-    } else {
-      setTimeout(() => router.push(path as any), 200);
-    }
+    setTimeout(() => router.navigate(path as any), 100);
   };
 
   const isActive = (path: string) => {
