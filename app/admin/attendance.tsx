@@ -7,10 +7,10 @@ import {
   TextInput,
   RefreshControl,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
 
 function formatTime(date: any): string {
@@ -43,6 +43,7 @@ export default function AdminAttendanceScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<{ id?: number; batch?: boolean } | null>(null);
 
   const today = new Date().toISOString().split("T")[0];
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -64,18 +65,21 @@ export default function AdminAttendanceScreen() {
   }, []);
 
   const handleDelete = (id: number) => {
-    Alert.alert("刪除紀錄", "確定要刪除此打卡紀錄嗎？", [
-      { text: "取消" },
-      { text: "刪除", style: "destructive", onPress: () => deleteMutation.mutate({ id }) },
-    ]);
+    setConfirmDelete({ id });
   };
 
   const handleDeleteSelected = () => {
     if (selectedIds.length === 0) return;
-    Alert.alert("批量刪除", `確定要刪除選取的 ${selectedIds.length} 筆紀錄嗎？`, [
-      { text: "取消" },
-      { text: "刪除", style: "destructive", onPress: () => deleteBatchMutation.mutate({ ids: selectedIds }) },
-    ]);
+    setConfirmDelete({ batch: true });
+  };
+
+  const handleConfirmDelete = () => {
+    if (confirmDelete?.id !== undefined) {
+      deleteMutation.mutate({ id: confirmDelete.id });
+    } else if (confirmDelete?.batch) {
+      deleteBatchMutation.mutate({ ids: selectedIds });
+    }
+    setConfirmDelete(null);
   };
 
   const toggleSelect = (id: number) => {
@@ -90,6 +94,15 @@ export default function AdminAttendanceScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
+      <ConfirmDialog
+        visible={!!confirmDelete}
+        title={confirmDelete?.batch ? "批量刪除" : "刪除紀錄"}
+        message={confirmDelete?.batch ? `確定要刪除選取的 ${selectedIds.length} 筆紀錄嗎？` : "確定要刪除此打卡紀錄嗎？"}
+        confirmText="刪除"
+        confirmStyle="destructive"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDelete(null)}
+      />
       <AdminHeader title="打卡紀錄" subtitle={`共 ${filteredRecords.length} 筆紀錄`} onRefresh={onRefresh} refreshing={refreshing} />
       {selectedIds.length > 0 && (
         <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>

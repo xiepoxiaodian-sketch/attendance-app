@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,13 +6,13 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
-  Alert,
   RefreshControl,
   ActivityIndicator,
   Switch,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
+import { ConfirmDialog, AlertDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 
@@ -70,9 +70,10 @@ export default function AdminSettingsScreen() {
 // ============================================================
 function SystemSettings() {
   const { data: settings, refetch } = trpc.settings.getAll.useQuery();
+  const [alertMsg, setAlertMsg] = useState<{ title: string; message: string } | null>(null);
   const setBatchMutation = trpc.settings.setBatch.useMutation({
-    onSuccess: () => { refetch(); Alert.alert("成功", "設定已儲存"); },
-    onError: (err) => Alert.alert("錯誤", err.message),
+    onSuccess: () => { refetch(); setAlertMsg({ title: "成功", message: "設定已儲存" }); },
+    onError: (err) => setAlertMsg({ title: "錯誤", message: err.message }),
   });
 
   const [form, setForm] = useState<Record<string, string>>({});
@@ -97,6 +98,12 @@ function SystemSettings() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <AlertDialog
+        visible={!!alertMsg}
+        title={alertMsg?.title ?? ""}
+        message={alertMsg?.message ?? ""}
+        onClose={() => setAlertMsg(null)}
+      />
       <View style={{ backgroundColor: "white", borderRadius: 14, padding: 16, marginBottom: 16 }}>
         <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginBottom: 12 }}>打卡設定</Text>
 
@@ -202,10 +209,12 @@ function ShiftsSettings() {
   const [showModal, setShowModal] = useState(false);
   const [editShift, setEditShift] = useState<any>(null);
   const [form, setForm] = useState({ name: "", startTime: "09:00", endTime: "18:00", isDefaultWeekday: false, isDefaultHoliday: false });
+  const [alertMsg, setAlertMsg] = useState<{ title: string; message: string } | null>(null);
+  const [confirmDeleteShift, setConfirmDeleteShift] = useState<{ id: number; name: string } | null>(null);
 
   const createMutation = trpc.workShifts.create.useMutation({
-    onSuccess: () => { refetch(); setShowModal(false); Alert.alert("成功", "工作時段已建立"); },
-    onError: (err) => Alert.alert("錯誤", err.message),
+    onSuccess: () => { refetch(); setShowModal(false); setAlertMsg({ title: "成功", message: "工作時段已建立" }); },
+    onError: (err) => setAlertMsg({ title: "錯誤", message: err.message }),
   });
 
   const updateMutation = trpc.workShifts.update.useMutation({
@@ -218,7 +227,7 @@ function ShiftsSettings() {
 
   const handleSave = () => {
     if (!form.name || !form.startTime || !form.endTime) {
-      Alert.alert("錯誤", "請填寫所有必填欄位");
+      setAlertMsg({ title: "錯誤", message: "請填寫所有必填欄位" });
       return;
     }
     if (editShift) {
@@ -230,6 +239,21 @@ function ShiftsSettings() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <AlertDialog
+        visible={!!alertMsg}
+        title={alertMsg?.title ?? ""}
+        message={alertMsg?.message ?? ""}
+        onClose={() => setAlertMsg(null)}
+      />
+      <ConfirmDialog
+        visible={!!confirmDeleteShift}
+        title="刪除工作時段"
+        message={`確定要刪除「${confirmDeleteShift?.name ?? ""}」嗎？`}
+        confirmText="刪除"
+        confirmStyle="destructive"
+        onConfirm={() => { if (confirmDeleteShift) deleteMutation.mutate({ id: confirmDeleteShift.id }); setConfirmDeleteShift(null); }}
+        onCancel={() => setConfirmDeleteShift(null)}
+      />
       <TouchableOpacity
         onPress={() => { setEditShift(null); setForm({ name: "", startTime: "09:00", endTime: "18:00", isDefaultWeekday: false, isDefaultHoliday: false }); setShowModal(true); }}
         style={{ backgroundColor: "#1E40AF", borderRadius: 12, paddingVertical: 12, alignItems: "center", marginBottom: 16 }}
@@ -266,7 +290,7 @@ function ShiftsSettings() {
                 <Text style={{ color: "#1E40AF", fontSize: 13 }}>編輯</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => Alert.alert("刪除", `確定要刪除「${shift.name}」嗎？`, [{ text: "取消" }, { text: "刪除", style: "destructive", onPress: () => deleteMutation.mutate({ id: shift.id }) }])}
+                onPress={() => setConfirmDeleteShift({ id: shift.id, name: shift.name })}
                 style={{ backgroundColor: "#FEE2E2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
               >
                 <Text style={{ color: "#DC2626", fontSize: 13 }}>刪除</Text>
@@ -328,6 +352,7 @@ function ShiftsSettings() {
 function DevicesSettings() {
   const { data: devices, refetch } = trpc.devices.getAll.useQuery();
   const { data: employees } = trpc.employees.list.useQuery();
+  const [confirmRevoke, setConfirmRevoke] = useState<{ id: number; name: string } | null>(null);
 
   const deleteMutation = trpc.devices.delete.useMutation({
     onSuccess: () => refetch(),
@@ -337,6 +362,15 @@ function DevicesSettings() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ConfirmDialog
+        visible={!!confirmRevoke}
+        title="解除綁定"
+        message={`確定要解除 ${confirmRevoke?.name ?? ""} 的綁定嗎？`}
+        confirmText="解除"
+        confirmStyle="destructive"
+        onConfirm={() => { if (confirmRevoke) deleteMutation.mutate({ id: confirmRevoke.id }); setConfirmRevoke(null); }}
+        onCancel={() => setConfirmRevoke(null)}
+      />
       <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>共 {devices?.length ?? 0} 台已綁定裝置</Text>
       {(devices ?? []).map((device) => (
         <View key={device.id} style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}>
@@ -356,10 +390,7 @@ function DevicesSettings() {
               </Text>
             </View>
             <TouchableOpacity
-              onPress={() => Alert.alert("解除綁定", `確定要解除 ${device.deviceName || "此裝置"} 的綁定嗎？`, [
-                { text: "取消" },
-                { text: "解除", style: "destructive", onPress: () => deleteMutation.mutate({ id: device.id }) },
-              ])}
+              onPress={() => setConfirmRevoke({ id: device.id, name: device.deviceName || "此裝置" })}
               style={{ backgroundColor: "#FEE2E2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
             >
               <Text style={{ color: "#DC2626", fontSize: 13 }}>解除</Text>
@@ -389,15 +420,16 @@ function LeaveReview({ adminId }: { adminId: number }) {
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<"approved" | "rejected" | null>(null);
 
+  const [alertMsg, setAlertMsg] = useState<{ title: string; message: string } | null>(null);
   const reviewMutation = trpc.leave.review.useMutation({
     onSuccess: () => {
       refetch();
       refetchAll();
       setShowNoteModal(false);
       setReviewNote("");
-      Alert.alert("成功", pendingAction === "approved" ? "已核准請假申請" : "已拒絕請假申請");
+      setAlertMsg({ title: "成功", message: pendingAction === "approved" ? "已核准請假申請" : "已拒絕請假申請" });
     },
-    onError: (err) => Alert.alert("錯誤", err.message),
+    onError: (err) => setAlertMsg({ title: "錯誤", message: err.message }),
   });
 
   const handleReview = (id: number, status: "approved" | "rejected") => {
@@ -426,6 +458,12 @@ function LeaveReview({ adminId }: { adminId: number }) {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <AlertDialog
+        visible={!!alertMsg}
+        title={alertMsg?.title ?? ""}
+        message={alertMsg?.message ?? ""}
+        onClose={() => setAlertMsg(null)}
+      />
       {/* Pending */}
       {(pendingLeave ?? []).length > 0 && (
         <View style={{ marginBottom: 16 }}>

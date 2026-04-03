@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, Alert } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
 
 type LeaveStatus = "pending" | "approved" | "rejected" | "all";
@@ -29,6 +30,7 @@ function formatDate(d: any) {
 export default function LeaveReviewScreen() {
   const [activeStatus, setActiveStatus] = useState<LeaveStatus>("pending");
   const [refreshing, setRefreshing] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ id: number; type: "approve" | "reject" } | null>(null);
 
   const queryStatus = activeStatus === "all" ? undefined : activeStatus;
   const { data: leaveRequests, refetch, isLoading } = trpc.leave.getAll.useQuery({ status: queryStatus });
@@ -41,17 +43,18 @@ export default function LeaveReviewScreen() {
   }, [refetch]);
 
   const handleApprove = (id: number) => {
-    Alert.alert("確認核准", "確定要核准這筆請假申請嗎？", [
-      { text: "取消", style: "cancel" },
-      { text: "核准", onPress: () => reviewMutation.mutate({ id, status: "approved", reviewedBy: 1 }) },
-    ]);
+    setConfirmAction({ id, type: "approve" });
   };
 
   const handleReject = (id: number) => {
-    Alert.alert("確認拒絕", "確定要拒絕這筆請假申請嗎？", [
-      { text: "取消", style: "cancel" },
-      { text: "拒絕", style: "destructive", onPress: () => reviewMutation.mutate({ id, status: "rejected", reviewedBy: 1 }) },
-    ]);
+    setConfirmAction({ id, type: "reject" });
+  };
+
+  const handleConfirmAction = () => {
+    if (!confirmAction) return;
+    const status = confirmAction.type === "approve" ? "approved" : "rejected";
+    reviewMutation.mutate({ id: confirmAction.id, status, reviewedBy: 1 });
+    setConfirmAction(null);
   };
 
   const getStatusStyle = (status: string) => {
@@ -62,6 +65,15 @@ export default function LeaveReviewScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
+      <ConfirmDialog
+        visible={!!confirmAction}
+        title={confirmAction?.type === "approve" ? "確認核准" : "確認拒絕"}
+        message={confirmAction?.type === "approve" ? "確定要核准這筆請假申請嗎？" : "確定要拒絕這筆請假申請嗎？"}
+        confirmText={confirmAction?.type === "approve" ? "核准" : "拒絕"}
+        confirmStyle={confirmAction?.type === "reject" ? "destructive" : "default"}
+        onConfirm={handleConfirmAction}
+        onCancel={() => setConfirmAction(null)}
+      />
       <AdminHeader title="請假審核" subtitle={`共 ${leaveRequests?.length ?? 0} 筆申請`} onRefresh={onRefresh} refreshing={refreshing} />
 
       {/* Status Tabs */}

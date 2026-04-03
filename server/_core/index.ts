@@ -75,12 +75,23 @@ async function startServer() {
     }),
   );
 
-  // SPA fallback: serve index.html for all non-API routes in production
+  // SPA fallback: serve route-specific .html first, then index.html for all non-API routes in production
   if (process.env.NODE_ENV === "production") {
     app.get("*", (req, res) => {
-      if (!req.path.startsWith("/api")) {
-        res.sendFile(path.join(distWebPath, "index.html"));
+      if (req.path.startsWith("/api")) return;
+      const fs = require("fs");
+      // Try exact path + .html (e.g. /admin/employees -> dist-web/admin/employees.html)
+      const htmlPath = path.join(distWebPath, req.path.replace(/\/$/, "") + ".html");
+      if (fs.existsSync(htmlPath)) {
+        return res.sendFile(htmlPath);
       }
+      // Try path/index.html (e.g. /admin -> dist-web/admin/index.html)
+      const indexPath = path.join(distWebPath, req.path.replace(/\/$/, ""), "index.html");
+      if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+      }
+      // Fallback to root index.html
+      res.sendFile(path.join(distWebPath, "index.html"));
     });
   }
 

@@ -7,12 +7,12 @@ import {
   TextInput,
   Modal,
   ScrollView,
-  Alert,
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
+import { ConfirmDialog, AlertDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
 
 type Employee = {
@@ -122,6 +122,8 @@ export default function AdminEmployeesScreen() {
   const [form, setForm] = useState(INITIAL_FORM);
   const [newPassword, setNewPassword] = useState("");
   const [formError, setFormError] = useState("");
+  const [alertDialog, setAlertDialog] = useState<{ title: string; message: string } | null>(null);
+  const [confirmDeleteEmp, setConfirmDeleteEmp] = useState<Employee | null>(null);
 
   const { data: employees, refetch, isLoading } = trpc.employees.list.useQuery();
 
@@ -130,7 +132,7 @@ export default function AdminEmployeesScreen() {
       refetch();
       setShowModal(false);
       setForm(INITIAL_FORM);
-      Alert.alert("成功", "員工帳號已建立");
+      setAlertDialog({ title: "成功", message: "員工帳號已建立" });
     },
     onError: (err) => setFormError(err.message || "建立失敗"),
   });
@@ -147,9 +149,9 @@ export default function AdminEmployeesScreen() {
     onSuccess: () => {
       setShowResetModal(false);
       setNewPassword("");
-      Alert.alert("成功", "密碼已重置，員工下次登入需重新設定");
+      setAlertDialog({ title: "成功", message: "密碼已重置，員工下次登入需重新設定" });
     },
-    onError: (err) => Alert.alert("錯誤", err.message),
+    onError: (err) => setAlertDialog({ title: "錯誤", message: err.message }),
   });
 
   const deleteMutation = trpc.employees.delete.useMutation({
@@ -207,15 +209,12 @@ export default function AdminEmployeesScreen() {
   };
 
   const handleDelete = (emp: Employee) => {
-    Alert.alert("刪除員工", `確定要刪除 ${emp.fullName} 的帳號嗎？此操作無法復原。`, [
-      { text: "取消" },
-      { text: "刪除", style: "destructive", onPress: () => deleteMutation.mutate({ id: emp.id }) },
-    ]);
+    setConfirmDeleteEmp(emp);
   };
 
   const handleResetPassword = () => {
     if (!selectedEmployee || !newPassword || newPassword.length < 6) {
-      Alert.alert("錯誤", "新密碼至少需要 6 個字元");
+      setAlertDialog({ title: "錯誤", message: "新密碼至少需要 6 個字元" });
       return;
     }
     resetPasswordMutation.mutate({ id: selectedEmployee.id, newPassword });
@@ -229,6 +228,21 @@ export default function AdminEmployeesScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
+      <AlertDialog
+        visible={!!alertDialog}
+        title={alertDialog?.title ?? ""}
+        message={alertDialog?.message ?? ""}
+        onClose={() => setAlertDialog(null)}
+      />
+      <ConfirmDialog
+        visible={!!confirmDeleteEmp}
+        title="刪除員工"
+        message={`確定要刪除 ${confirmDeleteEmp?.fullName} 的帳號嗎？此操作無法復原。`}
+        confirmText="刪除"
+        confirmStyle="destructive"
+        onConfirm={() => { if (confirmDeleteEmp) deleteMutation.mutate({ id: confirmDeleteEmp.id }); setConfirmDeleteEmp(null); }}
+        onCancel={() => setConfirmDeleteEmp(null)}
+      />
       <AdminHeader title="員工管理" subtitle={`共 ${employees?.length ?? 0} 位員工`} onRefresh={onRefresh} refreshing={refreshing} />
       {/* Add Button */}
       <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>

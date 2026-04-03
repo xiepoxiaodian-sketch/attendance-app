@@ -8,6 +8,8 @@ import "react-native-reanimated";
 import { Platform } from "react-native";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
+import { useFonts } from "expo-font";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import {
   SafeAreaFrameContext,
   SafeAreaInsetsContext,
@@ -33,6 +35,11 @@ export default function RootLayout() {
 
   const [insets, setInsets] = useState<EdgeInsets>(initialInsets);
   const [frame, setFrame] = useState<Rect>(initialFrame);
+
+  // Pre-load MaterialIcons font for web to prevent □ icon rendering
+  const [fontsLoaded] = useFonts({
+    MaterialIcons: require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf"),
+  });
 
   // Initialize Manus runtime for cookie injection from parent container
   useEffect(() => {

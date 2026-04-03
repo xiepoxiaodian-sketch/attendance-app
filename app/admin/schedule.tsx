@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal,
-  Alert, ActivityIndicator, FlatList, TextInput, Switch, RefreshControl,
+  ActivityIndicator, FlatList, TextInput, Switch, RefreshControl,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
 import { TimePickerWheel } from "@/components/time-picker-wheel";
+import { ConfirmDialog, AlertDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -66,6 +67,8 @@ function WeekTab() {
   const [leave, setLeave] = useState<{ enabled: boolean; type: LeaveTypeValue; mode: "allDay" | "partial"; start: string; end: string }>({
     enabled: false, type: "annual", mode: "allDay", start: "09:00", end: "18:00",
   });
+  const [alertMsg, setAlertMsg] = useState<{ title: string; message: string } | null>(null);
+  const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState(false);
 
   const weekDates = getWeekDates(weekOffset);
   const startDate = toDateStr(weekDates[0]);
@@ -110,9 +113,9 @@ function WeekTab() {
       setShowModal(false);
       refetchSchedules();
       invalidateSchedules();
-      Alert.alert("成功", "排班已儲存");
+      setAlertMsg({ title: "成功", message: "排班已儲存" });
     },
-    onError: (err) => Alert.alert("錯誤", err.message),
+    onError: (err) => setAlertMsg({ title: "錯誤", message: err.message }),
   });
   const deleteMutation = trpc.schedules.delete.useMutation({
     onSuccess: () => {
@@ -120,7 +123,7 @@ function WeekTab() {
       refetchSchedules();
       invalidateSchedules();
     },
-    onError: (err) => Alert.alert("錯誤", err.message),
+    onError: (err) => setAlertMsg({ title: "錯誤", message: err.message }),
   });
 
   const handleOpenSchedule = (employeeId: number, date: string) => {
@@ -156,10 +159,14 @@ function WeekTab() {
     if (!selectedEmployee || !selectedDate) return;
     const existing = scheduleMap[selectedEmployee]?.[selectedDate];
     if (!existing) { setShowModal(false); return; }
-    Alert.alert("刪除排班", "確定要刪除此日的排班嗎？", [
-      { text: "取消", style: "cancel" },
-      { text: "刪除", style: "destructive", onPress: () => deleteMutation.mutate({ id: existing.id }) },
-    ]);
+    setConfirmDeleteSchedule(true);
+  };
+
+  const handleConfirmDeleteSchedule = () => {
+    if (!selectedEmployee || !selectedDate) return;
+    const existing = scheduleMap[selectedEmployee]?.[selectedDate];
+    if (existing) deleteMutation.mutate({ id: existing.id });
+    setConfirmDeleteSchedule(false);
   };
 
   const addShift = () => setShifts(prev => [...prev, { startTime: "09:00", endTime: "18:00", label: `班次${prev.length + 1}` }]);
@@ -170,6 +177,21 @@ function WeekTab() {
 
   return (
     <>
+      <AlertDialog
+        visible={!!alertMsg}
+        title={alertMsg?.title ?? ""}
+        message={alertMsg?.message ?? ""}
+        onClose={() => setAlertMsg(null)}
+      />
+      <ConfirmDialog
+        visible={confirmDeleteSchedule}
+        title="刪除排班"
+        message="確定要刪除此日的排班嗎？"
+        confirmText="刪除"
+        confirmStyle="destructive"
+        onConfirm={handleConfirmDeleteSchedule}
+        onCancel={() => setConfirmDeleteSchedule(false)}
+      />
       {/* Week Navigation */}
       <View style={{ backgroundColor: "white", paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -640,6 +662,7 @@ function WorkShiftsTab() {
   const [form, setForm] = useState<typeof INITIAL_FORM>(INITIAL_FORM);
   const [editId, setEditId] = useState<number | null>(null);
   const [formError, setFormError] = useState("");
+  const [confirmDeleteShift, setConfirmDeleteShift] = useState<{ id: number; name: string } | null>(null);
 
   const { data: shifts, refetch, isLoading } = trpc.workShifts.list.useQuery();
   const createMutation = trpc.workShifts.create.useMutation({ onSuccess: () => { refetch(); setShowModal(false); } });
@@ -659,14 +682,20 @@ function WorkShiftsTab() {
   };
 
   const handleDelete = (id: number, name: string) => {
-    Alert.alert("刪除班次", `確定要刪除「${name}」班次嗎？`, [
-      { text: "取消", style: "cancel" },
-      { text: "刪除", style: "destructive", onPress: () => deleteMutation.mutate({ id }) },
-    ]);
+    setConfirmDeleteShift({ id, name });
   };
 
   return (
     <>
+      <ConfirmDialog
+        visible={!!confirmDeleteShift}
+        title="刪除班次"
+        message={`確定要刪除「${confirmDeleteShift?.name ?? ""}」班次嗎？`}
+        confirmText="刪除"
+        confirmStyle="destructive"
+        onConfirm={() => { if (confirmDeleteShift) deleteMutation.mutate({ id: confirmDeleteShift.id }); setConfirmDeleteShift(null); }}
+        onCancel={() => setConfirmDeleteShift(null)}
+      />
       <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>
         <TouchableOpacity onPress={openCreate} style={{ backgroundColor: "#2563EB", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 }}>
           <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>+ 新增班次</Text>

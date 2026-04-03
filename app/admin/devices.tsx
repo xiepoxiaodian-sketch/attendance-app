@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, Alert } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
 
 function formatDate(d: any) {
@@ -12,6 +13,8 @@ function formatDate(d: any) {
 
 export default function DevicesScreen() {
   const [refreshing, setRefreshing] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: number; name: string } | null>(null);
 
   const { data: devices, refetch, isLoading } = trpc.devices.getAll.useQuery();
   const deleteMutation = trpc.devices.delete.useMutation({ onSuccess: () => refetch() });
@@ -23,19 +26,31 @@ export default function DevicesScreen() {
   }, [refetch]);
 
   const handleRevoke = (id: number, employeeName: string) => {
-    Alert.alert(
-      "解除裝置綁定",
-      `確定要解除「${employeeName}」的裝置綁定嗎？員工下次登入時需要重新綁定裝置。`,
-      [
-        { text: "取消", style: "cancel" },
-        { text: "解除", style: "destructive", onPress: () => deleteMutation.mutate({ id }) },
-      ]
-    );
+    setPendingDelete({ id, name: employeeName });
+    setConfirmVisible(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (pendingDelete) {
+      deleteMutation.mutate({ id: pendingDelete.id });
+      setPendingDelete(null);
+    }
+    setConfirmVisible(false);
   };
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
       <AdminHeader title="裝置管理" subtitle={`共 ${devices?.length ?? 0} 台已綁定裝置`} onRefresh={onRefresh} refreshing={refreshing} />
+
+      <ConfirmDialog
+        visible={confirmVisible}
+        title="解除裝置綁定"
+        message={`確定要解除「${pendingDelete?.name ?? ""}」的裝置綁定嗎？員工下次登入時需要重新綁定裝置。`}
+        confirmText="解除"
+        confirmStyle="destructive"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => { setConfirmVisible(false); setPendingDelete(null); }}
+      />
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
