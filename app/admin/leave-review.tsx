@@ -62,7 +62,7 @@ export default function LeaveReviewScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
-      <AdminHeader title="請假審核" subtitle={`共 ${leaveRequests?.length ?? 0} 筆申請`} />
+      <AdminHeader title="請假審核" subtitle={`共 ${leaveRequests?.length ?? 0} 筆申請`} onRefresh={onRefresh} refreshing={refreshing} />
 
       {/* Status Tabs */}
       <View style={{ backgroundColor: "white", flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>

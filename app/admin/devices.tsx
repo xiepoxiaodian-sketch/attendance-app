@@ -35,7 +35,7 @@ export default function DevicesScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
-      <AdminHeader title="裝置管理" subtitle={`共 ${devices?.length ?? 0} 台已綁定裝置`} />
+      <AdminHeader title="裝置管理" subtitle={`共 ${devices?.length ?? 0} 台已綁定裝置`} onRefresh={onRefresh} refreshing={refreshing} />
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>

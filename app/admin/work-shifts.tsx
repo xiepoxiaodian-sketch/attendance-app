@@ -92,7 +92,7 @@ export default function WorkShiftsScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
-      <AdminHeader title="工作時段" subtitle={`共 ${shifts?.length ?? 0} 個班次`} />
+      <AdminHeader title="工作時段" subtitle={`共 ${shifts?.length ?? 0} 個班次`} onRefresh={onRefresh} refreshing={refreshing} />
 
       {/* Add Button */}
       <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>

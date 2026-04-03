@@ -92,7 +92,7 @@ export default function AdminDashboard() {
         contentContainerStyle={{ paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <AdminHeader title="總覽" subtitle={`${todayDateStr} · 今日出勤狀況`} />
+        <AdminHeader title="總覽" subtitle={`${todayDateStr} · 今日出勤狀況`} onRefresh={onRefresh} refreshing={refreshing} />
 
         <View style={{ padding: 14, gap: 12 }}>
           {/* Stats Row 1 */}

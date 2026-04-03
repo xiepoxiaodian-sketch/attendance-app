@@ -287,7 +287,7 @@ export default function ReportsScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
-      <AdminHeader title="報表統計" subtitle={`${year} 年 ${month} 月`} />
+      <AdminHeader title="報表統計" subtitle={`${year} 年 ${month} 月`} onRefresh={onRefresh} refreshing={refreshing} />
 
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

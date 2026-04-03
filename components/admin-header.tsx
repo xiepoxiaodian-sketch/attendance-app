@@ -1,14 +1,28 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useState } from "react";
 import { AdminSidebar } from "./admin-sidebar";
-
 type Props = {
   title: string;
   subtitle?: string;
+  onRefresh?: () => void | Promise<void>;
+  refreshing?: boolean;
 };
 
-export function AdminHeader({ title, subtitle }: Props) {
+export function AdminHeader({ title, subtitle, onRefresh, refreshing }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [localRefreshing, setLocalRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!onRefresh || localRefreshing || refreshing) return;
+    setLocalRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setLocalRefreshing(false);
+    }
+  };
+
+  const isRefreshing = refreshing || localRefreshing;
 
   return (
     <>
@@ -48,6 +62,28 @@ export function AdminHeader({ title, subtitle }: Props) {
             <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>{subtitle}</Text>
           ) : null}
         </View>
+
+        {/* Refresh Button */}
+        {onRefresh && (
+          <TouchableOpacity
+            onPress={handleRefresh}
+            disabled={isRefreshing}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              backgroundColor: isRefreshing ? "#EFF6FF" : "#F1F5F9",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {isRefreshing ? (
+              <ActivityIndicator size="small" color="#2563EB" />
+            ) : (
+              <Text style={{ fontSize: 16 }}>🔄</Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       <AdminSidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
