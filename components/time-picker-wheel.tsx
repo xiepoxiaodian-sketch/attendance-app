@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,11 +6,17 @@ import {
   StyleSheet,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Platform,
+  TouchableOpacity,
+  Modal,
 } from "react-native";
 
 const ITEM_HEIGHT = 44;
 const VISIBLE_ITEMS = 5;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
 
 interface TimePickerWheelProps {
   value: string; // "HH:MM"
@@ -18,6 +24,106 @@ interface TimePickerWheelProps {
   label?: string;
 }
 
+// ─── Web version: dropdown selects ──────────────────────────────────────────
+function TimePickerWeb({ value, onChange, label }: TimePickerWheelProps) {
+  const [hStr, mStr] = value.split(":");
+  const safeHour = HOURS.includes(hStr) ? hStr : "09";
+  const safeMin = MINUTES.includes(mStr) ? mStr : MINUTES.find(m => parseInt(m) >= parseInt(mStr ?? "0")) ?? "00";
+
+  const handleHourChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    onChange(`${e.target.value}:${safeMin}`);
+  };
+  const handleMinChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    onChange(`${safeHour}:${e.target.value}`);
+  };
+
+  return (
+    <View style={webStyles.container}>
+      {label && <Text style={webStyles.label}>{label}</Text>}
+      <View style={webStyles.pickerWrapper}>
+        {/* @ts-ignore - web-only select element */}
+        <select
+          value={safeHour}
+          onChange={handleHourChange}
+          style={{
+            fontSize: 22,
+            fontWeight: "700",
+            color: "#1E40AF",
+            backgroundColor: "#F8FAFC",
+            border: "none",
+            outline: "none",
+            padding: "8px 4px",
+            cursor: "pointer",
+            appearance: "none",
+            WebkitAppearance: "none",
+            textAlign: "center",
+            width: 52,
+          }}
+        >
+          {HOURS.map(h => (
+            // @ts-ignore
+            <option key={h} value={h}>{h}</option>
+          ))}
+        </select>
+        <Text style={webStyles.colon}>:</Text>
+        {/* @ts-ignore - web-only select element */}
+        <select
+          value={safeMin}
+          onChange={handleMinChange}
+          style={{
+            fontSize: 22,
+            fontWeight: "700",
+            color: "#1E40AF",
+            backgroundColor: "#F8FAFC",
+            border: "none",
+            outline: "none",
+            padding: "8px 4px",
+            cursor: "pointer",
+            appearance: "none",
+            WebkitAppearance: "none",
+            textAlign: "center",
+            width: 52,
+          }}
+        >
+          {MINUTES.map(m => (
+            // @ts-ignore
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </View>
+    </View>
+  );
+}
+
+const webStyles = StyleSheet.create({
+  container: {
+    alignItems: "center",
+  },
+  label: {
+    fontSize: 12,
+    color: "#64748B",
+    marginBottom: 8,
+    fontWeight: "600",
+  },
+  pickerWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  colon: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#1E40AF",
+    marginHorizontal: 4,
+  },
+});
+
+// ─── Native version: scroll wheel ───────────────────────────────────────────
 function WheelColumn({
   items,
   selectedIndex,
@@ -29,6 +135,7 @@ function WheelColumn({
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const isScrolling = useRef(false);
+  const pendingIndex = useRef(selectedIndex);
 
   useEffect(() => {
     if (!isScrolling.current) {
@@ -36,20 +143,27 @@ function WheelColumn({
     }
   }, [selectedIndex]);
 
-  const handleScrollEnd = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      isScrolling.current = false;
-      const y = e.nativeEvent.contentOffset.y;
+  const snapToIndex = useCallback(
+    (y: number) => {
       const index = Math.round(y / ITEM_HEIGHT);
       const clamped = Math.max(0, Math.min(items.length - 1, index));
-      onSelect(clamped);
+      pendingIndex.current = clamped;
       scrollRef.current?.scrollTo({ y: clamped * ITEM_HEIGHT, animated: true });
+      onSelect(clamped);
     },
     [items.length, onSelect]
   );
 
+  const handleScrollEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      isScrolling.current = false;
+      snapToIndex(e.nativeEvent.contentOffset.y);
+    },
+    [snapToIndex]
+  );
+
   return (
-    <View style={styles.column}>
+    <View style={nativeStyles.column}>
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
@@ -64,11 +178,19 @@ function WheelColumn({
         {items.map((item, i) => {
           const isSelected = i === selectedIndex;
           return (
-            <View key={item} style={styles.item}>
-              <Text style={[styles.itemText, isSelected && styles.selectedText]}>
+            <TouchableOpacity
+              key={item}
+              style={nativeStyles.item}
+              onPress={() => {
+                onSelect(i);
+                scrollRef.current?.scrollTo({ y: i * ITEM_HEIGHT, animated: true });
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[nativeStyles.itemText, isSelected && nativeStyles.selectedText]}>
                 {item}
               </Text>
-            </View>
+            </TouchableOpacity>
           );
         })}
       </ScrollView>
@@ -76,10 +198,7 @@ function WheelColumn({
   );
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
-const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
-
-export function TimePickerWheel({ value, onChange, label }: TimePickerWheelProps) {
+function TimePickerNative({ value, onChange, label }: TimePickerWheelProps) {
   const [hStr, mStr] = value.split(":");
   const hourIndex = HOURS.indexOf(hStr ?? "09");
   const minuteIndex = MINUTES.findIndex((m) => parseInt(m) >= parseInt(mStr ?? "00"));
@@ -87,33 +206,27 @@ export function TimePickerWheel({ value, onChange, label }: TimePickerWheelProps
   const safeMinIdx = minuteIndex >= 0 ? minuteIndex : 0;
 
   const handleHourChange = (index: number) => {
-    const newHour = HOURS[index];
-    const currentMin = MINUTES[safeMinIdx];
-    onChange(`${newHour}:${currentMin}`);
+    onChange(`${HOURS[index]}:${MINUTES[safeMinIdx]}`);
   };
 
   const handleMinuteChange = (index: number) => {
-    const currentHour = HOURS[safeHourIdx];
-    const newMin = MINUTES[index];
-    onChange(`${currentHour}:${newMin}`);
+    onChange(`${HOURS[safeHourIdx]}:${MINUTES[index]}`);
   };
 
   return (
-    <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
-      <View style={styles.pickerWrapper}>
-        {/* Selection highlight */}
-        <View style={styles.selectionBar} pointerEvents="none" />
-
+    <View style={nativeStyles.container}>
+      {label && <Text style={nativeStyles.label}>{label}</Text>}
+      <View style={nativeStyles.pickerWrapper}>
+        <View style={nativeStyles.selectionBar} pointerEvents="none" />
         <WheelColumn items={HOURS} selectedIndex={safeHourIdx} onSelect={handleHourChange} />
-        <Text style={styles.colon}>:</Text>
+        <Text style={nativeStyles.colon}>:</Text>
         <WheelColumn items={MINUTES} selectedIndex={safeMinIdx} onSelect={handleMinuteChange} />
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const nativeStyles = StyleSheet.create({
   container: {
     alignItems: "center",
   },
@@ -172,3 +285,11 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
 });
+
+// ─── Export: platform-aware ──────────────────────────────────────────────────
+export function TimePickerWheel(props: TimePickerWheelProps) {
+  if (Platform.OS === "web") {
+    return <TimePickerWeb {...props} />;
+  }
+  return <TimePickerNative {...props} />;
+}
