@@ -3,7 +3,6 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
@@ -25,15 +24,11 @@ function formatDate(date: Date | string | null | undefined): string {
 
 function calcWorkHours(clockIn: any, clockOut: any): string {
   if (!clockIn || !clockOut) return "-";
-  const inTime = new Date(clockIn).getTime();
-  const outTime = new Date(clockOut).getTime();
-  const diff = (outTime - inTime) / 1000 / 60;
-  const h = Math.floor(diff / 60);
-  const m = Math.round(diff % 60);
-  return `${h}h ${m}m`;
+  const diff = (new Date(clockOut).getTime() - new Date(clockIn).getTime()) / 1000 / 60;
+  return `${Math.floor(diff / 60)}h ${Math.round(diff % 60)}m`;
 }
 
-function getStatusBadge(status: string | null | undefined) {
+function StatusBadge({ status }: { status: string | null | undefined }) {
   const map: Record<string, { label: string; bg: string; text: string }> = {
     normal: { label: "正常", bg: "#DCFCE7", text: "#16A34A" },
     late: { label: "遲到", bg: "#FEF3C7", text: "#D97706" },
@@ -42,7 +37,7 @@ function getStatusBadge(status: string | null | undefined) {
   };
   const s = map[status ?? "normal"] ?? map.normal;
   return (
-    <View style={{ backgroundColor: s.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+    <View style={{ backgroundColor: s.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
       <Text style={{ color: s.text, fontSize: 11, fontWeight: "600" }}>{s.label}</Text>
     </View>
   );
@@ -52,7 +47,6 @@ export default function RecordsScreen() {
   const { employee } = useEmployeeAuth();
   const [refreshing, setRefreshing] = useState(false);
 
-  // Get last 30 days
   const endDate = new Date().toISOString().split("T")[0];
   const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
@@ -71,24 +65,57 @@ export default function RecordsScreen() {
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
+  // Stats
+  const totalDays = sortedRecords.length;
+  const lateDays = sortedRecords.filter(r => r.status === "late").length;
+  const normalDays = sortedRecords.filter(r => r.status === "normal").length;
+
   return (
-    <ScreenContainer>
-      {/* Header */}
-      <View style={{ backgroundColor: "#1E40AF", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 }}>
-        <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>打卡紀錄</Text>
-        <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4 }}>
-          最近 30 天
-        </Text>
+    <ScreenContainer containerClassName="bg-[#F1F5F9]">
+      {/* Page Header */}
+      <View style={{
+        backgroundColor: "white",
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E2E8F0",
+      }}>
+        <Text style={{ fontSize: 20, fontWeight: "700", color: "#1E293B" }}>打卡紀錄</Text>
+        <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>最近 30 天</Text>
       </View>
+
+      {/* Stats Row */}
+      {!isLoading && totalDays > 0 && (
+        <View style={{
+          backgroundColor: "white",
+          flexDirection: "row",
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: "#F1F5F9",
+          gap: 0,
+        }}>
+          {[
+            { label: "出勤天數", value: String(totalDays), color: "#2563EB" },
+            { label: "正常", value: String(normalDays), color: "#16A34A" },
+            { label: "遲到", value: String(lateDays), color: "#D97706" },
+          ].map((stat, i) => (
+            <View key={i} style={{ flex: 1, alignItems: "center", borderRightWidth: i < 2 ? 1 : 0, borderRightColor: "#F1F5F9" }}>
+              <Text style={{ fontSize: 22, fontWeight: "700", color: stat.color }}>{stat.value}</Text>
+              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{stat.label}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color="#1E40AF" />
+          <ActivityIndicator size="large" color="#2563EB" />
         </View>
       ) : sortedRecords.length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
-          <Text style={{ fontSize: 48, marginBottom: 16 }}>📋</Text>
-          <Text style={{ color: "#64748B", fontSize: 16, textAlign: "center" }}>
+          <Text style={{ fontSize: 14, color: "#94A3B8", textAlign: "center" }}>
             最近 30 天內沒有打卡紀錄
           </Text>
         </View>
@@ -97,58 +124,67 @@ export default function RecordsScreen() {
           data={sortedRecords}
           keyExtractor={(item) => String(item.id)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 14, gap: 8, paddingBottom: 24 }}
           renderItem={({ item }) => (
-            <View
-              style={{
-                backgroundColor: "white",
-                borderRadius: 14,
-                padding: 14,
-                marginBottom: 10,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.06,
-                shadowRadius: 6,
-                elevation: 2,
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <View style={{
+              backgroundColor: "white",
+              borderRadius: 12,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 3,
+              elevation: 1,
+            }}>
+              {/* Top Row */}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <View>
                   <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>
                     {formatDate(item.date)}
                   </Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 1 }}>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>
                     {item.shiftLabel || "班次1"}
                   </Text>
                 </View>
-                {getStatusBadge(item.status)}
+                <StatusBadge status={item.status} />
               </View>
 
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {/* Time Row */}
+              <View style={{ flexDirection: "row", backgroundColor: "#F8FAFC", borderRadius: 10, padding: 10 }}>
                 <View style={{ flex: 1, alignItems: "center" }}>
-                  <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 2 }}>上班</Text>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: item.clockInTime ? "#22C55E" : "#CBD5E1" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 3 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#22C55E" }} />
+                    <Text style={{ fontSize: 10, color: "#94A3B8" }}>上班</Text>
+                  </View>
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: item.clockInTime ? "#22C55E" : "#CBD5E1" }}>
                     {formatTime(item.clockInTime)}
                   </Text>
                 </View>
+                <View style={{ width: 1, backgroundColor: "#E2E8F0" }} />
                 <View style={{ flex: 1, alignItems: "center" }}>
-                  <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 2 }}>下班</Text>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: item.clockOutTime ? "#3B82F6" : "#CBD5E1" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 3 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#3B82F6" }} />
+                    <Text style={{ fontSize: 10, color: "#94A3B8" }}>下班</Text>
+                  </View>
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: item.clockOutTime ? "#3B82F6" : "#CBD5E1" }}>
                     {formatTime(item.clockOutTime)}
                   </Text>
                 </View>
+                <View style={{ width: 1, backgroundColor: "#E2E8F0" }} />
                 <View style={{ flex: 1, alignItems: "center" }}>
-                  <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 2 }}>工時</Text>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B" }}>
+                  <Text style={{ fontSize: 10, color: "#94A3B8", marginBottom: 3 }}>工時</Text>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>
                     {calcWorkHours(item.clockInTime, item.clockOutTime)}
                   </Text>
                 </View>
               </View>
 
               {item.clockInLocation && (
-                <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center" }}>
-                  <Text style={{ fontSize: 11, color: "#94A3B8" }}>📍 {item.clockInLocation}</Text>
-                </View>
+                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>
+                  📍 {item.clockInLocation}
+                </Text>
               )}
             </View>
           )}

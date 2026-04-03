@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
+  Switch,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -17,22 +17,46 @@ import { trpc } from "@/lib/trpc";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login } = useEmployeeAuth();
+  const { login, saveCredentials, loadSavedCredentials, clearSavedCredentials } = useEmployeeAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
+  const [stayLoggedIn, setStayLoggedIn] = useState(false);
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    loadSavedCredentials().then((creds) => {
+      if (creds) {
+        setUsername(creds.username);
+        setPassword(creds.password);
+        setRememberMe(true);
+      }
+    });
+  }, []);
 
   const loginMutation = trpc.employee.login.useMutation({
     onSuccess: async (data) => {
-      await login({
-        id: data.id,
-        username: data.username,
-        fullName: data.fullName,
-        role: data.role as "admin" | "employee",
-        needsSetup: data.needsSetup,
-        employeeType: data.employeeType ?? undefined,
-        jobTitle: data.jobTitle ?? null,
-      });
+      // Handle remember me
+      if (rememberMe) {
+        await saveCredentials(username.trim(), password);
+      } else {
+        await clearSavedCredentials();
+      }
+
+      await login(
+        {
+          id: data.id,
+          username: data.username,
+          fullName: data.fullName,
+          role: data.role as "admin" | "employee",
+          needsSetup: data.needsSetup,
+          employeeType: data.employeeType ?? undefined,
+          jobTitle: data.jobTitle ?? null,
+        },
+        stayLoggedIn
+      );
+
       if (data.needsSetup) {
         router.replace("/setup/password" as any);
       } else if (data.role === "admin") {
@@ -42,7 +66,7 @@ export default function LoginScreen() {
       }
     },
     onError: (err) => {
-      setError(err.message || "登入失敗，請再試一次");
+      setError(err.message || "帳號或密碼錯誤");
     },
   });
 
@@ -68,23 +92,52 @@ export default function LoginScreen() {
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
         >
-          <View className="flex-1 px-6 justify-center">
+          <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center" }}>
             {/* Logo / Title Area */}
-            <View className="items-center mb-12">
-              <View className="w-20 h-20 bg-white rounded-2xl items-center justify-center mb-4 shadow-lg">
+            <View style={{ alignItems: "center", marginBottom: 40 }}>
+              <View style={{
+                width: 80, height: 80,
+                backgroundColor: "white",
+                borderRadius: 20,
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 16,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 12,
+                elevation: 8,
+              }}>
                 <Text style={{ fontSize: 40 }}>🕐</Text>
               </View>
-              <Text className="text-3xl font-bold text-white mb-1">員工打卡系統</Text>
-              <Text className="text-base text-blue-200">請登入您的帳號</Text>
+              <Text style={{ fontSize: 28, fontWeight: "700", color: "white", marginBottom: 4 }}>
+                員工打卡系統
+              </Text>
+              <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.75)" }}>
+                請登入您的帳號
+              </Text>
             </View>
 
             {/* Login Card */}
-            <View className="bg-white rounded-3xl p-6 shadow-xl">
-              <Text className="text-2xl font-bold text-foreground mb-6">登入</Text>
+            <View style={{
+              backgroundColor: "white",
+              borderRadius: 20,
+              padding: 24,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.15,
+              shadowRadius: 20,
+              elevation: 10,
+            }}>
+              <Text style={{ fontSize: 20, fontWeight: "700", color: "#1E293B", marginBottom: 20 }}>
+                帳號登入
+              </Text>
 
               {/* Username */}
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-muted mb-2">帳號</Text>
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 }}>
+                  帳號
+                </Text>
                 <TextInput
                   value={username}
                   onChangeText={setUsername}
@@ -92,14 +145,25 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="next"
-                  className="bg-surface border border-border rounded-xl px-4 py-3 text-foreground text-base"
+                  style={{
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    borderRadius: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    fontSize: 15,
+                    color: "#1E293B",
+                  }}
                   placeholderTextColor="#94A3B8"
                 />
               </View>
 
               {/* Password */}
-              <View className="mb-6">
-                <Text className="text-sm font-medium text-muted mb-2">密碼</Text>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 }}>
+                  密碼
+                </Text>
                 <TextInput
                   value={password}
                   onChangeText={setPassword}
@@ -107,15 +171,64 @@ export default function LoginScreen() {
                   secureTextEntry
                   returnKeyType="done"
                   onSubmitEditing={handleLogin}
-                  className="bg-surface border border-border rounded-xl px-4 py-3 text-foreground text-base"
+                  style={{
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    borderRadius: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    fontSize: 15,
+                    color: "#1E293B",
+                  }}
                   placeholderTextColor="#94A3B8"
                 />
               </View>
 
+              {/* Remember Me & Stay Logged In */}
+              <View style={{ marginBottom: 16, gap: 10 }}>
+                {/* Remember credentials */}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View>
+                    <Text style={{ fontSize: 14, color: "#374151", fontWeight: "500" }}>記住帳號密碼</Text>
+                    <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 1 }}>下次自動填入帳號和密碼</Text>
+                  </View>
+                  <Switch
+                    value={rememberMe}
+                    onValueChange={setRememberMe}
+                    trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
+                    thumbColor={rememberMe ? "#2563EB" : "#94A3B8"}
+                  />
+                </View>
+
+                <View style={{ height: 1, backgroundColor: "#F1F5F9" }} />
+
+                {/* Stay logged in */}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View>
+                    <Text style={{ fontSize: 14, color: "#374151", fontWeight: "500" }}>保持登入</Text>
+                    <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 1 }}>關閉 App 後自動保持登入狀態</Text>
+                  </View>
+                  <Switch
+                    value={stayLoggedIn}
+                    onValueChange={setStayLoggedIn}
+                    trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
+                    thumbColor={stayLoggedIn ? "#2563EB" : "#94A3B8"}
+                  />
+                </View>
+              </View>
+
               {/* Error */}
               {error ? (
-                <View className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
-                  <Text className="text-error text-sm text-center">{error}</Text>
+                <View style={{
+                  backgroundColor: "#FEF2F2",
+                  borderWidth: 1,
+                  borderColor: "#FECACA",
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 14,
+                }}>
+                  <Text style={{ color: "#EF4444", fontSize: 13, textAlign: "center" }}>{error}</Text>
                 </View>
               ) : null}
 
@@ -124,11 +237,10 @@ export default function LoginScreen() {
                 onPress={handleLogin}
                 disabled={loginMutation.isPending}
                 style={{
-                  backgroundColor: "#1E40AF",
+                  backgroundColor: loginMutation.isPending ? "#93C5FD" : "#2563EB",
                   borderRadius: 12,
                   paddingVertical: 14,
                   alignItems: "center",
-                  opacity: loginMutation.isPending ? 0.7 : 1,
                 }}
               >
                 {loginMutation.isPending ? (
@@ -141,7 +253,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text className="text-center text-blue-200 text-sm mt-8">
+            <Text style={{ textAlign: "center", color: "rgba(255,255,255,0.6)", fontSize: 13, marginTop: 24 }}>
               如忘記密碼，請聯絡管理員重置
             </Text>
           </View>

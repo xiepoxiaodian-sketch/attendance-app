@@ -15,7 +15,6 @@ import * as Device from "expo-device";
 import { ScreenContainer } from "@/components/screen-container";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
-import { useColors } from "@/hooks/use-colors";
 
 function getDeviceId(): string {
   if (Platform.OS === "web") {
@@ -44,38 +43,16 @@ function formatDate(date: Date): string {
   });
 }
 
-function getStatusColor(status: string | null | undefined): string {
-  switch (status) {
-    case "late": return "#F59E0B";
-    case "early_leave": return "#F59E0B";
-    case "absent": return "#EF4444";
-    default: return "#22C55E";
-  }
-}
-
-function getStatusLabel(status: string | null | undefined): string {
-  switch (status) {
-    case "late": return "遲到";
-    case "early_leave": return "早退";
-    case "absent": return "缺勤";
-    default: return "正常";
-  }
-}
-
 export default function ClockScreen() {
   const { employee } = useEmployeeAuth();
-  const colors = useColors();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isClocking, setIsClocking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Update clock every second
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
-
-  const utils = trpc.useUtils();
 
   const { data: todayAttendance, refetch: refetchAttendance } = trpc.attendance.getToday.useQuery(
     { employeeId: employee?.id ?? 0 },
@@ -94,9 +71,7 @@ export default function ClockScreen() {
       refetchAttendance();
       Alert.alert("打卡成功", "上班打卡完成！", [{ text: "確定" }]);
     },
-    onError: (err) => {
-      Alert.alert("打卡失敗", err.message, [{ text: "確定" }]);
-    },
+    onError: (err) => Alert.alert("打卡失敗", err.message, [{ text: "確定" }]),
   });
 
   const clockOutMutation = trpc.attendance.clockOut.useMutation({
@@ -104,9 +79,7 @@ export default function ClockScreen() {
       refetchAttendance();
       Alert.alert("打卡成功", "下班打卡完成！", [{ text: "確定" }]);
     },
-    onError: (err) => {
-      Alert.alert("打卡失敗", err.message, [{ text: "確定" }]);
-    },
+    onError: (err) => Alert.alert("打卡失敗", err.message, [{ text: "確定" }]),
   });
 
   const onRefresh = useCallback(async () => {
@@ -118,9 +91,7 @@ export default function ClockScreen() {
   const handleClock = async (shiftLabel: string, isClockIn: boolean) => {
     if (!employee) return;
     setIsClocking(true);
-
     try {
-      // 1. Get GPS location
       let lat: number | undefined;
       let lng: number | undefined;
       let locationName: string | undefined;
@@ -135,12 +106,9 @@ export default function ClockScreen() {
             lng = loc.coords.longitude;
             locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
           }
-        } catch (e) {
-          // GPS not available, continue without it
-        }
+        } catch (e) {}
       }
 
-      // 2. Biometric authentication
       if (Platform.OS !== "web") {
         const hasHardware = await LocalAuthentication.hasHardwareAsync();
         const isEnrolled = await LocalAuthentication.isEnrolledAsync();
@@ -160,60 +128,68 @@ export default function ClockScreen() {
         }
       }
 
-      // 3. Submit clock in/out
       const deviceId = getDeviceId();
       if (isClockIn) {
-        await clockInMutation.mutateAsync({
-          employeeId: employee.id,
-          deviceId,
-          lat,
-          lng,
-          locationName,
-          shiftLabel,
-        });
+        await clockInMutation.mutateAsync({ employeeId: employee.id, deviceId, lat, lng, locationName, shiftLabel });
       } else {
         const record = todayAttendance?.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
-        await clockOutMutation.mutateAsync({
-          employeeId: employee.id,
-          attendanceId: record?.id,
-          deviceId,
-          lat,
-          lng,
-          locationName,
-          shiftLabel,
-        });
+        await clockOutMutation.mutateAsync({ employeeId: employee.id, attendanceId: record?.id, deviceId, lat, lng, locationName, shiftLabel });
       }
     } finally {
       setIsClocking(false);
     }
   };
 
-  // Determine shift status
-  const shifts = (todaySchedule && todaySchedule.shifts ? todaySchedule.shifts as Array<{ startTime: string; endTime: string; label: string }> : []);
-  const defaultShifts = shifts.length > 0 ? shifts : [{ startTime: "09:00", endTime: "18:00", label: "班次1" }];
+  const shifts = (todaySchedule && todaySchedule.shifts
+    ? todaySchedule.shifts as Array<{ startTime: string; endTime: string; label: string }>
+    : []);
+  const displayShifts = shifts.length > 0 ? shifts : [{ startTime: "09:00", endTime: "18:00", label: "班次1" }];
+
+  const timeStr = currentTime.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const [hm, sec] = timeStr.split(":").length === 3
+    ? [timeStr.slice(0, 5), timeStr.slice(6)]
+    : [timeStr, ""];
 
   return (
-    <ScreenContainer>
+    <ScreenContainer containerClassName="bg-[#F1F5F9]">
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={{ backgroundColor: "#1E40AF", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}>
-          <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 14, marginBottom: 4 }}>
-            {employee?.fullName} · {employee?.jobTitle || (employee?.role === "admin" ? "管理員" : "員工")}
-          </Text>
-          <Text style={{ color: "white", fontSize: 48, fontWeight: "700", letterSpacing: -1 }}>
-            {currentTime.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
-          </Text>
-          <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 14, marginTop: 4 }}>
+        {/* Top Header Card */}
+        <View style={{
+          backgroundColor: "#1E3A8A",
+          paddingHorizontal: 20,
+          paddingTop: 20,
+          paddingBottom: 40,
+        }}>
+          <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginBottom: 2 }}>
             {formatDate(currentTime)}
           </Text>
+          <View style={{ flexDirection: "row", alignItems: "flex-end", marginTop: 4 }}>
+            <Text style={{ color: "white", fontSize: 52, fontWeight: "700", letterSpacing: -2, lineHeight: 60 }}>
+              {hm}
+            </Text>
+            <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 24, fontWeight: "400", marginBottom: 6, marginLeft: 2 }}>
+              :{sec}
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 8 }}>
+            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>
+                {employee?.fullName?.[0] ?? "?"}
+              </Text>
+            </View>
+            <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 14, fontWeight: "500" }}>
+              {employee?.fullName} · {employee?.jobTitle || "員工"}
+            </Text>
+          </View>
         </View>
 
-        <View style={{ flex: 1, padding: 16, marginTop: -16 }}>
-          {/* Today's Shifts */}
-          {defaultShifts.map((shift) => {
+        {/* Shift Cards */}
+        <View style={{ padding: 14, marginTop: -20, gap: 12 }}>
+          {displayShifts.map((shift) => {
             const record = todayAttendance?.find(r => r.shiftLabel === shift.label);
             const isClockedIn = !!record?.clockInTime && !record?.clockOutTime;
             const isCompleted = !!record?.clockInTime && !!record?.clockOutTime;
@@ -224,57 +200,71 @@ export default function ClockScreen() {
                 style={{
                   backgroundColor: "white",
                   borderRadius: 16,
-                  padding: 16,
-                  marginBottom: 12,
+                  padding: 18,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
                   shadowColor: "#000",
                   shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.08,
+                  shadowOpacity: 0.05,
                   shadowRadius: 8,
-                  elevation: 3,
+                  elevation: 2,
                 }}
               >
                 {/* Shift Header */}
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <View>
-                    <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B" }}>{shift.label}</Text>
-                    <Text style={{ fontSize: 14, color: "#64748B", marginTop: 2 }}>
+                    <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B" }}>{shift.label}</Text>
+                    <Text style={{ fontSize: 13, color: "#64748B", marginTop: 3 }}>
                       {shift.startTime} – {shift.endTime}
                     </Text>
                   </View>
-                  {isCompleted ? (
-                    <View style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-                      <Text style={{ color: "#16A34A", fontSize: 12, fontWeight: "600" }}>已完成</Text>
-                    </View>
-                  ) : isClockedIn ? (
-                    <View style={{ backgroundColor: "#DBEAFE", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-                      <Text style={{ color: "#1D4ED8", fontSize: 12, fontWeight: "600" }}>上班中</Text>
-                    </View>
-                  ) : (
-                    <View style={{ backgroundColor: "#F1F5F9", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-                      <Text style={{ color: "#64748B", fontSize: 12, fontWeight: "600" }}>未打卡</Text>
-                    </View>
-                  )}
+                  <View style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 20,
+                    backgroundColor: isCompleted ? "#DCFCE7" : isClockedIn ? "#DBEAFE" : "#F1F5F9",
+                  }}>
+                    <Text style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: isCompleted ? "#16A34A" : isClockedIn ? "#1D4ED8" : "#64748B",
+                    }}>
+                      {isCompleted ? "已完成" : isClockedIn ? "上班中" : "未打卡"}
+                    </Text>
+                  </View>
                 </View>
 
-                {/* Clock Times */}
-                <View style={{ flexDirection: "row", marginBottom: 12 }}>
+                {/* Clock Times Row */}
+                <View style={{
+                  flexDirection: "row",
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 14,
+                }}>
                   <View style={{ flex: 1, alignItems: "center" }}>
-                    <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 4 }}>上班</Text>
-                    <Text style={{ fontSize: 20, fontWeight: "700", color: record?.clockInTime ? "#22C55E" : "#CBD5E1" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#22C55E" }} />
+                      <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "500" }}>上班</Text>
+                    </View>
+                    <Text style={{ fontSize: 22, fontWeight: "700", color: record?.clockInTime ? "#22C55E" : "#CBD5E1" }}>
                       {formatTime(record?.clockInTime)}
                     </Text>
                     {record?.status === "late" && (
-                      <Text style={{ fontSize: 11, color: "#F59E0B", marginTop: 2 }}>遲到</Text>
+                      <Text style={{ fontSize: 10, color: "#F59E0B", marginTop: 2, fontWeight: "600" }}>遲到</Text>
                     )}
                   </View>
-                  <View style={{ width: 1, backgroundColor: "#E2E8F0", marginHorizontal: 8 }} />
+                  <View style={{ width: 1, backgroundColor: "#E2E8F0" }} />
                   <View style={{ flex: 1, alignItems: "center" }}>
-                    <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 4 }}>下班</Text>
-                    <Text style={{ fontSize: 20, fontWeight: "700", color: record?.clockOutTime ? "#3B82F6" : "#CBD5E1" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#3B82F6" }} />
+                      <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "500" }}>下班</Text>
+                    </View>
+                    <Text style={{ fontSize: 22, fontWeight: "700", color: record?.clockOutTime ? "#3B82F6" : "#CBD5E1" }}>
                       {formatTime(record?.clockOutTime)}
                     </Text>
                     {record?.status === "early_leave" && (
-                      <Text style={{ fontSize: 11, color: "#F59E0B", marginTop: 2 }}>早退</Text>
+                      <Text style={{ fontSize: 10, color: "#F59E0B", marginTop: 2, fontWeight: "600" }}>早退</Text>
                     )}
                   </View>
                 </View>
@@ -285,9 +275,9 @@ export default function ClockScreen() {
                     onPress={() => handleClock(shift.label, !isClockedIn)}
                     disabled={isClocking}
                     style={{
-                      backgroundColor: isClockedIn ? "#3B82F6" : "#1E40AF",
+                      backgroundColor: isClockedIn ? "#2563EB" : "#1E3A8A",
                       borderRadius: 12,
-                      paddingVertical: 12,
+                      paddingVertical: 14,
                       alignItems: "center",
                       opacity: isClocking ? 0.7 : 1,
                     }}
@@ -295,29 +285,34 @@ export default function ClockScreen() {
                     {isClocking ? (
                       <ActivityIndicator color="white" />
                     ) : (
-                      <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>
-                        {isClockedIn ? "⬇️ 下班打卡" : "⬆️ 上班打卡"}
+                      <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
+                        {isClockedIn ? "下班打卡" : "上班打卡"}
                       </Text>
                     )}
                   </TouchableOpacity>
+                )}
+
+                {isCompleted && (
+                  <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, paddingVertical: 10, alignItems: "center" }}>
+                    <Text style={{ color: "#16A34A", fontSize: 14, fontWeight: "600" }}>今日已完成打卡</Text>
+                  </View>
                 )}
               </View>
             );
           })}
 
-          {/* No schedule notice */}
+          {/* Notices */}
           {shifts.length === 0 && (
-            <View style={{ backgroundColor: "#FFF7ED", borderRadius: 12, padding: 12, marginBottom: 12 }}>
+            <View style={{ backgroundColor: "#FFFBEB", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#FDE68A" }}>
               <Text style={{ color: "#92400E", fontSize: 13, textAlign: "center" }}>
-                ℹ️ 今日尚未排班，顯示預設班次
+                今日尚未排班，顯示預設班次
               </Text>
             </View>
           )}
 
-          {/* GPS Status */}
           {settings?.work_location_lat && (
-            <View style={{ backgroundColor: "#F0FDF4", borderRadius: 12, padding: 12, marginBottom: 12, flexDirection: "row", alignItems: "center" }}>
-              <Text style={{ fontSize: 16, marginRight: 8 }}>📍</Text>
+            <View style={{ backgroundColor: "#F0FDF4", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#BBF7D0", flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ fontSize: 16 }}>📍</Text>
               <Text style={{ color: "#166534", fontSize: 13, flex: 1 }}>
                 打卡需在工作地點 {settings?.allowed_radius || 200} 公尺範圍內
               </Text>
