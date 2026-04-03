@@ -47,14 +47,13 @@ export function AdminSidebar({ visible, onClose }: Props) {
   }, [visible]);
 
   const handleNav = async (path: string) => {
+    onClose();
     if (path === "__logout__") {
-      onClose();
       await logout();
-      router.replace("/login" as any);
+      setTimeout(() => router.replace("/login" as any), 300);
       return;
     }
-    router.replace(path as any);
-    onClose();
+    setTimeout(() => router.push(path as any), 200);
   };
 
   const isActive = (path: string) => {
