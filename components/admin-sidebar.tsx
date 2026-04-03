@@ -47,13 +47,15 @@ export function AdminSidebar({ visible, onClose }: Props) {
   }, [visible]);
 
   const handleNav = async (path: string) => {
-    onClose();
     if (path === "__logout__") {
+      onClose();
       await logout();
-      setTimeout(() => router.replace("/login" as any), 300);
+      router.replace("/login" as any);
       return;
     }
-    setTimeout(() => router.push(path as any), 200);
+    // Push first, then close - avoids popstate triggering back navigation
+    router.push(path as any);
+    onClose();
   };
 
   const isActive = (path: string) => {
@@ -66,7 +68,7 @@ export function AdminSidebar({ visible, onClose }: Props) {
       visible={visible}
       transparent
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={() => {}}
     >
       {/* Backdrop */}
       <Animated.View
