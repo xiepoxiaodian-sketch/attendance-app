@@ -6,25 +6,10 @@ import { Platform, View, Text, ActivityIndicator } from "react-native";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { useEffect } from "react";
 
-type TabItemProps = {
-  icon: string;
-  label: string;
-  color: string;
-};
-
-function TabItem({ icon, label, color }: TabItemProps) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-      <IconSymbol size={22} name={icon as any} color={color} />
-      <Text style={{ fontSize: 13, fontWeight: "600", color }}>{label}</Text>
-    </View>
-  );
-}
-
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const bottomPadding = Platform.OS === "web" ? 10 : Math.max(insets.bottom, 6);
-  const tabBarHeight = 52 + bottomPadding;
+  const tabBarHeight = 60 + bottomPadding;
   const { employee, isLoading } = useEmployeeAuth();
   const router = useRouter();
 
@@ -39,7 +24,6 @@ export default function TabLayout() {
     }
   }, [employee, isLoading]);
 
-  // Show loading spinner while checking auth (not blank)
   if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#1E3A8A" }}>
@@ -49,7 +33,6 @@ export default function TabLayout() {
     );
   }
 
-  // Not logged in or admin: redirect handled by useEffect, show nothing while redirecting
   if (!employee || employee.role === "admin") return null;
 
   return (
@@ -59,7 +42,12 @@ export default function TabLayout() {
         tabBarInactiveTintColor: "#94A3B8",
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+          marginTop: 2,
+        },
         tabBarStyle: {
           paddingTop: 6,
           paddingBottom: bottomPadding,
@@ -74,35 +62,45 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "打卡",
-          tabBarIcon: ({ color }) => <TabItem icon="clock.fill" label="打卡" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol size={size ?? 24} name="clock.fill" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="records"
         options={{
           title: "紀錄",
-          tabBarIcon: ({ color }) => <TabItem icon="list.bullet.clipboard" label="紀錄" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol size={size ?? 24} name="list.bullet.clipboard" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="schedule-view"
         options={{
           title: "排班",
-          tabBarIcon: ({ color }) => <TabItem icon="calendar" label="排班" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol size={size ?? 24} name="calendar" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="leave"
         options={{
           title: "請假",
-          tabBarIcon: ({ color }) => <TabItem icon="doc.text.fill" label="請假" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol size={size ?? 24} name="doc.text.fill" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "我的",
-          tabBarIcon: ({ color }) => <TabItem icon="person.crop.circle" label="我的" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol size={size ?? 24} name="person.crop.circle" color={color} />
+          ),
         }}
       />
     </Tabs>

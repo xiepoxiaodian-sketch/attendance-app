@@ -6,6 +6,8 @@ const EMPLOYEE_KEY = "employee_session";
 const REMEMBER_CREDENTIALS_KEY = "remember_credentials";
 const SAVED_CREDENTIALS_KEY = "saved_credentials";
 const STAY_LOGGED_IN_KEY = "stay_logged_in";
+const BIOMETRIC_ENABLED_KEY = "biometric_enabled";
+const BIOMETRIC_CREDENTIALS_KEY = "biometric_credentials";
 
 export interface EmployeeSession {
   id: number;
@@ -31,6 +33,10 @@ interface EmployeeAuthContextType {
   saveCredentials: (username: string, password: string) => Promise<void>;
   loadSavedCredentials: () => Promise<SavedCredentials | null>;
   clearSavedCredentials: () => Promise<void>;
+  isBiometricEnabled: () => Promise<boolean>;
+  enableBiometric: (username: string, password: string) => Promise<void>;
+  disableBiometric: () => Promise<void>;
+  getBiometricCredentials: () => Promise<SavedCredentials | null>;
 }
 
 const EmployeeAuthContext = createContext<EmployeeAuthContextType>({
@@ -42,6 +48,10 @@ const EmployeeAuthContext = createContext<EmployeeAuthContextType>({
   saveCredentials: async () => {},
   loadSavedCredentials: async () => null,
   clearSavedCredentials: async () => {},
+  isBiometricEnabled: async () => false,
+  enableBiometric: async () => {},
+  disableBiometric: async () => {},
+  getBiometricCredentials: async () => null,
 });
 
 async function secureGet(key: string): Promise<string | null> {
@@ -94,13 +104,11 @@ export function EmployeeAuthProvider({ children }: { children: React.ReactNode }
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if stay logged in is enabled before loading session
     secureGet(STAY_LOGGED_IN_KEY).then(async (stayLoggedIn) => {
       if (stayLoggedIn === "true") {
         const session = await loadSession();
         setEmployee(session);
       }
-      // If stayLoggedIn is not set, don't auto-load session
       setIsLoading(false);
     });
   }, []);
@@ -113,7 +121,6 @@ export function EmployeeAuthProvider({ children }: { children: React.ReactNode }
 
   const logout = async () => {
     await clearSession();
-    // Keep stay_logged_in preference but clear session
     setEmployee(null);
   };
 
@@ -146,6 +153,34 @@ export function EmployeeAuthProvider({ children }: { children: React.ReactNode }
     await secureDelete(SAVED_CREDENTIALS_KEY);
   };
 
+  // Biometric methods
+  const isBiometricEnabled = async (): Promise<boolean> => {
+    const val = await secureGet(BIOMETRIC_ENABLED_KEY);
+    return val === "true";
+  };
+
+  const enableBiometric = async (username: string, password: string): Promise<void> => {
+    await secureSet(BIOMETRIC_ENABLED_KEY, "true");
+    await secureSet(BIOMETRIC_CREDENTIALS_KEY, JSON.stringify({ username, password }));
+  };
+
+  const disableBiometric = async (): Promise<void> => {
+    await secureDelete(BIOMETRIC_ENABLED_KEY);
+    await secureDelete(BIOMETRIC_CREDENTIALS_KEY);
+  };
+
+  const getBiometricCredentials = async (): Promise<SavedCredentials | null> => {
+    try {
+      const enabled = await secureGet(BIOMETRIC_ENABLED_KEY);
+      if (enabled !== "true") return null;
+      const data = await secureGet(BIOMETRIC_CREDENTIALS_KEY);
+      if (!data) return null;
+      return JSON.parse(data) as SavedCredentials;
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <EmployeeAuthContext.Provider value={{
       employee,
@@ -156,6 +191,10 @@ export function EmployeeAuthProvider({ children }: { children: React.ReactNode }
       saveCredentials,
       loadSavedCredentials,
       clearSavedCredentials,
+      isBiometricEnabled,
+      enableBiometric,
+      disableBiometric,
+      getBiometricCredentials,
     }}>
       {children}
     </EmployeeAuthContext.Provider>

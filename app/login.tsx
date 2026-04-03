@@ -9,22 +9,37 @@ import {
   ScrollView,
   ActivityIndicator,
   Switch,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
+import * as LocalAuthentication from "expo-local-authentication";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, saveCredentials, loadSavedCredentials, clearSavedCredentials } = useEmployeeAuth();
+  const {
+    login,
+    saveCredentials,
+    loadSavedCredentials,
+    clearSavedCredentials,
+    isBiometricEnabled,
+    enableBiometric,
+    getBiometricCredentials,
+  } = useEmployeeAuth();
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricType, setBiometricType] = useState<"face" | "fingerprint" | "none">("none");
+  const [biometricLoading, setBiometricLoading] = useState(false);
 
-  // Load saved credentials on mount
+  // Load saved credentials and check biometric on mount
   useEffect(() => {
     loadSavedCredentials().then((creds) => {
       if (creds) {
@@ -33,17 +48,39 @@ export default function LoginScreen() {
         setRememberMe(true);
       }
     });
+
+    // Check biometric availability
+    if (Platform.OS !== "web") {
+      Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        LocalAuthentication.isEnrolledAsync(),
+        LocalAuthentication.supportedAuthenticationTypesAsync(),
+      ]).then(([hasHw, isEnrolled, types]) => {
+        if (hasHw && isEnrolled) {
+          setBiometricAvailable(true);
+          if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+            setBiometricType("face");
+          } else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+            setBiometricType("fingerprint");
+          }
+        }
+      });
+    }
+
+    // Check if biometric login is enabled
+    isBiometricEnabled().then(setBiometricEnabled);
   }, []);
 
   const loginMutation = trpc.employee.login.useMutation({
     onSuccess: async (data) => {
-      // Handle remember me
       if (rememberMe) {
         await saveCredentials(username.trim(), password);
       } else {
         await clearSavedCredentials();
       }
 
+      // Admin always stays logged in (multi-device support, no session restriction)
+      const shouldStayLoggedIn = data.role === "admin" ? true : stayLoggedIn;
       await login(
         {
           id: data.id,
@@ -54,8 +91,27 @@ export default function LoginScreen() {
           employeeType: data.employeeType ?? undefined,
           jobTitle: data.jobTitle ?? null,
         },
-        stayLoggedIn
+        shouldStayLoggedIn
       );
+
+      // If biometric is available and not yet enabled, offer to enable it
+      if (biometricAvailable && !biometricEnabled && Platform.OS !== "web") {
+        const label = biometricType === "face" ? "臉部識別" : "指紋識別";
+        Alert.alert(
+          `啟用${label}快速登入`,
+          `下次登入時可直接使用${label}，不需輸入帳號密碼`,
+          [
+            { text: "稍後再說", style: "cancel" },
+            {
+              text: "啟用",
+              onPress: async () => {
+                await enableBiometric(username.trim(), password);
+                setBiometricEnabled(true);
+              },
+            },
+          ]
+        );
+      }
 
       if (data.needsSetup) {
         router.replace("/setup/password" as any);
@@ -78,6 +134,41 @@ export default function LoginScreen() {
     }
     loginMutation.mutate({ username: username.trim(), password });
   };
+
+  const handleBiometricLogin = async () => {
+    if (biometricLoading) return;
+    setBiometricLoading(true);
+    setError("");
+    try {
+      const label = biometricType === "face" ? "臉部識別" : "指紋識別";
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: `使用${label}快速登入`,
+        fallbackLabel: "使用密碼",
+        disableDeviceFallback: false,
+      });
+
+      if (!result.success) {
+        setBiometricLoading(false);
+        return;
+      }
+
+      const creds = await getBiometricCredentials();
+      if (!creds) {
+        setError("生物識別資料已失效，請重新登入");
+        setBiometricLoading(false);
+        return;
+      }
+
+      loginMutation.mutate({ username: creds.username, password: creds.password });
+    } catch {
+      setError("生物識別驗證失敗，請使用帳號密碼登入");
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
+  const biometricLabel = biometricType === "face" ? "臉部識別" : "指紋識別";
+  const biometricIcon = biometricType === "face" ? "🪪" : "👆";
 
   return (
     <ScreenContainer
@@ -111,7 +202,7 @@ export default function LoginScreen() {
                 <Text style={{ fontSize: 40 }}>🕐</Text>
               </View>
               <Text style={{ fontSize: 28, fontWeight: "700", color: "white", marginBottom: 4 }}>
-                員工打卡系統
+                好好上班
               </Text>
               <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.75)" }}>
                 請登入您的帳號
@@ -241,6 +332,7 @@ export default function LoginScreen() {
                   borderRadius: 12,
                   paddingVertical: 14,
                   alignItems: "center",
+                  marginBottom: biometricAvailable && biometricEnabled ? 12 : 0,
                 }}
               >
                 {loginMutation.isPending ? (
@@ -251,6 +343,36 @@ export default function LoginScreen() {
                   </Text>
                 )}
               </TouchableOpacity>
+
+              {/* Biometric Login Button - only show on native if enabled */}
+              {biometricAvailable && biometricEnabled && Platform.OS !== "web" && (
+                <TouchableOpacity
+                  onPress={handleBiometricLogin}
+                  disabled={biometricLoading || loginMutation.isPending}
+                  style={{
+                    backgroundColor: "#F0F9FF",
+                    borderWidth: 1.5,
+                    borderColor: "#BAE6FD",
+                    borderRadius: 12,
+                    paddingVertical: 14,
+                    alignItems: "center",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                >
+                  {biometricLoading ? (
+                    <ActivityIndicator color="#0284C7" />
+                  ) : (
+                    <>
+                      <Text style={{ fontSize: 20 }}>{biometricIcon}</Text>
+                      <Text style={{ color: "#0284C7", fontSize: 15, fontWeight: "600" }}>
+                        使用{biometricLabel}快速登入
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
 
             <Text style={{ textAlign: "center", color: "rgba(255,255,255,0.6)", fontSize: 13, marginTop: 24 }}>
