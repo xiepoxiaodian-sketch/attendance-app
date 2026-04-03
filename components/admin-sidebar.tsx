@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity, ScrollView, Modal, Animated } from "react-native";
-import { useRouter, usePathname } from "expo-router";
+import { View, Text, TouchableOpacity, ScrollView, Modal, Animated, Platform } from "react-native";
+import { usePathname } from "expo-router";
 import { useRef, useEffect } from "react";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -26,7 +26,6 @@ type Props = {
 };
 
 export function AdminSidebar({ visible, onClose }: Props) {
-  const router = useRouter();
   const pathname = usePathname();
   const { employee, logout } = useEmployeeAuth();
   const slideAnim = useRef(new Animated.Value(-280)).current;
@@ -50,13 +49,24 @@ export function AdminSidebar({ visible, onClose }: Props) {
     if (path === "__logout__") {
       onClose();
       await logout();
-      router.replace("/login" as any);
+      if (Platform.OS === "web") {
+        window.location.href = "/login";
+      }
       return;
     }
-    // Close sidebar first, then navigate after animation
-    // With Slot layout (no Stack history), this is safe
-    onClose();
-    setTimeout(() => router.push(path as any), 250);
+
+    // On web: use window.location.href to avoid Modal popstate conflicts
+    // On native: close sidebar then navigate
+    if (Platform.OS === "web") {
+      // Directly navigate without waiting for modal animation
+      // This avoids the popstate event from Modal close overriding navigation
+      window.location.href = path === "/(tabs)" ? "/" : path;
+    } else {
+      onClose();
+      // For native, use dynamic import to avoid circular deps
+      const { router } = require("expo-router");
+      setTimeout(() => router.push(path as any), 250);
+    }
   };
 
   const isActive = (path: string) => {
@@ -69,7 +79,7 @@ export function AdminSidebar({ visible, onClose }: Props) {
       visible={visible}
       transparent
       animationType="none"
-      onRequestClose={() => {}}
+      onRequestClose={onClose}
     >
       {/* Backdrop */}
       <Animated.View
