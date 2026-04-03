@@ -31,10 +31,14 @@ if [ ! -d "dist-web" ]; then
   exit 1
 fi
 echo "✅ 前端打包完成"
-
+# Step 2.5: 注入 MaterialIcons 字型（修復 Web 圖示顯示問題）
+echo ""
+echo "🔤 注入 MaterialIcons 字型..."
+node scripts/inject-fonts.js
+echo "✅ 字型注入完成"
 # Step 3: 加入 PWA 設定 + 版本號（強制瀏覽器更新快取）
 echo ""
-echo "🎨 [3/4] 加入 PWA 設定..."
+echo "🎨 [3/4] 加入 PWA 設定...""
 python3 << 'PYEOF'
 from PIL import Image
 import os, json, glob, time

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
+import fs from "fs";
 import net from "net";
 import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -79,7 +80,6 @@ async function startServer() {
   if (process.env.NODE_ENV === "production") {
     app.get("*", (req, res) => {
       if (req.path.startsWith("/api")) return;
-      const fs = require("fs");
       // Try exact path + .html (e.g. /admin/employees -> dist-web/admin/employees.html)
       const htmlPath = path.join(distWebPath, req.path.replace(/\/$/, "") + ".html");
       if (fs.existsSync(htmlPath)) {
