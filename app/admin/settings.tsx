@@ -115,7 +115,7 @@ function SystemSettings() {
         </View>
 
         {/* Require GPS */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={{ fontSize: 14, color: "#1E293B" }}>要求 GPS 定位</Text>
             <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>打卡時需在指定地點範圍內</Text>
@@ -127,7 +127,40 @@ function SystemSettings() {
             thumbColor={form.require_gps === "true" ? "#1E40AF" : "#94A3B8"}
           />
         </View>
+
+        {/* Require WiFi IP */}
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10 }}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={{ fontSize: 14, color: "#1E293B" }}>限定公司 WiFi 打卡</Text>
+            <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>員工需連公司 WiFi 才能打卡</Text>
+          </View>
+          <Switch
+            value={form.require_ip_whitelist === "true"}
+            onValueChange={(v) => setForm(f => ({ ...f, require_ip_whitelist: v ? "true" : "false" }))}
+            trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
+            thumbColor={form.require_ip_whitelist === "true" ? "#1E40AF" : "#94A3B8"}
+          />
+        </View>
       </View>
+
+      {/* WiFi IP Whitelist input */}
+      {form.require_ip_whitelist === "true" && (
+        <View style={{ backgroundColor: "white", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+          <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginBottom: 4 }}>公司 WiFi 外部 IP</Text>
+          <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 12 }}>請到 https://whatismyip.com 查詢公司 WiFi 的對外 IP。多個 IP 用逗號分隔（例：203.69.123.45, 111.22.33.44）</Text>
+          <TextInput
+            value={form.allowed_ips ?? ""}
+            onChangeText={(v) => setForm(f => ({ ...f, allowed_ips: v }))}
+            placeholder="例：203.69.123.45"
+            returnKeyType="done"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: "#1E293B" }}
+            placeholderTextColor="#94A3B8"
+          />
+          <Text style={{ fontSize: 11, color: "#F59E0B", marginTop: 8 }}>⚠️ 啟用後員工必須連公司 WiFi 才能打卡，請確認 IP 正確再儲存</Text>
+        </View>
+      )}
 
       <View style={{ backgroundColor: "white", borderRadius: 14, padding: 16, marginBottom: 16 }}>
         <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginBottom: 12 }}>地點與時間設定</Text>

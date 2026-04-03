@@ -77,12 +77,25 @@ const attendanceRouter = router({
       locationName: z.string().optional(),
       shiftLabel: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const today = new Date().toISOString().split("T")[0];
       const existing = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
       const shiftLabel = input.shiftLabel || "班次1";
       const alreadyClockedIn = existing.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
       if (alreadyClockedIn) throw new Error("已打上班卡，請先打下班卡");
+
+      // ── IP Whitelist check ─────────────────────────────────────────────────
+      const requireIp = await db.getSetting("require_ip_whitelist");
+      if (requireIp === "true") {
+        const allowedIps = await db.getSetting("allowed_ips");
+        if (allowedIps) {
+          const clientIp = (ctx.req.headers["x-forwarded-for"] as string || ctx.req.socket.remoteAddress || "").split(",")[0].trim();
+          const ipList = allowedIps.split(",").map((ip: string) => ip.trim()).filter(Boolean);
+          if (!ipList.some((ip: string) => clientIp === ip || clientIp.startsWith(ip))) {
+            throw new Error(`您目前不在公司 WiFi 網路內，無法打卡（目前 IP：${clientIp}）`);
+          }
+        }
+      }
 
       const requireDevice = await db.getSetting("require_device_binding");
       if (requireDevice === "true") {
@@ -141,7 +154,7 @@ const attendanceRouter = router({
       locationName: z.string().optional(),
       shiftLabel: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const today = new Date().toISOString().split("T")[0];
       const now = new Date();
       const records = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
@@ -153,6 +166,19 @@ const attendanceRouter = router({
         record = records.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
       }
       if (!record) throw new Error("找不到對應的打卡紀錄，請先打上班卡");
+
+      // ── IP Whitelist check ─────────────────────────────────────────────────
+      const requireIpOut = await db.getSetting("require_ip_whitelist");
+      if (requireIpOut === "true") {
+        const allowedIpsOut = await db.getSetting("allowed_ips");
+        if (allowedIpsOut) {
+          const clientIp = (ctx.req.headers["x-forwarded-for"] as string || ctx.req.socket.remoteAddress || "").split(",")[0].trim();
+          const ipList = allowedIpsOut.split(",").map((ip: string) => ip.trim()).filter(Boolean);
+          if (!ipList.some((ip: string) => clientIp === ip || clientIp.startsWith(ip))) {
+            throw new Error(`您目前不在公司 WiFi 網路內，無法打卡（目前 IP：${clientIp}）`);
+          }
+        }
+      }
 
       // Enforce device binding on clock-out too
       const requireDeviceOut = await db.getSetting("require_device_binding");
