@@ -2,7 +2,7 @@ import { Tabs, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Platform, View, Text } from "react-native";
+import { Platform, View, Text, ActivityIndicator } from "react-native";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { useEffect } from "react";
 
@@ -29,16 +29,28 @@ export default function TabLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !employee) {
+    if (isLoading) return;
+    if (!employee) {
       router.replace("/login" as any);
-    } else if (!isLoading && employee?.needsSetup) {
+    } else if (employee.needsSetup) {
       router.replace("/setup/password" as any);
-    } else if (!isLoading && employee?.role === "admin") {
+    } else if (employee.role === "admin") {
       router.replace("/admin" as any);
     }
   }, [employee, isLoading]);
 
-  if (isLoading || !employee || employee.role === "admin") return null;
+  // Show loading spinner while checking auth (not blank)
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#1E3A8A" }}>
+        <ActivityIndicator size="large" color="white" />
+        <Text style={{ color: "rgba(255,255,255,0.7)", marginTop: 12, fontSize: 14 }}>載入中...</Text>
+      </View>
+    );
+  }
+
+  // Not logged in or admin: redirect handled by useEffect, show nothing while redirecting
+  if (!employee || employee.role === "admin") return null;
 
   return (
     <Tabs

@@ -85,9 +85,10 @@ const attendanceRouter = router({
       if (alreadyClockedIn) throw new Error("已打上班卡，請先打下班卡");
 
       const requireDevice = await db.getSetting("require_device_binding");
-      if (requireDevice === "true" && input.deviceId) {
+      if (requireDevice === "true") {
+        if (!input.deviceId) throw new Error("打卡需要裝置識別碼，請使用已綁定的裝置");
         const device = await db.findDevice(input.employeeId, input.deviceId);
-        if (!device) throw new Error("此裝置未綁定，無法打卡");
+        if (!device) throw new Error("此裝置未綁定您的帳號，請聯絡管理員授權後再打卡");
       }
 
       if (input.lat && input.lng) {
@@ -152,6 +153,14 @@ const attendanceRouter = router({
         record = records.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
       }
       if (!record) throw new Error("找不到對應的打卡紀錄，請先打上班卡");
+
+      // Enforce device binding on clock-out too
+      const requireDeviceOut = await db.getSetting("require_device_binding");
+      if (requireDeviceOut === "true") {
+        if (!input.deviceId) throw new Error("打卡需要裝置識別碼，請使用已綁定的裝置");
+        const device = await db.findDevice(input.employeeId, input.deviceId);
+        if (!device) throw new Error("此裝置未綁定您的帳號，請聯絡管理員授權後再打卡");
+      }
 
       if (input.lat && input.lng) {
         const lat = await db.getSetting("work_location_lat");

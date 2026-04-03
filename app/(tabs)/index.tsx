@@ -16,6 +16,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
 
+// ─── Device ID helper ────────────────────────────────────────────────────────
 function getDeviceId(): string {
   if (Platform.OS === "web") {
     let id = localStorage.getItem("device_id");
@@ -25,9 +26,17 @@ function getDeviceId(): string {
     }
     return id;
   }
-  return `${Device.brand}-${Device.modelName}-${Device.osVersion}`.replace(/\s+/g, "-").toLowerCase();
+  return `${Device.brand}-${Device.modelName}-${Device.osVersion}`
+    .replace(/\s+/g, "-")
+    .toLowerCase();
 }
 
+function getDevicePlatform(): string {
+  if (Platform.OS === "web") return "web";
+  return Platform.OS;
+}
+
+// ─── Format helpers ───────────────────────────────────────────────────────────
 function formatTime(date: Date | string | null | undefined): string {
   if (!date) return "--:--";
   const d = typeof date === "string" ? new Date(date) : date;
@@ -43,10 +52,57 @@ function formatDate(date: Date): string {
   });
 }
 
+// ─── Verification step indicator ─────────────────────────────────────────────
+type VerifyStep = "idle" | "biometric" | "device" | "location" | "clocking" | "done";
+
+function VerifyStepBadge({ step }: { step: VerifyStep }) {
+  if (step === "idle" || step === "done") return null;
+
+  const labels: Record<VerifyStep, string> = {
+    idle: "",
+    biometric: "🔐 生物識別驗證中...",
+    device: "📱 裝置綁定確認中...",
+    location: "📍 定位取得中...",
+    clocking: "⏳ 打卡記錄中...",
+    done: "",
+  };
+
+  return (
+    <View style={{
+      position: "absolute",
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 999,
+    }}>
+      <View style={{
+        backgroundColor: "white",
+        borderRadius: 16,
+        padding: 28,
+        alignItems: "center",
+        minWidth: 240,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+        elevation: 12,
+      }}>
+        <ActivityIndicator size="large" color="#2563EB" style={{ marginBottom: 14 }} />
+        <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B", textAlign: "center" }}>
+          {labels[step]}
+        </Text>
+        <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 6 }}>請稍候...</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
 export default function ClockScreen() {
   const { employee } = useEmployeeAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isClocking, setIsClocking] = useState(false);
+  const [verifyStep, setVerifyStep] = useState<VerifyStep>("idle");
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -66,20 +122,30 @@ export default function ClockScreen() {
 
   const { data: settings } = trpc.settings.getAll.useQuery();
 
+  const registerDeviceMutation = trpc.devices.register.useMutation();
+
   const clockInMutation = trpc.attendance.clockIn.useMutation({
     onSuccess: () => {
       refetchAttendance();
-      Alert.alert("打卡成功", "上班打卡完成！", [{ text: "確定" }]);
+      setVerifyStep("done");
+      Alert.alert("打卡成功 ✅", "上班打卡完成！", [{ text: "確定" }]);
     },
-    onError: (err) => Alert.alert("打卡失敗", err.message, [{ text: "確定" }]),
+    onError: (err) => {
+      setVerifyStep("idle");
+      Alert.alert("打卡失敗", err.message, [{ text: "確定" }]);
+    },
   });
 
   const clockOutMutation = trpc.attendance.clockOut.useMutation({
     onSuccess: () => {
       refetchAttendance();
-      Alert.alert("打卡成功", "下班打卡完成！", [{ text: "確定" }]);
+      setVerifyStep("done");
+      Alert.alert("打卡成功 ✅", "下班打卡完成！", [{ text: "確定" }]);
     },
-    onError: (err) => Alert.alert("打卡失敗", err.message, [{ text: "確定" }]),
+    onError: (err) => {
+      setVerifyStep("idle");
+      Alert.alert("打卡失敗", err.message, [{ text: "確定" }]);
+    },
   });
 
   const onRefresh = useCallback(async () => {
@@ -88,70 +154,172 @@ export default function ClockScreen() {
     setRefreshing(false);
   }, []);
 
+  // ─── Three-step verification + clock ───────────────────────────────────────
   const handleClock = async (shiftLabel: string, isClockIn: boolean) => {
-    if (!employee) return;
-    setIsClocking(true);
+    if (!employee || verifyStep !== "idle") return;
+
     try {
+      // ── Step 1: Biometric ──────────────────────────────────────────────────
+      if (Platform.OS !== "web") {
+        setVerifyStep("biometric");
+        const hasHardware = await LocalAuthentication.hasHardwareAsync();
+        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+        if (hasHardware && isEnrolled) {
+          const result = await LocalAuthentication.authenticateAsync({
+            promptMessage: isClockIn
+              ? `${shiftLabel} - 上班打卡驗證`
+              : `${shiftLabel} - 下班打卡驗證`,
+            cancelLabel: "取消",
+            disableDeviceFallback: false,
+          });
+          if (!result.success) {
+            setVerifyStep("idle");
+            if (result.error !== "user_cancel" && result.error !== "app_cancel") {
+              Alert.alert("驗證失敗", "生物識別驗證失敗，請再試一次");
+            }
+            return;
+          }
+        } else {
+          // No biometric hardware — warn but allow (web or unenrolled device)
+          setVerifyStep("idle");
+          Alert.alert(
+            "無法驗證",
+            "此裝置未設定生物識別（Face ID / 指紋），請先在系統設定中啟用後再打卡。",
+            [{ text: "確定" }]
+          );
+          return;
+        }
+      }
+
+      // ── Step 2: Device binding ─────────────────────────────────────────────
+      setVerifyStep("device");
+      const deviceId = getDeviceId();
+      const platform = getDevicePlatform();
+
+      // Auto-register device on first use (will be a no-op if already registered)
+      try {
+        await registerDeviceMutation.mutateAsync({
+          employeeId: employee.id,
+          deviceId,
+          deviceName: Platform.OS !== "web"
+            ? `${Device.brand ?? ""} ${Device.modelName ?? ""}`.trim()
+            : "Web Browser",
+          platform,
+        });
+      } catch {
+        // Registration failed — device may not be bound
+        setVerifyStep("idle");
+        Alert.alert(
+          "裝置未綁定",
+          "此裝置尚未綁定您的帳號，請聯絡管理員進行裝置授權後再打卡。",
+          [{ text: "確定" }]
+        );
+        return;
+      }
+
+      // ── Step 3: GPS location ───────────────────────────────────────────────
+      setVerifyStep("location");
       let lat: number | undefined;
       let lng: number | undefined;
       let locationName: string | undefined;
 
       const requireGPS = settings?.work_location_lat && settings?.work_location_lng;
+
       if (requireGPS) {
+        // GPS required — must succeed
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          setVerifyStep("idle");
+          Alert.alert(
+            "需要定位權限",
+            "打卡需要取得您的位置，請允許定位權限後再試。",
+            [{ text: "確定" }]
+          );
+          return;
+        }
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          lat = loc.coords.latitude;
+          lng = loc.coords.longitude;
+          locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        } catch {
+          setVerifyStep("idle");
+          Alert.alert("定位失敗", "無法取得您的位置，請確認 GPS 已開啟後再試。", [{ text: "確定" }]);
+          return;
+        }
+      } else {
+        // GPS not required — try to get location silently
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === "granted") {
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
             lat = loc.coords.latitude;
             lng = loc.coords.longitude;
             locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
           }
-        } catch (e) {}
-      }
-
-      if (Platform.OS !== "web") {
-        const hasHardware = await LocalAuthentication.hasHardwareAsync();
-        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-        if (hasHardware && isEnrolled) {
-          const result = await LocalAuthentication.authenticateAsync({
-            promptMessage: isClockIn ? `${shiftLabel} - 上班打卡驗證` : `${shiftLabel} - 下班打卡驗證`,
-            cancelLabel: "取消",
-            disableDeviceFallback: false,
-          });
-          if (!result.success) {
-            if (result.error !== "user_cancel" && result.error !== "app_cancel") {
-              Alert.alert("驗證失敗", "生物識別驗證失敗，請再試一次");
-            }
-            setIsClocking(false);
-            return;
-          }
+        } catch {
+          // Silent fail — location not required
         }
       }
 
-      const deviceId = getDeviceId();
+      // ── Step 4: Clock in / out ─────────────────────────────────────────────
+      setVerifyStep("clocking");
       if (isClockIn) {
-        await clockInMutation.mutateAsync({ employeeId: employee.id, deviceId, lat, lng, locationName, shiftLabel });
+        await clockInMutation.mutateAsync({
+          employeeId: employee.id,
+          deviceId,
+          lat,
+          lng,
+          locationName,
+          shiftLabel,
+        });
       } else {
-        const record = todayAttendance?.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
-        await clockOutMutation.mutateAsync({ employeeId: employee.id, attendanceId: record?.id, deviceId, lat, lng, locationName, shiftLabel });
+        const record = todayAttendance?.find(
+          (r) => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime
+        );
+        await clockOutMutation.mutateAsync({
+          employeeId: employee.id,
+          attendanceId: record?.id,
+          deviceId,
+          lat,
+          lng,
+          locationName,
+          shiftLabel,
+        });
       }
+    } catch {
+      setVerifyStep("idle");
     } finally {
-      setIsClocking(false);
+      // Reset to idle after a short delay
+      setTimeout(() => setVerifyStep("idle"), 500);
     }
   };
 
-  const shifts = (todaySchedule && todaySchedule.shifts
-    ? todaySchedule.shifts as Array<{ startTime: string; endTime: string; label: string }>
-    : []);
-  const displayShifts = shifts.length > 0 ? shifts : [{ startTime: "09:00", endTime: "18:00", label: "班次1" }];
+  const shifts = todaySchedule?.shifts
+    ? (todaySchedule.shifts as Array<{ startTime: string; endTime: string; label: string }>)
+    : [];
+  const displayShifts = shifts.length > 0
+    ? shifts
+    : [{ startTime: "09:00", endTime: "18:00", label: "班次1" }];
 
-  const timeStr = currentTime.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-  const [hm, sec] = timeStr.split(":").length === 3
-    ? [timeStr.slice(0, 5), timeStr.slice(6)]
-    : [timeStr, ""];
+  const timeStr = currentTime.toLocaleTimeString("zh-TW", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = timeStr.split(":");
+  const hm = parts.length === 3 ? `${parts[0]}:${parts[1]}` : timeStr;
+  const sec = parts.length === 3 ? parts[2] : "";
+
+  const isClocking = verifyStep !== "idle" && verifyStep !== "done";
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
+      {/* Overlay during verification */}
+      <VerifyStepBadge step={verifyStep} />
+
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={{ flexGrow: 1 }}
@@ -176,7 +344,14 @@ export default function ClockScreen() {
             </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 8 }}>
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
+            <View style={{
+              width: 28,
+              height: 28,
+              borderRadius: 14,
+              backgroundColor: "rgba(255,255,255,0.15)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
               <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>
                 {employee?.fullName?.[0] ?? "?"}
               </Text>
@@ -185,12 +360,29 @@ export default function ClockScreen() {
               {employee?.fullName} · {employee?.jobTitle || "員工"}
             </Text>
           </View>
+
+          {/* Security badges */}
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            {Platform.OS !== "web" && (
+              <View style={{ backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 11, fontWeight: "600" }}>🔐 生物識別</Text>
+              </View>
+            )}
+            <View style={{ backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 11, fontWeight: "600" }}>📱 裝置綁定</Text>
+            </View>
+            {settings?.work_location_lat && (
+              <View style={{ backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 11, fontWeight: "600" }}>📍 GPS 定位</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Shift Cards */}
         <View style={{ padding: 14, marginTop: -20, gap: 12 }}>
           {displayShifts.map((shift) => {
-            const record = todayAttendance?.find(r => r.shiftLabel === shift.label);
+            const record = todayAttendance?.find((r) => r.shiftLabel === shift.label);
             const isClockedIn = !!record?.clockInTime && !record?.clockOutTime;
             const isCompleted = !!record?.clockInTime && !!record?.clockOutTime;
 
@@ -285,16 +477,21 @@ export default function ClockScreen() {
                     {isClocking ? (
                       <ActivityIndicator color="white" />
                     ) : (
-                      <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
-                        {isClockedIn ? "下班打卡" : "上班打卡"}
-                      </Text>
+                      <View>
+                        <Text style={{ color: "white", fontSize: 16, fontWeight: "700", textAlign: "center" }}>
+                          {isClockedIn ? "下班打卡" : "上班打卡"}
+                        </Text>
+                        <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, textAlign: "center", marginTop: 2 }}>
+                          {Platform.OS !== "web" ? "生物識別 + 裝置 + 定位" : "裝置綁定 + 定位"}
+                        </Text>
+                      </View>
                     )}
                   </TouchableOpacity>
                 )}
 
                 {isCompleted && (
                   <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, paddingVertical: 10, alignItems: "center" }}>
-                    <Text style={{ color: "#16A34A", fontSize: 14, fontWeight: "600" }}>今日已完成打卡</Text>
+                    <Text style={{ color: "#16A34A", fontSize: 14, fontWeight: "600" }}>今日已完成打卡 ✅</Text>
                   </View>
                 )}
               </View>
@@ -310,14 +507,21 @@ export default function ClockScreen() {
             </View>
           )}
 
-          {settings?.work_location_lat && (
-            <View style={{ backgroundColor: "#F0FDF4", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#BBF7D0", flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={{ fontSize: 16 }}>📍</Text>
-              <Text style={{ color: "#166534", fontSize: 13, flex: 1 }}>
-                打卡需在工作地點 {settings?.allowed_radius || 200} 公尺範圍內
+          {/* Security info card */}
+          <View style={{ backgroundColor: "#EFF6FF", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#BFDBFE", gap: 6 }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E40AF", marginBottom: 2 }}>打卡安全驗證</Text>
+            {Platform.OS !== "web" && (
+              <Text style={{ fontSize: 12, color: "#1E40AF" }}>🔐 生物識別（Face ID / 指紋）</Text>
+            )}
+            <Text style={{ fontSize: 12, color: "#1E40AF" }}>📱 裝置綁定驗證</Text>
+            {settings?.work_location_lat ? (
+              <Text style={{ fontSize: 12, color: "#1E40AF" }}>
+                📍 GPS 定位（需在 {settings?.allowed_radius || 200} 公尺範圍內）
               </Text>
-            </View>
-          )}
+            ) : (
+              <Text style={{ fontSize: 12, color: "#1E40AF" }}>📍 GPS 定位記錄</Text>
+            )}
+          </View>
         </View>
       </ScrollView>
     </ScreenContainer>
