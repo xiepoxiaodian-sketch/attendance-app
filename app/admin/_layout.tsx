@@ -1,4 +1,4 @@
-import { Stack, useRouter } from "expo-router";
+import { Slot, useRouter } from "expo-router";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { useEffect } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
@@ -28,18 +28,5 @@ export default function AdminLayout() {
 
   if (!employee || employee.role !== "admin") return null;
 
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="employees" />
-      <Stack.Screen name="schedule" />
-      <Stack.Screen name="attendance" />
-      <Stack.Screen name="leave-review" />
-      <Stack.Screen name="reports" />
-      <Stack.Screen name="devices" />
-      <Stack.Screen name="settings" />
-      <Stack.Screen name="schedule-overview" />
-      <Stack.Screen name="work-shifts" />
-    </Stack>
-  );
+  return <Slot />;
 }
