@@ -1,33 +1,33 @@
-import { View, Text, TouchableOpacity, ScrollView, Modal, Animated, Platform } from "react-native";
-import { usePathname } from "expo-router";
+import { View, Text, TouchableOpacity, ScrollView, Modal, Animated } from "react-native";
 import { useRef, useEffect } from "react";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useRouter } from "expo-router";
+import { type AdminPage } from "@/lib/admin-nav-context";
 
-const NAV_ITEMS = [
-  { label: "總覽", icon: "chart.bar.fill", path: "/admin" },
-  { label: "員工管理", icon: "person.2.fill", path: "/admin/employees" },
-  { label: "排班管理", icon: "calendar.badge.clock", path: "/admin/schedule" },
-  { label: "打卡紀錄", icon: "clock.fill", path: "/admin/attendance" },
-  { label: "請假審核", icon: "doc.text.fill", path: "/admin/leave-review" },
-  { label: "報表統計", icon: "chart.line.uptrend.xyaxis", path: "/admin/reports" },
-  { label: "裝置管理", icon: "iphone", path: "/admin/devices" },
-  { label: "系統設定", icon: "gear", path: "/admin/settings" },
-];
+export type { AdminPage };
 
-const BOTTOM_ITEMS = [
-  { label: "員工打卡頁", icon: "clock.arrow.circlepath", path: "/(tabs)" },
-  { label: "登出", icon: "rectangle.portrait.and.arrow.right", path: "__logout__" },
+const NAV_ITEMS: { label: string; icon: string; page: AdminPage }[] = [
+  { label: "總覽", icon: "chart.bar.fill", page: "dashboard" },
+  { label: "員工管理", icon: "person.2.fill", page: "employees" },
+  { label: "排班管理", icon: "calendar.badge.clock", page: "schedule" },
+  { label: "打卡紀錄", icon: "clock.fill", page: "attendance" },
+  { label: "請假審核", icon: "doc.text.fill", page: "leave-review" },
+  { label: "報表統計", icon: "chart.line.uptrend.xyaxis", page: "reports" },
+  { label: "裝置管理", icon: "iphone", page: "devices" },
+  { label: "系統設定", icon: "gear", page: "settings" },
 ];
 
 type Props = {
   visible: boolean;
   onClose: () => void;
+  currentPage: AdminPage;
+  onNavigate: (page: AdminPage) => void;
 };
 
-export function AdminSidebar({ visible, onClose }: Props) {
-  const pathname = usePathname();
+export function AdminSidebar({ visible, onClose, currentPage, onNavigate }: Props) {
   const { employee, logout } = useEmployeeAuth();
+  const router = useRouter();
   const slideAnim = useRef(new Animated.Value(-280)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -45,33 +45,19 @@ export function AdminSidebar({ visible, onClose }: Props) {
     }
   }, [visible]);
 
-  const handleNav = async (path: string) => {
-    if (path === "__logout__") {
-      onClose();
-      await logout();
-      if (Platform.OS === "web") {
-        window.location.href = "/login";
-      }
-      return;
-    }
-
-    // On web: use window.location.href to avoid Modal popstate conflicts
-    // On native: close sidebar then navigate
-    if (Platform.OS === "web") {
-      // Directly navigate without waiting for modal animation
-      // This avoids the popstate event from Modal close overriding navigation
-      window.location.href = path === "/(tabs)" ? "/" : path;
-    } else {
-      onClose();
-      // For native, use dynamic import to avoid circular deps
-      const { router } = require("expo-router");
-      setTimeout(() => router.push(path as any), 250);
-    }
+  const handleNav = (page: AdminPage) => {
+    onNavigate(page);
   };
 
-  const isActive = (path: string) => {
-    if (path === "/admin") return pathname === "/admin";
-    return pathname.startsWith(path);
+  const handleGoToStaff = () => {
+    onClose();
+    setTimeout(() => router.replace("/(tabs)" as any), 50);
+  };
+
+  const handleLogout = async () => {
+    onClose();
+    await logout();
+    setTimeout(() => router.replace("/login" as any), 50);
   };
 
   return (
@@ -123,11 +109,11 @@ export function AdminSidebar({ visible, onClose }: Props) {
         <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
           <View style={{ paddingVertical: 8 }}>
             {NAV_ITEMS.map((item) => {
-              const active = isActive(item.path);
+              const active = currentPage === item.page;
               return (
                 <TouchableOpacity
-                  key={item.path}
-                  onPress={() => handleNav(item.path)}
+                  key={item.page}
+                  onPress={() => handleNav(item.page)}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -155,27 +141,38 @@ export function AdminSidebar({ visible, onClose }: Props) {
 
           {/* Bottom Items */}
           <View style={{ paddingBottom: 32 }}>
-            {BOTTOM_ITEMS.map((item) => (
-              <TouchableOpacity
-                key={item.path}
-                onPress={() => handleNav(item.path)}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 16,
-                  paddingVertical: 13,
-                  marginHorizontal: 8,
-                  marginVertical: 1,
-                  borderRadius: 10,
-                  gap: 12,
-                }}
-              >
-                <IconSymbol size={18} name={item.icon as any} color="rgba(255,255,255,0.65)" />
-                <Text style={{ fontSize: 14, color: item.path === "__logout__" ? "rgba(255,150,150,0.9)" : "rgba(255,255,255,0.75)" }}>
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity
+              onPress={handleGoToStaff}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 16,
+                paddingVertical: 13,
+                marginHorizontal: 8,
+                marginVertical: 1,
+                borderRadius: 10,
+                gap: 12,
+              }}
+            >
+              <IconSymbol size={18} name={"clock.arrow.circlepath" as any} color="rgba(255,255,255,0.65)" />
+              <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.75)" }}>員工打卡頁</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleLogout}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 16,
+                paddingVertical: 13,
+                marginHorizontal: 8,
+                marginVertical: 1,
+                borderRadius: 10,
+                gap: 12,
+              }}
+            >
+              <IconSymbol size={18} name={"rectangle.portrait.and.arrow.right" as any} color="rgba(255,150,150,0.9)" />
+              <Text style={{ fontSize: 14, color: "rgba(255,150,150,0.9)" }}>登出</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </Animated.View>

@@ -1,6 +1,8 @@
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useState } from "react";
 import { AdminSidebar } from "./admin-sidebar";
+import { useAdminNav } from "@/lib/admin-nav-context";
+
 type Props = {
   title: string;
   subtitle?: string;
@@ -11,6 +13,7 @@ type Props = {
 export function AdminHeader({ title, subtitle, onRefresh, refreshing }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [localRefreshing, setLocalRefreshing] = useState(false);
+  const { currentPage, navigate } = useAdminNav();
 
   const handleRefresh = async () => {
     if (!onRefresh || localRefreshing || refreshing) return;
@@ -86,7 +89,15 @@ export function AdminHeader({ title, subtitle, onRefresh, refreshing }: Props) {
         )}
       </View>
 
-      <AdminSidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <AdminSidebar
+        visible={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        currentPage={currentPage}
+        onNavigate={(page) => {
+          setSidebarOpen(false);
+          navigate(page);
+        }}
+      />
     </>
   );
 }
