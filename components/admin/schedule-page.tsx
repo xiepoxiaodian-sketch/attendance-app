@@ -69,6 +69,8 @@ function WeekTab() {
   });
   const [alertMsg, setAlertMsg] = useState<{ title: string; message: string } | null>(null);
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState(false);
+  const [showStaffingView, setShowStaffingView] = useState(false);
+  const [staffingPopup, setStaffingPopup] = useState<{ dateStr: string; hour: number; names: string[] } | null>(null);
 
   const weekDates = getWeekDates(weekOffset);
   const startDate = toDateStr(weekDates[0]);
@@ -175,6 +177,49 @@ function WeekTab() {
 
   const leaveDuration = leave.mode === "allDay" ? 8 : calcDuration(leave.start, leave.end);
 
+  // ── 時段人力計算 ─────────────────────────────────────────────────────────
+  // 計算每天每小時的在班人數與人員名單
+  const staffingByDayHour = useMemo(() => {
+    // result[dateStr][hour] = [empName, ...]
+    const result: Record<string, Record<number, string[]>> = {};
+    for (const d of weekDates) {
+      const dateStr = toDateStr(d);
+      result[dateStr] = {};
+      for (let h = 6; h <= 23; h++) result[dateStr][h] = [];
+    }
+    for (const emp of activeEmployees) {
+      for (const d of weekDates) {
+        const dateStr = toDateStr(d);
+        const schedule = scheduleMap[emp.id]?.[dateStr];
+        if (!schedule?.shifts?.length) continue;
+        if (schedule.leaveType && schedule.leaveMode === "allDay") continue;
+        for (const shift of schedule.shifts) {
+          const [sh, sm] = shift.startTime.split(":").map(Number);
+          const [eh, em] = shift.endTime.split(":").map(Number);
+          const startMin = sh * 60 + sm;
+          const endMin = eh * 60 + em;
+          for (let h = 6; h <= 23; h++) {
+            const slotStart = h * 60;
+            const slotEnd = (h + 1) * 60;
+            if (startMin < slotEnd && endMin > slotStart) {
+              if (!result[dateStr][h].includes(emp.fullName))
+                result[dateStr][h].push(emp.fullName);
+            }
+          }
+        }
+      }
+    }
+    return result;
+  }, [weekSchedules, activeEmployees, weekDates, scheduleMap]);
+
+  const maxStaff = useMemo(() => {
+    let max = 1;
+    for (const dayData of Object.values(staffingByDayHour))
+      for (const names of Object.values(dayData))
+        if (names.length > max) max = names.length;
+    return max;
+  }, [staffingByDayHour]);
+
   return (
     <>
       <AlertDialog
@@ -228,6 +273,113 @@ function WeekTab() {
           })}
         </View>
       </View>
+
+      {/* Staffing View Toggle */}
+      <TouchableOpacity
+        onPress={() => setShowStaffingView(v => !v)}
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B" }}>⏱ 時段人力視圖</Text>
+          <Text style={{ fontSize: 11, color: "#94A3B8" }}>每小時在班人數</Text>
+        </View>
+        <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "600" }}>{showStaffingView ? "收起 ▲" : "展開 ▼"}</Text>
+      </TouchableOpacity>
+
+      {/* Staffing Heatmap */}
+      {showStaffingView && (
+        <View style={{ backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
+          {/* Popup overlay */}
+          {staffingPopup && (
+            <TouchableOpacity
+              onPress={() => setStaffingPopup(null)}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}
+              activeOpacity={1}
+            >
+              <View style={{ position: "absolute", top: 8, left: 16, right: 16, backgroundColor: "white", borderRadius: 12, padding: 14, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 8, elevation: 8, borderWidth: 1, borderColor: "#E2E8F0", zIndex: 101 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>
+                    {staffingPopup.dateStr.slice(5).replace("-", "/")} {staffingPopup.hour}:00–{staffingPopup.hour + 1}:00
+                  </Text>
+                  <Text style={{ fontSize: 12, color: "#2563EB", fontWeight: "600" }}>{staffingPopup.names.length} 人在班</Text>
+                </View>
+                {staffingPopup.names.length === 0 ? (
+                  <Text style={{ fontSize: 13, color: "#94A3B8" }}>無人排班</Text>
+                ) : (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {staffingPopup.names.map((name, i) => (
+                      <View key={i} style={{ backgroundColor: "#EFF6FF", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+                        <Text style={{ fontSize: 12, color: "#1D4ED8", fontWeight: "600" }}>{name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
+          <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ paddingVertical: 8 }}>
+            <View>
+              {/* Hour labels */}
+              <View style={{ flexDirection: "row", marginLeft: 48, marginBottom: 2 }}>
+                {Array.from({ length: 18 }, (_, i) => i + 6).map(h => (
+                  <View key={h} style={{ width: 28, alignItems: "center" }}>
+                    <Text style={{ fontSize: 8, color: "#94A3B8" }}>{h}</Text>
+                  </View>
+                ))}
+              </View>
+              {/* Day rows */}
+              {weekDates.map((d, di) => {
+                const dateStr = toDateStr(d);
+                const isToday = dateStr === todayStr;
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                return (
+                  <View key={di} style={{ flexDirection: "row", alignItems: "center", marginBottom: 3 }}>
+                    {/* Day label */}
+                    <View style={{ width: 48, flexDirection: "row", alignItems: "center", gap: 2, paddingLeft: 8 }}>
+                      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: isToday ? "#2563EB" : "transparent", alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ fontSize: 9, fontWeight: "700", color: isToday ? "white" : isWeekend ? "#94A3B8" : "#475569" }}>{WEEKDAYS[d.getDay()]}</Text>
+                      </View>
+                      <Text style={{ fontSize: 8, color: isWeekend ? "#94A3B8" : "#64748B" }}>{d.getDate()}</Text>
+                    </View>
+                    {/* Hour cells */}
+                    {Array.from({ length: 18 }, (_, i) => i + 6).map(h => {
+                      const names = staffingByDayHour[dateStr]?.[h] ?? [];
+                      const count = names.length;
+                      const intensity = maxStaff > 0 ? count / maxStaff : 0;
+                      const bg = count === 0
+                        ? (isWeekend ? "#F8FAFC" : "#F1F5F9")
+                        : intensity < 0.33 ? "#DBEAFE"
+                        : intensity < 0.66 ? "#93C5FD"
+                        : "#2563EB";
+                      const textColor = intensity >= 0.66 ? "white" : "#1D4ED8";
+                      return (
+                        <TouchableOpacity
+                          key={h}
+                          onPress={() => setStaffingPopup({ dateStr, hour: h, names })}
+                          style={{ width: 28, height: 22, backgroundColor: bg, borderRadius: 3, marginHorizontal: 0.5, alignItems: "center", justifyContent: "center" }}
+                        >
+                          {count > 0 && <Text style={{ fontSize: 9, fontWeight: "700", color: textColor }}>{count}</Text>}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+              {/* Legend */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 6 }}>
+                <Text style={{ fontSize: 9, color: "#94A3B8" }}>人數：</Text>
+                {[{ bg: "#F1F5F9", label: "0" }, { bg: "#DBEAFE", label: "少" }, { bg: "#93C5FD", label: "中" }, { bg: "#2563EB", label: "多" }].map((item, i) => (
+                  <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                    <View style={{ width: 12, height: 12, backgroundColor: item.bg, borderRadius: 2 }} />
+                    <Text style={{ fontSize: 9, color: "#94A3B8" }}>{item.label}</Text>
+                  </View>
+                ))}
+                <Text style={{ fontSize: 9, color: "#94A3B8", marginLeft: 4 }}>（點擊格子查看人員）</Text>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      )}
 
       {/* Employee Rows */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
