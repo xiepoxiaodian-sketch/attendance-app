@@ -98,12 +98,28 @@ function WeekTab() {
     return map;
   }, [weekSchedules]);
 
+  const utils = trpc.useUtils();
+
+  const invalidateSchedules = useCallback(() => {
+    // Invalidate all schedule queries so MonthTab re-fetches on next render
+    utils.schedules.getWeekAll.invalidate();
+  }, [utils]);
+
   const upsertMutation = trpc.schedules.upsert.useMutation({
-    onSuccess: () => { setShowModal(false); refetchSchedules(); Alert.alert("成功", "排班已儲存"); },
+    onSuccess: () => {
+      setShowModal(false);
+      refetchSchedules();
+      invalidateSchedules();
+      Alert.alert("成功", "排班已儲存");
+    },
     onError: (err) => Alert.alert("錯誤", err.message),
   });
   const deleteMutation = trpc.schedules.delete.useMutation({
-    onSuccess: () => { setShowModal(false); refetchSchedules(); },
+    onSuccess: () => {
+      setShowModal(false);
+      refetchSchedules();
+      invalidateSchedules();
+    },
     onError: (err) => Alert.alert("錯誤", err.message),
   });
 
@@ -391,7 +407,10 @@ function MonthTab() {
   const lastDay = getDaysInMonth(year, month);
   const endDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
-  const { data: allSchedules } = trpc.schedules.getWeekAll.useQuery({ startDate, endDate });
+  const { data: allSchedules, refetch: refetchMonth } = trpc.schedules.getWeekAll.useQuery(
+    { startDate, endDate },
+    { staleTime: 0, refetchOnMount: true, refetchOnWindowFocus: true }
+  );
   const { data: allEmployees } = trpc.employees.list.useQuery();
   const activeEmployees = useMemo(() => allEmployees?.filter(e => e.isActive) ?? [], [allEmployees]);
 
