@@ -1,15 +1,8 @@
-import { Tabs, useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Platform, View, Text } from "react-native";
+import { Stack, useRouter } from "expo-router";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { useEffect } from "react";
 
 export default function AdminLayout() {
-  const insets = useSafeAreaInsets();
-  const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
-  const tabBarHeight = 58 + bottomPadding;
   const { employee, isLoading } = useEmployeeAuth();
   const router = useRouter();
 
@@ -24,62 +17,16 @@ export default function AdminLayout() {
   if (isLoading || !employee || employee.role !== "admin") return null;
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: "#FFFFFF",
-        tabBarInactiveTintColor: "rgba(255,255,255,0.5)",
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarStyle: {
-          paddingTop: 8,
-          paddingBottom: bottomPadding,
-          height: tabBarHeight,
-          backgroundColor: "#1E3A8A",
-          borderTopColor: "rgba(255,255,255,0.1)",
-          borderTopWidth: 0.5,
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "600",
-          marginTop: 2,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "總覽",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="chart.bar.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="attendance"
-        options={{
-          title: "打卡紀錄",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="clock.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="employees"
-        options={{
-          title: "員工",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.2.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="schedule"
-        options={{
-          title: "排班",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="calendar.badge.clock" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: "設定",
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="gear" color={color} />,
-        }}
-      />
-    </Tabs>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="employees" />
+      <Stack.Screen name="schedule" />
+      <Stack.Screen name="attendance" />
+      <Stack.Screen name="leave-review" />
+      <Stack.Screen name="reports" />
+      <Stack.Screen name="work-shifts" />
+      <Stack.Screen name="devices" />
+      <Stack.Screen name="settings" />
+    </Stack>
   );
 }

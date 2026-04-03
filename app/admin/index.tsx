@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
+import { AdminHeader } from "@/components/admin-header";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
 
@@ -86,36 +87,7 @@ export default function AdminDashboard() {
         contentContainerStyle={{ paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Page Header */}
-        <View style={{
-          backgroundColor: "white",
-          paddingHorizontal: 16,
-          paddingTop: 16,
-          paddingBottom: 14,
-          borderBottomWidth: 1,
-          borderBottomColor: "#E2E8F0",
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}>
-          <View>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: "#1E293B" }}>總覽</Text>
-            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>{todayDateStr} · 今日出勤狀況</Text>
-          </View>
-          <TouchableOpacity
-            onPress={handleLogout}
-            style={{
-              backgroundColor: "#F1F5F9",
-              borderRadius: 20,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-            }}
-          >
-            <Text style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}>登出</Text>
-          </TouchableOpacity>
-        </View>
+        <AdminHeader title="總覽" subtitle={`${todayDateStr} · 今日出勤狀況`} />
 
         <View style={{ padding: 14, gap: 12 }}>
           {/* Stats Row 1 */}

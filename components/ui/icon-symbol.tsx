@@ -80,6 +80,10 @@ const MAPPING = {
   "eye.slash.fill": "visibility-off",
   "faceid": "face",
   "touchid": "fingerprint",
+  "alarm.fill": "alarm",
+  "chart.line.uptrend.xyaxis": "trending-up",
+  "clock.arrow.circlepath": "history",
+  "rectangle.portrait.and.arrow.right": "logout",
 } as unknown as IconMapping;
 
 /**

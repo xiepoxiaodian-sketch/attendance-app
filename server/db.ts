@@ -306,6 +306,16 @@ export async function getSchedulesByEmployee(employeeId: number, startDate: stri
     ));
 }
 
+export async function getAllSchedulesByDateRange(startDate: string, endDate: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(schedules)
+    .where(and(
+      sql`DATE(${schedules.date}) >= ${startDate}`,
+      sql`DATE(${schedules.date}) <= ${endDate}`
+    ));
+}
+
 export async function upsertSchedule(employeeId: number, date: string, shifts: Array<{ startTime: string; endTime: string; label: string }>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

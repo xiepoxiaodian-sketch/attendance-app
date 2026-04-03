@@ -12,6 +12,7 @@ import {
   Switch,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
+import { AdminHeader } from "@/components/admin-header";
 import { trpc } from "@/lib/trpc";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 
@@ -31,10 +32,7 @@ export default function AdminSettingsScreen() {
 
   return (
     <ScreenContainer>
-      {/* Header */}
-      <View style={{ backgroundColor: "#1E40AF", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 }}>
-        <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>設定</Text>
-      </View>
+      <AdminHeader title="設定" subtitle="系統設定與管理" />
 
       {/* Tabs */}
       <View style={{ backgroundColor: "white", borderBottomWidth: 0.5, borderBottomColor: "#E2E8F0" }}>

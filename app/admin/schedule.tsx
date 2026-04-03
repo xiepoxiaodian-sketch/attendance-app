@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
+import { AdminHeader } from "@/components/admin-header";
 import { trpc } from "@/lib/trpc";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -30,24 +31,51 @@ function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0];
 }
 
+type ShiftEntry = { startTime: string; endTime: string; label: string };
+
 export default function AdminScheduleScreen() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [shifts, setShifts] = useState([{ startTime: "09:00", endTime: "18:00", label: "班次1" }]);
+  const [shifts, setShifts] = useState<ShiftEntry[]>([{ startTime: "09:00", endTime: "18:00", label: "班次1" }]);
 
   const weekDates = getWeekDates(weekOffset);
+  const startDate = toDateStr(weekDates[0]);
+  const endDate = toDateStr(weekDates[6]);
 
   const { data: employees } = trpc.employees.list.useQuery();
   const { data: workShifts } = trpc.workShifts.list.useQuery();
+  const { data: weekSchedules, refetch: refetchSchedules } = trpc.schedules.getWeekAll.useQuery({ startDate, endDate });
 
   const activeEmployees = (employees ?? []).filter(e => e.isActive && e.role === "employee");
+
+  // Build a lookup map: employeeId -> dateStr -> schedule
+  const scheduleMap = useMemo(() => {
+    const map: Record<number, Record<string, { id: number; shifts: ShiftEntry[] }>> = {};
+    for (const s of (weekSchedules ?? [])) {
+      const empId = s.employeeId;
+      const rawDate = s.date as unknown as string | Date;
+      const dateKey = typeof rawDate === "string" ? rawDate.split("T")[0] : toDateStr(rawDate);
+      if (!map[empId]) map[empId] = {};
+      map[empId][dateKey] = { id: s.id, shifts: s.shifts as ShiftEntry[] };
+    }
+    return map;
+  }, [weekSchedules]);
 
   const upsertMutation = trpc.schedules.upsert.useMutation({
     onSuccess: () => {
       setShowModal(false);
+      refetchSchedules();
       Alert.alert("成功", "排班已儲存");
+    },
+    onError: (err) => Alert.alert("錯誤", err.message),
+  });
+
+  const deleteMutation = trpc.schedules.delete.useMutation({
+    onSuccess: () => {
+      setShowModal(false);
+      refetchSchedules();
     },
     onError: (err) => Alert.alert("錯誤", err.message),
   });
@@ -55,11 +83,16 @@ export default function AdminScheduleScreen() {
   const handleOpenSchedule = (employeeId: number, date: string) => {
     setSelectedEmployee(employeeId);
     setSelectedDate(date);
-    const defaultShift = workShifts?.find(s => s.isDefaultWeekday && s.isActive);
-    if (defaultShift) {
-      setShifts([{ startTime: defaultShift.startTime, endTime: defaultShift.endTime, label: "班次1" }]);
+    const existing = scheduleMap[employeeId]?.[date];
+    if (existing?.shifts?.length) {
+      setShifts(existing.shifts);
     } else {
-      setShifts([{ startTime: "09:00", endTime: "18:00", label: "班次1" }]);
+      const defaultShift = workShifts?.find(s => s.isDefaultWeekday && s.isActive);
+      if (defaultShift) {
+        setShifts([{ startTime: defaultShift.startTime, endTime: defaultShift.endTime, label: "班次1" }]);
+      } else {
+        setShifts([{ startTime: "09:00", endTime: "18:00", label: "班次1" }]);
+      }
     }
     setShowModal(true);
   };
@@ -67,6 +100,16 @@ export default function AdminScheduleScreen() {
   const handleSaveSchedule = () => {
     if (!selectedEmployee || !selectedDate) return;
     upsertMutation.mutate({ employeeId: selectedEmployee, date: selectedDate, shifts });
+  };
+
+  const handleDeleteSchedule = () => {
+    if (!selectedEmployee || !selectedDate) return;
+    const existing = scheduleMap[selectedEmployee]?.[selectedDate];
+    if (!existing) { setShowModal(false); return; }
+    Alert.alert("刪除排班", "確定要刪除此日的排班嗎？", [
+      { text: "取消", style: "cancel" },
+      { text: "刪除", style: "destructive", onPress: () => deleteMutation.mutate({ id: existing.id }) },
+    ]);
   };
 
   const addShift = () => {
@@ -85,18 +128,7 @@ export default function AdminScheduleScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
-      {/* Page Header */}
-      <View style={{
-        backgroundColor: "white",
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: "#E2E8F0",
-      }}>
-        <Text style={{ fontSize: 20, fontWeight: "700", color: "#1E293B" }}>排班管理</Text>
-        <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>點擊格子設定員工班表</Text>
-      </View>
+      <AdminHeader title="排班管理" subtitle="點擊格子設定員工班表" />
 
       {/* Week Navigation */}
       <View style={{
@@ -133,7 +165,7 @@ export default function AdminScheduleScreen() {
 
         {/* Day Headers */}
         <View style={{ flexDirection: "row" }}>
-          <View style={{ width: 64 }} />
+          <View style={{ width: 60 }} />
           {weekDates.map((d, i) => {
             const isToday = toDateStr(d) === todayStr;
             const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -152,7 +184,7 @@ export default function AdminScheduleScreen() {
                   marginTop: 2,
                 }}>
                   <Text style={{
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: isToday ? "700" : "400",
                     color: isToday ? "white" : isWeekend ? "#94A3B8" : "#1E293B",
                   }}>
@@ -180,12 +212,12 @@ export default function AdminScheduleScreen() {
                 borderBottomWidth: 1,
                 borderBottomColor: "#F1F5F9",
                 flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 10,
+                alignItems: "stretch",
+                paddingVertical: 8,
               }}
             >
               {/* Employee Name */}
-              <View style={{ width: 64, paddingLeft: 12 }}>
+              <View style={{ width: 60, paddingLeft: 10, justifyContent: "center" }}>
                 <View style={{
                   width: 28,
                   height: 28,
@@ -199,7 +231,7 @@ export default function AdminScheduleScreen() {
                     {emp.fullName[0]}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 10, fontWeight: "600", color: "#1E293B" }} numberOfLines={1}>
+                <Text style={{ fontSize: 9, fontWeight: "600", color: "#1E293B" }} numberOfLines={2}>
                   {emp.fullName}
                 </Text>
               </View>
@@ -209,25 +241,47 @@ export default function AdminScheduleScreen() {
                 const dateStr = toDateStr(d);
                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                 const isToday = dateStr === todayStr;
+                const schedule = scheduleMap[emp.id]?.[dateStr];
+                const hasSchedule = !!schedule?.shifts?.length;
+
                 return (
                   <TouchableOpacity
                     key={i}
                     onPress={() => handleOpenSchedule(emp.id, dateStr)}
                     style={{
                       flex: 1,
-                      height: 48,
-                      marginHorizontal: 1.5,
-                      borderRadius: 8,
-                      backgroundColor: isWeekend ? "#F8FAFC" : isToday ? "#DBEAFE" : "#EFF6FF",
+                      minHeight: 56,
+                      marginHorizontal: 1,
+                      borderRadius: 6,
+                      backgroundColor: hasSchedule
+                        ? (isToday ? "#DBEAFE" : "#EFF6FF")
+                        : (isWeekend ? "#F8FAFC" : "#FAFAFA"),
                       alignItems: "center",
                       justifyContent: "center",
                       borderWidth: isToday ? 1 : 0,
                       borderColor: isToday ? "#93C5FD" : "transparent",
+                      padding: 2,
                     }}
                   >
-                    <Text style={{ fontSize: 9, color: isWeekend ? "#CBD5E1" : "#2563EB", fontWeight: isWeekend ? "400" : "600" }}>
-                      {isWeekend ? "休" : "排班"}
-                    </Text>
+                    {hasSchedule ? (
+                      <View style={{ alignItems: "center", gap: 1 }}>
+                        {schedule.shifts.map((sh, si) => (
+                          <View key={si} style={{ alignItems: "center" }}>
+                            <Text style={{ fontSize: 8, color: "#1D4ED8", fontWeight: "700", lineHeight: 11 }}>
+                              {sh.startTime}
+                            </Text>
+                            <Text style={{ fontSize: 7, color: "#93C5FD", lineHeight: 9 }}>↓</Text>
+                            <Text style={{ fontSize: 8, color: "#1D4ED8", fontWeight: "700", lineHeight: 11 }}>
+                              {sh.endTime}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 9, color: isWeekend ? "#CBD5E1" : "#CBD5E1" }}>
+                        {isWeekend ? "休" : "—"}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -264,18 +318,55 @@ export default function AdminScheduleScreen() {
           <ScrollView contentContainerStyle={{ padding: 16 }}>
             {/* Info Card */}
             <View style={{ backgroundColor: "#EFF6FF", borderRadius: 10, padding: 12, marginBottom: 16, flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#2563EB" }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#2563EB" }}>
                   {employees?.find(e => e.id === selectedEmployee)?.fullName?.[0] ?? "?"}
                 </Text>
               </View>
-              <View>
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#1E293B" }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>
                   {employees?.find(e => e.id === selectedEmployee)?.fullName ?? "員工"}
                 </Text>
-                <Text style={{ fontSize: 12, color: "#64748B" }}>{selectedDate}</Text>
+                <Text style={{ fontSize: 13, color: "#64748B" }}>{selectedDate}</Text>
               </View>
+              {selectedEmployee && selectedDate && scheduleMap[selectedEmployee]?.[selectedDate] && (
+                <TouchableOpacity
+                  onPress={handleDeleteSchedule}
+                  style={{ backgroundColor: "#FEF2F2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+                >
+                  <Text style={{ fontSize: 13, color: "#EF4444", fontWeight: "600" }}>刪除</Text>
+                </TouchableOpacity>
+              )}
             </View>
+
+            {/* Quick Select from WorkShifts */}
+            {(workShifts ?? []).filter(ws => ws.isActive).length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 8 }}>快速套用班次</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {(workShifts ?? []).filter(ws => ws.isActive).map(ws => (
+                      <TouchableOpacity
+                        key={ws.id}
+                        onPress={() => setShifts([{ startTime: ws.startTime, endTime: ws.endTime, label: ws.name }])}
+                        style={{
+                          backgroundColor: "white",
+                          borderWidth: 1,
+                          borderColor: "#2563EB",
+                          borderRadius: 8,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#2563EB" }}>{ws.name}</Text>
+                        <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{ws.startTime} ~ {ws.endTime}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+            )}
 
             {/* Shifts */}
             {shifts.map((shift, i) => (
@@ -357,6 +448,7 @@ export default function AdminScheduleScreen() {
                 borderRadius: 12,
                 padding: 14,
                 alignItems: "center",
+                marginBottom: 8,
               }}
             >
               <Text style={{ color: "#2563EB", fontSize: 14, fontWeight: "600" }}>+ 新增班次</Text>

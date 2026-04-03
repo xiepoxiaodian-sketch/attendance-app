@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
+import { AdminHeader } from "@/components/admin-header";
 import { trpc } from "@/lib/trpc";
 
 type Employee = {
@@ -228,32 +229,12 @@ export default function AdminEmployeesScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
-      {/* Page Header */}
-      <View style={{
-        backgroundColor: "white",
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: "#E2E8F0",
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}>
-        <View>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: "#1E293B" }}>員工管理</Text>
-          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-            共 {employees?.length ?? 0} 位員工
-          </Text>
-        </View>
+      <AdminHeader title="員工管理" subtitle={`共 ${employees?.length ?? 0} 位員工`} />
+      {/* Add Button */}
+      <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>
         <TouchableOpacity
           onPress={() => { setSelectedEmployee(null); setForm(INITIAL_FORM); setFormError(""); setShowModal(true); }}
-          style={{
-            backgroundColor: "#2563EB",
-            borderRadius: 20,
-            paddingHorizontal: 14,
-            paddingVertical: 8,
-          }}
+          style={{ backgroundColor: "#2563EB", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 }}
         >
           <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>+ 新增</Text>
         </TouchableOpacity>

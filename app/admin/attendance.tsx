@@ -10,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
+import { AdminHeader } from "@/components/admin-header";
 import { trpc } from "@/lib/trpc";
 
 function formatTime(date: any): string {
@@ -89,31 +90,17 @@ export default function AdminAttendanceScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
-      {/* Page Header */}
-      <View style={{
-        backgroundColor: "white",
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: "#E2E8F0",
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}>
-        <View>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: "#1E293B" }}>打卡紀錄</Text>
-          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>共 {filteredRecords.length} 筆紀錄</Text>
-        </View>
-        {selectedIds.length > 0 && (
+      <AdminHeader title="打卡紀錄" subtitle={`共 ${filteredRecords.length} 筆紀錄`} />
+      {selectedIds.length > 0 && (
+        <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>
           <TouchableOpacity
             onPress={handleDeleteSelected}
             style={{ backgroundColor: "#EF4444", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 }}
           >
             <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>刪除 {selectedIds.length} 筆</Text>
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* Filters */}
       <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", gap: 8 }}>

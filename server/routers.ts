@@ -379,6 +379,12 @@ const schedulesRouter = router({
       return { success: true };
     }),
 
+  getWeekAll: publicProcedure
+    .input(z.object({ startDate: z.string(), endDate: z.string() }))
+    .query(async ({ input }) => {
+      return db.getAllSchedulesByDateRange(input.startDate, input.endDate);
+    }),
+
   delete: publicProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
