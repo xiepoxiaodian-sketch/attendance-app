@@ -53,7 +53,7 @@ export function AdminSidebar({ visible, onClose }: Props) {
       setTimeout(() => router.replace("/login" as any), 300);
       return;
     }
-    setTimeout(() => router.navigate(path as any), 100);
+    setTimeout(() => router.replace(path as any), 100);
   };
 
   const isActive = (path: string) => {
