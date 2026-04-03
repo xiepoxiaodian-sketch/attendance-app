@@ -38,6 +38,7 @@ export default function LoginScreen() {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricType, setBiometricType] = useState<"face" | "fingerprint" | "none">("none");
   const [biometricLoading, setBiometricLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Load saved credentials and check biometric on mount
   useEffect(() => {
@@ -255,25 +256,41 @@ export default function LoginScreen() {
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 }}>
                   密碼
                 </Text>
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="請輸入密碼"
-                  secureTextEntry
-                  returnKeyType="done"
-                  onSubmitEditing={handleLogin}
-                  style={{
-                    backgroundColor: "#F8FAFC",
-                    borderWidth: 1,
-                    borderColor: "#E2E8F0",
-                    borderRadius: 10,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    fontSize: 15,
-                    color: "#1E293B",
-                  }}
-                  placeholderTextColor="#94A3B8"
-                />
+                <View style={{ position: "relative" }}>
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="請輸入密碼"
+                    secureTextEntry={!showPassword}
+                    returnKeyType="done"
+                    onSubmitEditing={handleLogin}
+                    style={{
+                      backgroundColor: "#F8FAFC",
+                      borderWidth: 1,
+                      borderColor: "#E2E8F0",
+                      borderRadius: 10,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      paddingRight: 48,
+                      fontSize: 15,
+                      color: "#1E293B",
+                    }}
+                    placeholderTextColor="#94A3B8"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(v => !v)}
+                    style={{
+                      position: "absolute",
+                      right: 12,
+                      top: 0,
+                      bottom: 0,
+                      justifyContent: "center",
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text style={{ fontSize: 18 }}>{showPassword ? "🙈" : "👁️"}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Remember Me & Stay Logged In */}
