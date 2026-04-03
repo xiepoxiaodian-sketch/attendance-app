@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
@@ -60,6 +61,12 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  // Serve static frontend files in production
+  const distWebPath = path.join(process.cwd(), "dist-web");
+  if (process.env.NODE_ENV === "production") {
+    app.use(express.static(distWebPath));
+  }
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -67,6 +74,15 @@ async function startServer() {
       createContext,
     }),
   );
+
+  // SPA fallback: serve index.html for all non-API routes in production
+  if (process.env.NODE_ENV === "production") {
+    app.get("*", (req, res) => {
+      if (!req.path.startsWith("/api")) {
+        res.sendFile(path.join(distWebPath, "index.html"));
+      }
+    });
+  }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
