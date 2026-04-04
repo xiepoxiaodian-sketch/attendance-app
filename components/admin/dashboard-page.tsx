@@ -63,6 +63,7 @@ export default function AdminDashboard() {
   const { data: summary, refetch: refetchSummary } = trpc.attendance.todaySummary.useQuery();
   const { data: allEmployees } = trpc.employees.list.useQuery();
   const { data: leaveRequests } = trpc.leave.getAll.useQuery({ status: "pending" });
+  const { data: pendingCorrections } = trpc.punchCorrection.getAll.useQuery({ status: "pending" });
   const { data: todayAttendance, refetch: refetchAttendance } = trpc.attendance.getAll.useQuery({
     startDate: today, endDate: today,
   });
@@ -82,6 +83,7 @@ export default function AdminDashboard() {
   const presentCount = summary?.clockedIn ?? 0;
   const lateCount = summary?.late ?? 0;
   const pendingLeave = leaveRequests?.length ?? 0;
+  const pendingCorrectionCount = pendingCorrections?.length ?? 0;
 
   const todayDateStr = new Date().toLocaleDateString("zh-TW", {
     year: "numeric", month: "long", day: "numeric",
@@ -107,6 +109,12 @@ export default function AdminDashboard() {
           <View style={{ flexDirection: "row", gap: 10 }}>
             <StatCard icon="⚠️" value={`${lateCount} 人`} label="今日遲到" iconBg="#FEF2F2" onPress={() => navigate("attendance")} />
             <StatCard icon="📋" value={`${pendingLeave} 件`} label="待審請假" iconBg="#FFFBEB" onPress={() => navigate("leave-review")} />
+          </View>
+
+          {/* Stats Row 3 */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <StatCard icon="🕐" value={`${pendingCorrectionCount} 件`} label="待審補打卡" iconBg="#F0F9FF" onPress={() => navigate("punch-correction")} />
+            <View style={{ flex: 1 }} />
           </View>
 
           {/* Today Attendance Card */}

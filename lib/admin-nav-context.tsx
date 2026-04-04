@@ -6,6 +6,7 @@ export type AdminPage =
   | "schedule"
   | "attendance"
   | "leave-review"
+  | "punch-correction"
   | "reports"
   | "devices"
   | "settings";

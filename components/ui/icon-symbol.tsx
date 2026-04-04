@@ -83,6 +83,7 @@ const MAPPING = {
   "alarm.fill": "alarm",
   "chart.line.uptrend.xyaxis": "trending-up",
   "clock.arrow.circlepath": "history",
+  "clock.badge.checkmark.fill": "pending-actions",
   "rectangle.portrait.and.arrow.right": "logout",
 } as unknown as IconMapping;
 
