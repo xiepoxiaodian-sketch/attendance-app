@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal,
-  ActivityIndicator, FlatList, TextInput, Switch, RefreshControl,
+  ActivityIndicator, FlatList, TextInput, Switch, RefreshControl, Platform,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
@@ -482,6 +482,7 @@ function MonthTab() {
   const [month, setMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   const startDate = `${year}-${String(month + 1).padStart(2, "0")}-01`;
   const lastDay = getDaysInMonth(year, month);
@@ -507,6 +508,75 @@ function MonthTab() {
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); setSelectedDate(null); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); setSelectedDate(null); };
 
+  const generatePrintHTML = () => {
+    const monthName = `${year} 年 ${month + 1} 月`;
+    const daysInM = getDaysInMonth(year, month);
+    const TAG_COLORS: Record<string, { bg: string; color: string; label: string }> = {
+      indoor: { bg: "#DBEAFE", color: "#1D4ED8", label: "內場" },
+      outdoor: { bg: "#DCFCE7", color: "#15803D", label: "外場" },
+      supervisor: { bg: "#FEF9C3", color: "#854D0E", label: "幹部" },
+    };
+    // Build day columns: each day has list of working employees
+    const dayData: Array<{ day: number; dateStr: string; dow: number; employees: Array<{ name: string; tag?: string | null; shifts: ShiftEntry[]; leaveType?: string | null }> }> = [];
+    for (let d = 1; d <= daysInM; d++) {
+      const dateStr = fmtDate(year, month, d);
+      const dow = new Date(year, month, d).getDay();
+      const dayMap = scheduleMap[dateStr] ?? {};
+      const emps = activeEmployees
+        .filter(e => dayMap[e.id]?.shifts?.length > 0 || dayMap[e.id]?.leaveType)
+        .map(e => ({ name: e.fullName, tag: (e as { tag?: string | null }).tag, shifts: dayMap[e.id]?.shifts ?? [], leaveType: dayMap[e.id]?.leaveType }));
+      dayData.push({ day: d, dateStr, dow, employees: emps });
+    }
+    const LEAVE_MAP: Record<string, { label: string; color: string }> = {
+      annual: { label: "特休", color: "#2563EB" }, sick: { label: "病假", color: "#DC2626" },
+      personal: { label: "事假", color: "#D97706" }, marriage: { label: "婚假", color: "#7C3AED" },
+      bereavement: { label: "喪假", color: "#475569" }, official: { label: "公假", color: "#0891B2" },
+      other: { label: "休假", color: "#64748B" },
+    };
+    const rows = dayData.map(({ day, dow, employees }) => {
+      const isWeekend = dow === 0 || dow === 6;
+      const empHTML = employees.map(e => {
+        const tagInfo = e.tag ? TAG_COLORS[e.tag] : null;
+        const tagSpan = tagInfo ? `<span style="background:${tagInfo.bg};color:${tagInfo.color};border-radius:4px;padding:1px 5px;font-size:9px;margin-left:4px;">${tagInfo.label}</span>` : "";
+        const leaveInfo = e.leaveType ? LEAVE_MAP[e.leaveType] : null;
+        const detail = leaveInfo
+          ? `<span style="color:${leaveInfo.color};font-size:9px;">${leaveInfo.label}</span>`
+          : e.shifts.map(s => `<span style="font-size:9px;color:#475569;">${s.label ? s.label + " " : ""}${s.startTime}–${s.endTime}</span>`).join("<br/>");
+        return `<div style="margin-bottom:3px;"><span style="font-size:10px;font-weight:600;color:#1E293B;">${e.name}</span>${tagSpan}<br/>${detail}</div>`;
+      }).join("");
+      return `<td style="border:1px solid #E2E8F0;padding:6px;vertical-align:top;background:${isWeekend ? "#FFF7F7" : "white"};">
+        <div style="font-weight:700;font-size:13px;color:${isWeekend ? "#EF4444" : "#1E293B"};margin-bottom:4px;">${day}</div>
+        ${empHTML || '<span style="font-size:9px;color:#CBD5E1;">—</span>'}
+      </td>`;
+    });
+    // Group into weeks
+    const firstDow = new Date(year, month, 1).getDay();
+    const paddedRows = Array(firstDow).fill('<td style="border:1px solid #F1F5F9;background:#FAFAFA;"></td>').concat(rows);
+    while (paddedRows.length % 7 !== 0) paddedRows.push('<td style="border:1px solid #F1F5F9;background:#FAFAFA;"></td>');
+    const weekRows = [];
+    for (let i = 0; i < paddedRows.length; i += 7) {
+      weekRows.push(`<tr>${paddedRows.slice(i, i + 7).join("")}</tr>`);
+    }
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<style>@page{size:A4 landscape;margin:12mm}body{font-family:sans-serif;margin:0}table{width:100%;border-collapse:collapse}th{background:#1E3A5F;color:white;padding:6px;font-size:11px;border:1px solid #1E3A5F}td{min-height:60px}</style></head>
+<body>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+  <h2 style="margin:0;font-size:18px;color:#1E293B;">${monthName} 排班總覽</h2>
+  <span style="font-size:11px;color:#64748B;">列印時間：${new Date().toLocaleString("zh-TW")}</span>
+</div>
+<table><thead><tr>${["日","一","二","三","四","五","六"].map((d,i)=>`<th style="background:${i===0||i===6?"#7F1D1D":"#1E3A5F"}">${d}</th>`).join("")}</tr></thead><tbody>${weekRows.join("")}</tbody></table>
+<div style="margin-top:8px;font-size:10px;color:#64748B;">■ <span style="color:#1D4ED8;">■</span> 內場 ■ <span style="color:#15803D;">■</span> 外場 ■ <span style="color:#854D0E;">■</span> 幹部 &nbsp;|&nbsp; 假別：特休 病假 事假 婚假 喪假 公假 休假</div>
+</body></html>`;
+  };
+
+  const handlePrint = () => {
+    if (Platform.OS === "web") {
+      const html = generatePrintHTML();
+      const win = window.open("", "_blank");
+      if (win) { win.document.write(html); win.document.close(); win.focus(); win.print(); }
+    }
+  };
+
   const daysInMonth = getDaysInMonth(year, month);
   const firstDow = getFirstDow(year, month);
   const todayStr = today.toISOString().slice(0, 10);
@@ -520,6 +590,32 @@ function MonthTab() {
   const filteredEmployees = activeEmployees.filter(e => selectedEmployeeId === null || e.id === selectedEmployeeId);
 
   return (
+    <>
+    {/* Print Preview Modal */}
+    {showPrintPreview && Platform.OS === "web" && (
+      <Modal visible={showPrintPreview} animationType="slide" onRequestClose={() => setShowPrintPreview(false)}>
+        <View style={{ flex: 1, backgroundColor: "#1E293B" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#0F172A" }}>
+            <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>📋 列印預覽 — {year} 年 {month + 1} 月</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity onPress={handlePrint} style={{ backgroundColor: "#2563EB", borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 }}>
+                <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>🖨 確認列印</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowPrintPreview(false)} style={{ backgroundColor: "#475569", borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 }}>
+                <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>✕ 關閉</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+          {/* @ts-ignore web only */}
+          <iframe
+            srcDoc={generatePrintHTML()}
+            style={{ flex: 1, border: "none", width: "100%", height: "100%" } as never}
+            title="列印預覽"
+          />
+        </View>
+      </Modal>
+    )}
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 14, paddingBottom: 32, gap: 12 }}>
       {/* Calendar Card */}
       <View style={{ backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" }}>
@@ -527,7 +623,14 @@ function MonthTab() {
           <TouchableOpacity onPress={prevMonth} style={{ padding: 8 }}>
             <Text style={{ fontSize: 20, color: "#2563EB" }}>‹</Text>
           </TouchableOpacity>
-          <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>{year} 年 {month + 1} 月</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>{year} 年 {month + 1} 月</Text>
+            {Platform.OS === "web" && (
+              <TouchableOpacity onPress={() => setShowPrintPreview(true)} style={{ backgroundColor: "#F1F5F9", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Text style={{ fontSize: 13, color: "#475569" }}>🖨 列印</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <TouchableOpacity onPress={nextMonth} style={{ padding: 8 }}>
             <Text style={{ fontSize: 20, color: "#2563EB" }}>›</Text>
           </TouchableOpacity>
@@ -705,6 +808,7 @@ function MonthTab() {
         })}
       </View>
     </ScrollView>
+    </>
   );
 }
 
