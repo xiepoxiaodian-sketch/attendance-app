@@ -114,13 +114,24 @@ export async function getUserByOpenId(openId: string) {
 export async function getAllEmployees() {
   const db = await getDb();
   if (!db) return [];
+  // Sort: if sortOrder all same (0), fall back to username numeric order
+  const all = await db.select().from(employees);
+  const allSameOrder = all.length > 0 && all.every(e => e.sortOrder === all[0].sortOrder);
+  if (allSameOrder) {
+    return all.sort((a, b) => a.username.localeCompare(b.username, undefined, { numeric: true, sensitivity: 'base' }));
+  }
   return db.select().from(employees).orderBy(employees.sortOrder, employees.username);
 }
 
 export async function getActiveEmployees() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(employees).where(eq(employees.isActive, true)).orderBy(employees.sortOrder, employees.username);
+  const all = await db.select().from(employees).where(eq(employees.isActive, true));
+  const allSameOrder = all.length > 0 && all.every(e => e.sortOrder === all[0].sortOrder);
+  if (allSameOrder) {
+    return all.sort((a, b) => a.username.localeCompare(b.username, undefined, { numeric: true, sensitivity: 'base' }));
+  }
+  return all.sort((a, b) => a.sortOrder !== b.sortOrder ? a.sortOrder - b.sortOrder : a.username.localeCompare(b.username, undefined, { numeric: true, sensitivity: 'base' }));
 }
 
 export async function reorderEmployees(orderedIds: number[]) {
@@ -134,10 +145,10 @@ export async function reorderEmployees(orderedIds: number[]) {
 export async function createEmployee(data: InsertEmployee) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  // Assign sortOrder = current max + 1 so new employees go to the end
-  const existing = await db.select({ sortOrder: employees.sortOrder }).from(employees).orderBy(employees.sortOrder);
-  const maxOrder = existing.length > 0 ? Math.max(...existing.map(e => e.sortOrder)) : -1;
-  const result = await db.insert(employees).values({ ...data, sortOrder: maxOrder + 1 });
+  // Assign sortOrder based on username numeric value so default order matches account number
+  const usernameNum = parseInt(data.username.replace(/\D/g, ""), 10);
+  const sortOrderVal = isNaN(usernameNum) ? 9999 : usernameNum;
+  const result = await db.insert(employees).values({ ...data, sortOrder: sortOrderVal });
   return result[0].insertId;
 }
 

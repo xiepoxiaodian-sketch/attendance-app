@@ -635,19 +635,15 @@ function WeekTab() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   {/* 快速休假按鈕 */}
-                  {LEAVE_TYPES.map(lt => (
-                    <TouchableOpacity
-                      key={lt.value}
-                      onPress={() => {
-                        setShifts([]);
-                        setLeave({ enabled: true, type: lt.value as LeaveTypeValue, mode: "allDay", start: "09:00", end: "18:00" });
-                      }}
-                      style={{ backgroundColor: lt.bg, borderWidth: 1, borderColor: lt.color, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: lt.color }}>{lt.label}</Text>
-                      <Text style={{ fontSize: 10, color: lt.color, marginTop: 2, opacity: 0.8 }}>整天</Text>
-                    </TouchableOpacity>
-                  ))}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShifts([]);
+                      setLeave({ enabled: true, type: "annual" as LeaveTypeValue, mode: "allDay", start: "09:00", end: "18:00" });
+                    }}
+                    style={{ backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#EF4444", borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#EF4444" }}>休假</Text>
+                  </TouchableOpacity>
                   {/* 工作時段快速套用 */}
                   {(workShifts ?? []).filter(ws => ws.isActive).map(ws => (
                     <TouchableOpacity
@@ -947,8 +943,24 @@ function WorkShiftsTab() {
   const reorderMutation = trpc.workShifts.reorder.useMutation();
 
   // Sync local state when server data arrives
-  useCallback(() => { if (shifts) setLocalShifts(shifts as WorkShift[]); }, [shifts]);
-  if (shifts && localShifts.length !== shifts.length) setLocalShifts(shifts as WorkShift[]);
+  useEffect(() => { if (shifts) setLocalShifts(shifts as WorkShift[]); }, [shifts]);
+
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (index: number) => setDragIndex(index);
+  const handleDragEnter = (index: number) => setDragOverIndex(index);
+  const handleDragEnd = () => {
+    if (dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
+      const newList = [...localShifts];
+      const [moved] = newList.splice(dragIndex, 1);
+      newList.splice(dragOverIndex, 0, moved);
+      setLocalShifts(newList);
+      reorderMutation.mutate({ orderedIds: newList.map(s => s.id) });
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
 
@@ -986,22 +998,32 @@ function WorkShiftsTab() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color="#2563EB" />
         </View>
+      ) : localShifts.length === 0 ? (
+        <View style={{ alignItems: "center", paddingTop: 60 }}>
+          <Text style={{ fontSize: 40, marginBottom: 12 }}>🕐</Text>
+          <Text style={{ fontSize: 15, color: "#94A3B8" }}>尚未設定工作班次</Text>
+          <Text style={{ fontSize: 13, color: "#CBD5E1", marginTop: 4 }}>請先新增班次，才能在週排班快速套用</Text>
+        </View>
       ) : (
-        <FlatList
-          data={shifts ?? []}
-          keyExtractor={item => String(item.id)}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={{ padding: 14, gap: 10 }}
-          ListEmptyComponent={
-            <View style={{ alignItems: "center", paddingTop: 60 }}>
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>🕐</Text>
-              <Text style={{ fontSize: 15, color: "#94A3B8" }}>尚未設定工作班次</Text>
-              <Text style={{ fontSize: 13, color: "#CBD5E1", marginTop: 4 }}>請先新增班次，才能在週排班快速套用</Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 }}>
+        <ScrollView contentContainerStyle={{ padding: 14, gap: 10 }}>
+          <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4, textAlign: "center" }}>長按左側 ☰ 拖拽可調整順序</Text>
+          {localShifts.map((item, index) => (
+            <View
+              key={item.id}
+              // @ts-ignore web drag events
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              onDragEnter={() => handleDragEnter(index)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e: unknown) => { (e as { preventDefault: () => void }).preventDefault?.(); }}
+              style={[
+                { backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: dragOverIndex === index ? "#2563EB" : "#F1F5F9", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: dragIndex === index ? 0.15 : 0.05, shadowRadius: 3, elevation: dragIndex === index ? 4 : 1, opacity: dragIndex === index ? 0.6 : 1 },
+              ]}
+            >
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <View style={{ justifyContent: "center", paddingRight: 10, cursor: "grab" } as unknown as object}>
+                  <Text style={{ fontSize: 18, color: "#CBD5E1" }}>☰</Text>
+                </View>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{item.name}</Text>
@@ -1020,8 +1042,8 @@ function WorkShiftsTab() {
                 </View>
               </View>
             </View>
-          )}
-        />
+          ))}
+        </ScrollView>
       )}
 
       {/* Modal */}

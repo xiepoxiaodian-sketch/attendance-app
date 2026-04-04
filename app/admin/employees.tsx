@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -126,6 +126,26 @@ export default function AdminEmployeesScreen() {
   const [confirmDeleteEmp, setConfirmDeleteEmp] = useState<Employee | null>(null);
 
   const { data: employees, refetch, isLoading } = trpc.employees.list.useQuery();
+  const [localEmployees, setLocalEmployees] = useState<Employee[]>([]);
+  const [empDragIndex, setEmpDragIndex] = useState<number | null>(null);
+  const [empDragOverIndex, setEmpDragOverIndex] = useState<number | null>(null);
+  const reorderEmpMutation = trpc.employees.reorder.useMutation();
+
+  useEffect(() => { if (employees) setLocalEmployees(employees as Employee[]); }, [employees]);
+
+  const handleEmpDragStart = (index: number) => setEmpDragIndex(index);
+  const handleEmpDragEnter = (index: number) => setEmpDragOverIndex(index);
+  const handleEmpDragEnd = () => {
+    if (empDragIndex !== null && empDragOverIndex !== null && empDragIndex !== empDragOverIndex) {
+      const newList = [...localEmployees];
+      const [moved] = newList.splice(empDragIndex, 1);
+      newList.splice(empDragOverIndex, 0, moved);
+      setLocalEmployees(newList);
+      reorderEmpMutation.mutate({ orderedIds: newList.map(e => e.id) });
+    }
+    setEmpDragIndex(null);
+    setEmpDragOverIndex(null);
+  };
 
   const createMutation = trpc.employees.create.useMutation({
     onSuccess: () => {
@@ -220,7 +240,7 @@ export default function AdminEmployeesScreen() {
     resetPasswordMutation.mutate({ id: selectedEmployee.id, newPassword });
   };
 
-  const filteredEmployees = (employees ?? []).filter(e =>
+  const filteredEmployees = (searchQuery ? localEmployees : localEmployees).filter(e =>
     !searchQuery ||
     e.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.username.toLowerCase().includes(searchQuery.toLowerCase())
@@ -280,32 +300,46 @@ export default function AdminEmployeesScreen() {
           <ActivityIndicator size="large" color="#2563EB" />
         </View>
       ) : (
-        <FlatList
-          data={filteredEmployees}
-          keyExtractor={(item) => String(item.id)}
+        <ScrollView
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={{ padding: 14, gap: 10 }}
-          ListEmptyComponent={
+        >
+          {!searchQuery && <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4, textAlign: "center" }}>長按左側 ☰ 拖拽可調整順序</Text>}
+          {filteredEmployees.length === 0 ? (
             <View style={{ paddingVertical: 60, alignItems: "center" }}>
               <Text style={{ fontSize: 14, color: "#94A3B8" }}>
                 {searchQuery ? "找不到符合的員工" : "尚無員工資料"}
               </Text>
             </View>
-          }
-          renderItem={({ item }) => (
-            <View style={{
+          ) : filteredEmployees.map((item, index) => (
+            <View
+              key={item.id}
+              // @ts-ignore web drag events
+              draggable={!searchQuery}
+              onDragStart={() => handleEmpDragStart(index)}
+              onDragEnter={() => handleEmpDragEnter(index)}
+              onDragEnd={handleEmpDragEnd}
+              onDragOver={(e: unknown) => { (e as { preventDefault: () => void }).preventDefault?.(); }}
+              style={{
               backgroundColor: "white",
               borderRadius: 12,
               padding: 14,
               borderWidth: 1,
-              borderColor: "#E2E8F0",
+              borderColor: empDragOverIndex === index ? "#2563EB" : "#E2E8F0",
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.04,
+              shadowOpacity: empDragIndex === index ? 0.15 : 0.04,
               shadowRadius: 3,
-              elevation: 1,
+              elevation: empDragIndex === index ? 4 : 1,
+              opacity: empDragIndex === index ? 0.6 : 1,
             }}>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {/* Drag Handle */}
+                {!searchQuery && (
+                  <View style={{ justifyContent: "center", paddingRight: 8, cursor: "grab" } as unknown as object}>
+                    <Text style={{ fontSize: 18, color: "#CBD5E1" }}>☰</Text>
+                  </View>
+                )}
                 {/* Avatar */}
                 <View style={{
                   width: 42, height: 42,
@@ -376,8 +410,8 @@ export default function AdminEmployeesScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          )}
-        />
+          ))}
+        </ScrollView>
       )}
 
       {/* Create/Edit Modal */}
