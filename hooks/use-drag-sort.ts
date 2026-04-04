@@ -3,11 +3,12 @@ import { Platform } from "react-native";
 
 /**
  * A touch + mouse drag-sort hook for web.
- * Returns handlers to attach to each list item and a ghost element position.
+ * Returns handlers to attach to each list item and ghost element info.
  *
  * Usage:
- *   const { getItemHandlers, ghostStyle, ghostLabel } = useDragSort({ items, onReorder });
- *   items.map((item, index) => <View {...getItemHandlers(index)} key={item.id}>...</View>)
+ *   const { getItemHandlers, ghostPos, ghostLabel, ghostSize, activeIndex, overActiveIndex } = useDragSort({ items, onReorder });
+ *   items.map((item, index) => <View {...getItemHandlers(index, item.name)} key={item.id}>...</View>)
+ *   // Render ghost card outside the list using ghostPos + ghostLabel + ghostSize
  */
 export function useDragSort<T>({
   items,
@@ -22,6 +23,7 @@ export function useDragSort<T>({
   const [overActiveIndex, setOverActiveIndex] = useState<number | null>(null);
   const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
   const [ghostLabel, setGhostLabel] = useState<string>("");
+  const [ghostSize, setGhostSize] = useState<{ width: number; height: number }>({ width: 200, height: 56 });
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
 
   const finishDrag = useCallback(() => {
@@ -53,6 +55,12 @@ export function useDragSort<T>({
         setGhostLabel(label ?? String(index + 1));
         const touch = e.touches[0];
         setGhostPos({ x: touch.clientX, y: touch.clientY });
+        // Capture size of the dragged element
+        const el = itemRefs.current[index];
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          setGhostSize({ width: rect.width, height: rect.height });
+        }
       },
       onTouchMove: (e: React.TouchEvent) => {
         e.preventDefault();
@@ -80,13 +88,19 @@ export function useDragSort<T>({
         setOverActiveIndex(index);
         setGhostLabel(label ?? String(index + 1));
         setGhostPos({ x: e.clientX, y: e.clientY });
+        // Capture size of the dragged element
+        const el = itemRefs.current[index];
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          setGhostSize({ width: rect.width, height: rect.height });
+        }
         const onMouseMove = (ev: MouseEvent) => {
           setGhostPos({ x: ev.clientX, y: ev.clientY });
           const elements = itemRefs.current;
           for (let i = 0; i < elements.length; i++) {
-            const el = elements[i];
-            if (!el) continue;
-            const rect = el.getBoundingClientRect();
+            const elItem = elements[i];
+            if (!elItem) continue;
+            const rect = elItem.getBoundingClientRect();
             if (ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
               overIndex.current = i;
               setOverActiveIndex(i);
@@ -111,5 +125,6 @@ export function useDragSort<T>({
     overActiveIndex,
     ghostPos,
     ghostLabel,
+    ghostSize,
   };
 }

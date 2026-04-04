@@ -944,7 +944,7 @@ function WorkShiftsTab() {
   // Sync local state when server data arrives
   useEffect(() => { if (shifts) setLocalShifts(shifts as WorkShift[]); }, [shifts]);
 
-  const { getItemHandlers: getShiftHandlers, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex } = useDragSort({
+  const { getItemHandlers: getShiftHandlers, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize } = useDragSort({
     items: localShifts,
     onReorder: (newList) => {
       setLocalShifts(newList);
@@ -995,6 +995,37 @@ function WorkShiftsTab() {
           <Text style={{ fontSize: 13, color: "#CBD5E1", marginTop: 4 }}>請先新增班次，才能在週排班快速套用</Text>
         </View>
       ) : (
+        <>
+        {/* Ghost card: floating card that follows finger/cursor during drag */}
+        {shiftGhostPos && (
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute" as any,
+              left: shiftGhostPos.x - shiftGhostSize.width / 2,
+              top: shiftGhostPos.y - shiftGhostSize.height / 2,
+              width: shiftGhostSize.width,
+              zIndex: 9999,
+              backgroundColor: "white",
+              borderRadius: 12,
+              padding: 14,
+              borderWidth: 2,
+              borderColor: "#2563EB",
+              shadowColor: "#2563EB",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.25,
+              shadowRadius: 16,
+              elevation: 20,
+              opacity: 0.95,
+              transform: [{ rotate: "2deg" }],
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Text style={{ fontSize: 18, color: "#2563EB" }}>☰</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{shiftGhostLabel}</Text>
+            </View>
+          </View>
+        )}
         <ScrollView contentContainerStyle={{ padding: 14, gap: 10 }}>
           <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4, textAlign: "center" }}>長按左側 ☰ 拖拽可調整順序</Text>
           {localShifts.map((item, index) => (
@@ -1034,6 +1065,7 @@ function WorkShiftsTab() {
             </View>
           ))}
         </ScrollView>
+        </>
       )}
 
       {/* Modal */}
