@@ -1312,14 +1312,14 @@ function WorkShiftsTab() {
     }
   }, [settingsData]);
 
-  const { getCardRef: getShiftCardRef, getHandleHandlersOnly: getShiftHandleOnly, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize, ghostOffset: shiftGhostOffset } = useDragSort({
-    items: localShifts,
-    getId: (item) => String(item.id),
-    onReorder: (newList) => {
-      setLocalShifts(newList);
-      reorderMutation.mutate({ orderedIds: newList.map(s => s.id) });
-    },
-  });
+  const moveShift = (index: number, direction: "up" | "down") => {
+    const newList = [...localShifts];
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newList.length) return;
+    [newList[index], newList[targetIndex]] = [newList[targetIndex], newList[index]];
+    setLocalShifts(newList);
+    reorderMutation.mutate({ orderedIds: newList.map(s => s.id) });
+  };
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
 
@@ -1409,44 +1409,7 @@ function WorkShiftsTab() {
         </View>
       ) : (
         <>
-        {/* Ghost overlay: fixed full-screen overlay so ghost card uses absolute coords relative to viewport */}
-        {shiftGhostPos && (
-          <View
-            pointerEvents="none"
-            style={{
-              position: "fixed" as any,
-              top: 0, left: 0, right: 0, bottom: 0,
-              zIndex: 9999,
-            }}
-          >
-            <View
-              style={{
-                position: "absolute" as any,
-                left: shiftGhostPos.x,
-                top: shiftGhostPos.y,
-                width: shiftGhostSize.width,
-                backgroundColor: "white",
-                borderRadius: 12,
-                padding: 14,
-                borderWidth: 2,
-                borderColor: "#2563EB",
-                shadowColor: "#2563EB",
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: 0.25,
-                shadowRadius: 12,
-                elevation: 20,
-                opacity: 0.95,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <Text style={{ fontSize: 18, color: "#2563EB" }}>☰</Text>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{shiftGhostLabel}</Text>
-              </View>
-            </View>
-          </View>
-        )}
         <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 20 }}>
-          <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 12, textAlign: "center" }}>長按左側 ☰ 拖拽可調整順序</Text>
           {(() => {
             // 建立分組顯示結構
             const assignedShiftIds = new Set(groups.flatMap(g => g.shiftIds));
@@ -1455,24 +1418,32 @@ function WorkShiftsTab() {
             const renderShiftCard = (item: WorkShift, index: number) => (
               <View
                 key={item.id}
-                // @ts-ignore
-                ref={getShiftCardRef(String(item.id))}
                 style={{
                   backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1,
-                  borderColor: shiftOverIndex === index ? "#2563EB" : "#F1F5F9",
+                  borderColor: "#F1F5F9",
                   shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: shiftActiveIndex === index ? 0.15 : 0.05, shadowRadius: 3,
-                  elevation: shiftActiveIndex === index ? 4 : 1,
-                  opacity: shiftActiveIndex === index ? 0.5 : 1,
+                  shadowOpacity: 0.05, shadowRadius: 3,
+                  elevation: 1,
                   marginBottom: 8,
                 }}
               >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <View
-                    {...(getShiftHandleOnly(index, String(item.id), item.name) as object)}
-                    style={{ justifyContent: "center", paddingRight: 10, paddingLeft: 2, paddingVertical: 4, cursor: "grab", userSelect: "none" } as unknown as object}
-                  >
-                    <Text style={{ fontSize: 20, color: "#94A3B8" }}>⠿</Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  {/* 上移/下移按鈕 */}
+                  <View style={{ flexDirection: "column", gap: 2, paddingRight: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => moveShift(index, "up")}
+                      style={{ opacity: index === 0 ? 0.2 : 1, padding: 2 }}
+                      disabled={index === 0}
+                    >
+                      <Text style={{ fontSize: 14, color: "#64748B", lineHeight: 16 }}>▲</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => moveShift(index, "down")}
+                      style={{ opacity: index === localShifts.length - 1 ? 0.2 : 1, padding: 2 }}
+                      disabled={index === localShifts.length - 1}
+                    >
+                      <Text style={{ fontSize: 14, color: "#64748B", lineHeight: 16 }}>▼</Text>
+                    </TouchableOpacity>
                   </View>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
