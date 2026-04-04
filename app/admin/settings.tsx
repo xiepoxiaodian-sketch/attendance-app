@@ -204,11 +204,43 @@ function SystemSettings() {
 // ============================================================
 // Work Shifts Tab
 // ============================================================
+const SHIFT_CATEGORY_CONFIG = {
+  indoor: { label: "內場", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" },
+  outdoor: { label: "外場", color: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0" },
+  pt: { label: "PT", color: "#9333EA", bg: "#FAF5FF", border: "#E9D5FF" },
+} as const;
+
+const SHIFT_DAY_TYPE_CONFIG = {
+  weekday: { label: "平日", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A" },
+  holiday: { label: "假日", color: "#DC2626", bg: "#FEF2F2", border: "#FECACA" },
+  both: { label: "平日＋假日", color: "#64748B", bg: "#F8FAFC", border: "#E2E8F0" },
+} as const;
+
+type ShiftFormState = {
+  name: string;
+  startTime: string;
+  endTime: string;
+  isDefaultWeekday: boolean;
+  isDefaultHoliday: boolean;
+  category: "indoor" | "outdoor" | "pt";
+  dayType: "weekday" | "holiday" | "both";
+};
+
+const SHIFT_INITIAL_FORM: ShiftFormState = {
+  name: "",
+  startTime: "09:00",
+  endTime: "18:00",
+  isDefaultWeekday: false,
+  isDefaultHoliday: false,
+  category: "indoor",
+  dayType: "both",
+};
+
 function ShiftsSettings() {
   const { data: shifts, refetch } = trpc.workShifts.list.useQuery();
   const [showModal, setShowModal] = useState(false);
   const [editShift, setEditShift] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", startTime: "09:00", endTime: "18:00", isDefaultWeekday: false, isDefaultHoliday: false });
+  const [form, setForm] = useState<ShiftFormState>(SHIFT_INITIAL_FORM);
   const [alertMsg, setAlertMsg] = useState<{ title: string; message: string } | null>(null);
   const [confirmDeleteShift, setConfirmDeleteShift] = useState<{ id: number; name: string } | null>(null);
 
@@ -237,6 +269,88 @@ function ShiftsSettings() {
     }
   };
 
+  const allShifts = (shifts ?? []) as any[];
+  const grouped = {
+    indoor: allShifts.filter((s) => s.category === "indoor" || !s.category),
+    outdoor: allShifts.filter((s) => s.category === "outdoor"),
+    pt: allShifts.filter((s) => s.category === "pt"),
+  };
+
+  const renderShiftCard = (shift: any) => {
+    const catKey = (shift.category ?? "indoor") as keyof typeof SHIFT_CATEGORY_CONFIG;
+    const dayKey = (shift.dayType ?? "both") as keyof typeof SHIFT_DAY_TYPE_CONFIG;
+    const cat = SHIFT_CATEGORY_CONFIG[catKey] ?? SHIFT_CATEGORY_CONFIG.indoor;
+    const day = SHIFT_DAY_TYPE_CONFIG[dayKey] ?? SHIFT_DAY_TYPE_CONFIG.both;
+    return (
+      <View key={shift.id} style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{shift.name}</Text>
+              <View style={{ backgroundColor: day.bg, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: day.border }}>
+                <Text style={{ fontSize: 11, color: day.color, fontWeight: "600" }}>{day.label}</Text>
+              </View>
+              {shift.isDefaultWeekday && (
+                <View style={{ backgroundColor: "#EFF6FF", borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 11, color: "#2563EB", fontWeight: "600" }}>平日預設</Text>
+                </View>
+              )}
+              {shift.isDefaultHoliday && (
+                <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>假日預設</Text>
+                </View>
+              )}
+            </View>
+            <Text style={{ fontSize: 14, color: "#475569" }}>🕐 {shift.startTime} ~ {shift.endTime}</Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setEditShift(shift);
+                setForm({
+                  name: shift.name,
+                  startTime: shift.startTime,
+                  endTime: shift.endTime,
+                  isDefaultWeekday: shift.isDefaultWeekday ?? false,
+                  isDefaultHoliday: shift.isDefaultHoliday ?? false,
+                  category: shift.category ?? "indoor",
+                  dayType: shift.dayType ?? "both",
+                });
+                setShowModal(true);
+              }}
+              style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ color: "#1E40AF", fontSize: 13 }}>編輯</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setConfirmDeleteShift({ id: shift.id, name: shift.name })}
+              style={{ backgroundColor: "#FEE2E2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ color: "#DC2626", fontSize: 13 }}>刪除</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderGroup = (catKey: "indoor" | "outdoor" | "pt") => {
+    const items = grouped[catKey];
+    if (items.length === 0) return null;
+    const cat = SHIFT_CATEGORY_CONFIG[catKey];
+    return (
+      <View key={catKey} style={{ marginBottom: 16 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <View style={{ backgroundColor: cat.bg, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: cat.border }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: cat.color }}>{cat.label}</Text>
+          </View>
+          <Text style={{ fontSize: 12, color: "#94A3B8" }}>{items.length} 個班次</Text>
+        </View>
+        {items.map(renderShiftCard)}
+      </View>
+    );
+  };
+
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
       <AlertDialog
@@ -255,50 +369,15 @@ function ShiftsSettings() {
         onCancel={() => setConfirmDeleteShift(null)}
       />
       <TouchableOpacity
-        onPress={() => { setEditShift(null); setForm({ name: "", startTime: "09:00", endTime: "18:00", isDefaultWeekday: false, isDefaultHoliday: false }); setShowModal(true); }}
+        onPress={() => { setEditShift(null); setForm(SHIFT_INITIAL_FORM); setShowModal(true); }}
         style={{ backgroundColor: "#1E40AF", borderRadius: 12, paddingVertical: 12, alignItems: "center", marginBottom: 16 }}
       >
         <Text style={{ color: "white", fontSize: 15, fontWeight: "600" }}>+ 新增工作時段</Text>
       </TouchableOpacity>
 
-      {(shifts ?? []).map((shift) => (
-        <View key={shift.id} style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <View>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>{shift.name}</Text>
-              <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>
-                {shift.startTime} – {shift.endTime}
-              </Text>
-              <View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
-                {shift.isDefaultWeekday && (
-                  <View style={{ backgroundColor: "#EFF6FF", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                    <Text style={{ fontSize: 10, color: "#1E40AF" }}>平日預設</Text>
-                  </View>
-                )}
-                {shift.isDefaultHoliday && (
-                  <View style={{ backgroundColor: "#F0FDF4", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                    <Text style={{ fontSize: 10, color: "#16A34A" }}>假日預設</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <TouchableOpacity
-                onPress={() => { setEditShift(shift); setForm({ name: shift.name, startTime: shift.startTime, endTime: shift.endTime, isDefaultWeekday: shift.isDefaultWeekday ?? false, isDefaultHoliday: shift.isDefaultHoliday ?? false }); setShowModal(true); }}
-                style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
-              >
-                <Text style={{ color: "#1E40AF", fontSize: 13 }}>編輯</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setConfirmDeleteShift({ id: shift.id, name: shift.name })}
-                style={{ backgroundColor: "#FEE2E2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
-              >
-                <Text style={{ color: "#DC2626", fontSize: 13 }}>刪除</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      ))}
+      {renderGroup("indoor")}
+      {renderGroup("outdoor")}
+      {renderGroup("pt")}
 
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
@@ -331,6 +410,59 @@ function ShiftsSettings() {
                 />
               </View>
             ))}
+
+            {/* Category Selection */}
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 8 }}>分類</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+              {(["indoor", "outdoor", "pt"] as const).map(cat => {
+                const cfg = SHIFT_CATEGORY_CONFIG[cat];
+                const selected = form.category === cat;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => setForm(f => ({ ...f, category: cat }))}
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      backgroundColor: selected ? cfg.bg : "#F8FAFC",
+                      borderColor: selected ? cfg.color : "#E2E8F0",
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: selected ? cfg.color : "#94A3B8" }}>{cfg.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Day Type Selection */}
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 8 }}>適用日期</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+              {(["weekday", "holiday", "both"] as const).map(dt => {
+                const cfg = SHIFT_DAY_TYPE_CONFIG[dt];
+                const selected = form.dayType === dt;
+                return (
+                  <TouchableOpacity
+                    key={dt}
+                    onPress={() => setForm(f => ({ ...f, dayType: dt }))}
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      backgroundColor: selected ? cfg.bg : "#F8FAFC",
+                      borderColor: selected ? cfg.color : "#E2E8F0",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: selected ? cfg.color : "#94A3B8" }}>{cfg.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderTopWidth: 0.5, borderTopColor: "#F1F5F9" }}>
               <Text style={{ fontSize: 14, color: "#1E293B" }}>設為平日預設</Text>
               <Switch value={form.isDefaultWeekday} onValueChange={(v) => setForm(f => ({ ...f, isDefaultWeekday: v }))} trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }} thumbColor={form.isDefaultWeekday ? "#1E40AF" : "#94A3B8"} />
