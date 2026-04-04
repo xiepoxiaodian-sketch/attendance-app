@@ -120,6 +120,7 @@ export type InsertSchedule = typeof schedules.$inferInsert;
 
 /**
  * Registered devices for clock-in
+ * status: approved = active, pending = awaiting admin approval, rejected = denied
  */
 export const devices = mysqlTable("devices", {
   id: int("id").autoincrement().primaryKey(),
@@ -127,6 +128,7 @@ export const devices = mysqlTable("devices", {
   deviceId: varchar("deviceId", { length: 255 }).notNull(),
   deviceName: varchar("deviceName", { length: 128 }),
   platform: varchar("platform", { length: 32 }),
+  status: mysqlEnum("status", ["approved", "pending", "rejected"]).default("approved").notNull(),
   registeredAt: timestamp("registeredAt").defaultNow().notNull(),
 });
 

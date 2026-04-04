@@ -408,9 +408,44 @@ export async function getAllDevices() {
     deviceId: devices.deviceId,
     deviceName: devices.deviceName,
     platform: devices.platform,
+    status: devices.status,
     registeredAt: devices.registeredAt,
     employeeName: employees.fullName,
+    employeeJobTitle: employees.jobTitle,
+    employeeRole: employees.role,
   }).from(devices).leftJoin(employees, eq(devices.employeeId, employees.id));
+}
+
+export async function getPendingDevices() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: devices.id,
+    employeeId: devices.employeeId,
+    deviceId: devices.deviceId,
+    deviceName: devices.deviceName,
+    platform: devices.platform,
+    status: devices.status,
+    registeredAt: devices.registeredAt,
+    employeeName: employees.fullName,
+    employeeJobTitle: employees.jobTitle,
+  }).from(devices)
+    .leftJoin(employees, eq(devices.employeeId, employees.id))
+    .where(eq(devices.status, "pending"));
+}
+
+export async function updateDeviceStatus(id: number, status: "approved" | "pending" | "rejected") {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(devices).set({ status }).where(eq(devices.id, id));
+}
+
+export async function countApprovedDevicesByEmployee(employeeId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select().from(devices)
+    .where(and(eq(devices.employeeId, employeeId), eq(devices.status, "approved")));
+  return result.length;
 }
 
 export async function findDevice(employeeId: number, deviceId: string) {

@@ -543,6 +543,8 @@ const devicesRouter = router({
 
   getAll: publicProcedure.query(async () => db.getAllDevices()),
 
+  getPending: publicProcedure.query(async () => db.getPendingDevices()),
+
   register: publicProcedure
     .input(z.object({
       employeeId: z.number(),
@@ -551,10 +553,49 @@ const devicesRouter = router({
       platform: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      // Check if this exact device is already registered
       const existing = await db.findDevice(input.employeeId, input.deviceId);
-      if (existing) return { success: true, id: existing.id, alreadyRegistered: true };
-      const id = await db.registerDevice(input);
-      return { success: true, id, alreadyRegistered: false };
+      if (existing) {
+        if (existing.status === "rejected") {
+          throw new Error("此裝置已被管理員拒絕，請聯絡管理員解除限制");
+        }
+        return { success: true, id: existing.id, alreadyRegistered: true, status: existing.status };
+      }
+
+      // Check if employee is exempt from single-device restriction
+      const employee = await db.getEmployeeById(input.employeeId);
+      const isExempt = employee?.role === "admin" || employee?.jobTitle === "M";
+
+      if (!isExempt) {
+        // Check if employee already has an approved device
+        const approvedCount = await db.countApprovedDevicesByEmployee(input.employeeId);
+        if (approvedCount >= 1) {
+          // Register as pending - requires admin approval
+          const id = await db.registerDevice({ ...input, status: "pending" });
+          // Push notification to admins
+          const name = employee?.fullName || `員工 #${input.employeeId}`;
+          sendPushToAll({
+            title: "📱 新裝置申請",
+            body: `${name} 申請從新裝置登入，請至裝置管理頁面審核`,
+            icon: "/favicon.png",
+          }).catch(() => {});
+          return { success: true, id, alreadyRegistered: false, status: "pending" };
+        }
+      }
+
+      // First device or exempt employee → auto-approve
+      const id = await db.registerDevice({ ...input, status: "approved" });
+      return { success: true, id, alreadyRegistered: false, status: "approved" };
+    }),
+
+  review: publicProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(["approved", "rejected"]),
+    }))
+    .mutation(async ({ input }) => {
+      await db.updateDeviceStatus(input.id, input.status);
+      return { success: true };
     }),
 
   delete: publicProcedure

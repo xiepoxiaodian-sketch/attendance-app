@@ -184,3 +184,17 @@
 - [x] 管理員設定頁新增「未打卡提醒」開關和延遲分鐘數設定
 - [x] 管理員設定頁新增「打卡前提醒（員工）」開關
 - [x] 員工打卡頁新增推播訂閱按鈕（僅在管理員開啟打卡前提醒時顯示）
+
+## 單一裝置綁定功能
+- [x] devices schema 新增 status 欄位（approved/pending/rejected）
+- [x] 執行 migration 更新資料庫
+- [x] db.ts 新增 getPendingDevices、updateDeviceStatus、countApprovedDevicesByEmployee 函數
+- [x] devices.register API：一般員工已有核准裝置時，新裝置自動設為 pending 並推播通知管理員
+- [x] devices.register API：管理員（role=admin）和職稱「M」的員工不受限制，直接核准
+- [x] devices.getPending API：查詢所有待審核裝置
+- [x] devices.review API：管理員審核裝置（核准/拒絕）
+- [x] 管理後台裝置管理頁：新增「待審核」/「全部裝置」分頁切換
+- [x] 管理後台裝置管理頁：待審核裝置顯示核准/拒絕按鈕
+- [x] 管理後台裝置管理頁：全部裝置顯示狀態徽章和多裝置標示
+- [x] 員工端裝置綁定頁：返回 pending 時顯示等待審核畫面
+- [x] 員工端打卡頁：裝置為 pending 或 rejected 時阻止打卡並顯示提示

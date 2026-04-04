@@ -199,7 +199,7 @@ export default function ClockScreen() {
 
       // Auto-register device on first use (will be a no-op if already registered)
       try {
-        await registerDeviceMutation.mutateAsync({
+        const regResult = await registerDeviceMutation.mutateAsync({
           employeeId: employee.id,
           deviceId,
           deviceName: Platform.OS !== "web"
@@ -207,12 +207,32 @@ export default function ClockScreen() {
             : "Web Browser",
           platform,
         });
-      } catch {
-        // Registration failed — device may not be bound
+        // If device is pending approval, block clock-in
+        if ((regResult as any).status === "pending") {
+          setVerifyStep("idle");
+          Alert.alert(
+            "裝置待審核",
+            "此裝置申請尚待管理員審核，核准後才能使用此裝置打卡。請聯絡管理員。",
+            [{ text: "確定" }]
+          );
+          return;
+        }
+        // If device was rejected, block clock-in
+        if ((regResult as any).status === "rejected") {
+          setVerifyStep("idle");
+          Alert.alert(
+            "裝置已被拒絕",
+            "此裝置已被管理員拒絕，請聯絡管理員解除限制或使用已核准的裝置打卡。",
+            [{ text: "確定" }]
+          );
+          return;
+        }
+      } catch (err: any) {
+        // Registration failed — device may not be bound or was rejected
         setVerifyStep("idle");
         Alert.alert(
-          "裝置未綁定",
-          "此裝置尚未綁定您的帳號，請聯絡管理員進行裝置授權後再打卡。",
+          "裝置驗證失敗",
+          err?.message || "此裝置尚未綁定您的帳號，請聯絡管理員進行裝置授權後再打卡。",
           [{ text: "確定" }]
         );
         return;
