@@ -383,15 +383,58 @@ function WeekTab() {
         {/* Header */}
         <TouchableOpacity
           onPress={() => setShowStaffingView(v => !v)}
-          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12, paddingBottom: showStaffingView ? 8 : 12 }}
+          style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: showStaffingView ? 8 : 12 }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>⏱ 時段人力視圖</Text>
-            <View style={{ backgroundColor: "#EFF6FF", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 10, color: "#2563EB", fontWeight: "600" }}>每小時在班人數</Text>
+          {/* Title row */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>⏱ 時段人力視圖</Text>
+              <View style={{ backgroundColor: "#EFF6FF", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 10, color: "#2563EB", fontWeight: "600" }}>每小時在班人數</Text>
+              </View>
             </View>
+            <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "600" }}>{showStaffingView ? "收起 ▲" : "展開 ▼"}</Text>
           </View>
-          <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "600" }}>{showStaffingView ? "收起 ▲" : "展開 ▼"}</Text>
+          {/* 當天人員分類統計 */}
+          {(() => {
+            const todayScheduled = activeEmployees.filter(emp => {
+              const schedule = scheduleMap[emp.id]?.[todayStr];
+              if (!schedule?.shifts?.length) return false;
+              if (schedule.leaveType && schedule.leaveMode === "allDay") return false;
+              return true;
+            });
+            const indoorCount = todayScheduled.filter(e => (e as any).category === "indoor").length;
+            const outdoorCount = todayScheduled.filter(e => (e as any).category === "outdoor").length;
+            const supervisorCount = todayScheduled.filter(e => (e as any).jobTitle === "M").length;
+            const ptCount = todayScheduled.filter(e => (e as any).category === "pt").length;
+            return (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                <View style={{ backgroundColor: "#F1F5F9", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 11, color: "#475569", fontWeight: "600" }}>今日在班</Text>
+                  <Text style={{ fontSize: 15, color: "#1E293B", fontWeight: "700" }}>{todayScheduled.length}</Text>
+                  <Text style={{ fontSize: 11, color: "#94A3B8" }}>人</Text>
+                </View>
+                <View style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 11, color: "#1D4ED8", fontWeight: "600" }}>內場</Text>
+                  <Text style={{ fontSize: 15, color: "#1D4ED8", fontWeight: "700" }}>{indoorCount}</Text>
+                </View>
+                <View style={{ backgroundColor: "#F0FDF4", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 11, color: "#15803D", fontWeight: "600" }}>外場</Text>
+                  <Text style={{ fontSize: 15, color: "#15803D", fontWeight: "700" }}>{outdoorCount}</Text>
+                </View>
+                <View style={{ backgroundColor: "#FFF7ED", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 11, color: "#C2410C", fontWeight: "600" }}>幹部</Text>
+                  <Text style={{ fontSize: 15, color: "#C2410C", fontWeight: "700" }}>{supervisorCount}</Text>
+                </View>
+                {ptCount > 0 && (
+                  <View style={{ backgroundColor: "#FEF3C7", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text style={{ fontSize: 11, color: "#D97706", fontWeight: "600" }}>PT</Text>
+                    <Text style={{ fontSize: 15, color: "#D97706", fontWeight: "700" }}>{ptCount}</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })()}
         </TouchableOpacity>
 
         {showStaffingView && (() => {
