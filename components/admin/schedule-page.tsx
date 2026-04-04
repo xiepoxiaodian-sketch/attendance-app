@@ -153,6 +153,16 @@ function WeekTab() {
   const { data: employees } = trpc.employees.list.useQuery();
   const { data: workShifts } = trpc.workShifts.list.useQuery();
   const { data: weekSchedules, refetch: refetchSchedules } = trpc.schedules.getWeekAll.useQuery({ startDate, endDate });
+  const { data: weekSettingsData } = trpc.settings.getAll.useQuery();
+
+  // 解析分組設定
+  const shiftGroups = useMemo(() => {
+    if (!weekSettingsData?.shift_groups) return [] as Array<{ id: string; name: string; shiftIds: number[] }>;
+    try {
+      const parsed = JSON.parse(weekSettingsData.shift_groups);
+      return Array.isArray(parsed) ? parsed as Array<{ id: string; name: string; shiftIds: number[] }> : [];
+    } catch { return []; }
+  }, [weekSettingsData]);
 
   const activeEmployees = (employees ?? []).filter(e => e.isActive && e.role === "employee");
 
@@ -711,34 +721,66 @@ function WeekTab() {
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 10 }}>班次設定</Text>
             <View style={{ marginBottom: 16 }}>
               <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", marginBottom: 8 }}>快速套用</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  {/* 快速休假按鈕 */}
+              {/* 休假按鈕常驅 */}
+              <View style={{ marginBottom: 8 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShifts([]);
+                    setLeave({ enabled: true, type: "other" as LeaveTypeValue, mode: "allDay", start: "09:00", end: "18:00" });
+                  }}
+                  style={{ alignSelf: "flex-start", backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#64748B", borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#64748B" }}>休假</Text>
+                </TouchableOpacity>
+              </View>
+              {/* 依分組顯示班次按鈕 */}
+              {(() => {
+                const activeShifts = (workShifts ?? []).filter(ws => ws.isActive);
+                const assignedIds = new Set(shiftGroups.flatMap(g => g.shiftIds));
+                const ungrouped = activeShifts.filter(ws => !assignedIds.has(ws.id));
+                const renderShiftBtn = (ws: typeof activeShifts[0]) => (
                   <TouchableOpacity
+                    key={ws.id}
                     onPress={() => {
-                      setShifts([]);
-                      setLeave({ enabled: true, type: "other" as LeaveTypeValue, mode: "allDay", start: "09:00", end: "18:00" });
+                      setLeave(p => ({ ...p, enabled: false }));
+                      setShifts(prev => [...prev, { startTime: ws.startTime, endTime: ws.endTime, label: ws.name }]);
                     }}
-                    style={{ backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#64748B", borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" }}
+                    style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#2563EB", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#64748B" }}>休假</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#2563EB" }}>{ws.name}</Text>
+                    <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{ws.startTime} ~ {ws.endTime}</Text>
                   </TouchableOpacity>
-                  {/* 工作時段快速套用 */}
-                  {(workShifts ?? []).filter(ws => ws.isActive).map(ws => (
-                    <TouchableOpacity
-                      key={ws.id}
-                      onPress={() => {
-                        setLeave(p => ({ ...p, enabled: false }));
-                        setShifts(prev => [...prev, { startTime: ws.startTime, endTime: ws.endTime, label: ws.name }]);
-                      }}
-                      style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#2563EB", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#2563EB" }}>{ws.name}</Text>
-                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{ws.startTime} ~ {ws.endTime}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
+                );
+                const hasGroups = shiftGroups.filter(g => g.name.trim()).length > 0;
+                return (
+                  <>
+                    {shiftGroups.filter(g => g.name.trim()).map(group => {
+                      const groupShifts = activeShifts.filter(ws => group.shiftIds.includes(ws.id));
+                      if (groupShifts.length === 0) return null;
+                      return (
+                        <View key={group.id} style={{ marginBottom: 8 }}>
+                          <Text style={{ fontSize: 11, color: "#94A3B8", fontWeight: "600", marginBottom: 6 }}>{group.name}</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            <View style={{ flexDirection: "row", gap: 8 }}>
+                              {groupShifts.map(renderShiftBtn)}
+                            </View>
+                          </ScrollView>
+                        </View>
+                      );
+                    })}
+                    {ungrouped.length > 0 && (
+                      <View style={{ marginBottom: 4 }}>
+                        {hasGroups && <Text style={{ fontSize: 11, color: "#94A3B8", fontWeight: "600", marginBottom: 6 }}>其他</Text>}
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <View style={{ flexDirection: "row", gap: 8 }}>
+                            {ungrouped.map(renderShiftBtn)}
+                          </View>
+                        </ScrollView>
+                      </View>
+                    )}
+                  </>
+                );
+              })()}
             </View>
             {shifts.map((shift, i) => (
               <View key={i} style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
@@ -784,7 +826,22 @@ function MonthTab() {
     { staleTime: 0, refetchOnMount: true, refetchOnWindowFocus: true }
   );
   const { data: allEmployees } = trpc.employees.list.useQuery();
+  const { data: monthSettingsData } = trpc.settings.getAll.useQuery();
   const activeEmployees = useMemo(() => allEmployees?.filter(e => e.isActive) ?? [], [allEmployees]);
+
+  // 解析分組設定
+  const monthShiftGroups = useMemo(() => {
+    if (!monthSettingsData?.shift_groups) return [] as Array<{ id: string; name: string; shiftIds: number[] }>;
+    try {
+      const parsed = JSON.parse(monthSettingsData.shift_groups);
+      return Array.isArray(parsed) ? parsed as Array<{ id: string; name: string; shiftIds: number[] }> : [];
+    } catch { return []; }
+  }, [monthSettingsData]);
+
+  // 從分組設定取得分組名稱（以員工 ID 為鍵）——注意：分組是對班次的，這裡我們用員工的 tag 屬性分組
+  // 所以我們用 monthShiftGroups 的名稱來分區員工，但這裡分組是對班次的
+  // 我們需要一個方式：將員工按「最常用班次所屬分組」分類
+  // 簡化方式：將 monthShiftGroups 的名稱當作員工分區標籤
 
   const scheduleMap = useMemo(() => {
     const map: Record<string, Record<number, { shifts: ShiftEntry[]; leaveType?: string | null; leaveMode?: string | null; leaveDuration?: string | null }>> = {};
@@ -834,8 +891,8 @@ function MonthTab() {
       </th>`;
     }).join('');
 
-    // Build employee rows
-    const rows = printEmployees.map(emp => {
+    // Build employee row helper
+    const buildEmpRow = (emp: typeof printEmployees[0]) => {
       const tagLabel = TAG_LABEL[(emp as any).tag ?? ''] ?? '';
       const cells = Array.from({ length: daysCount }, (_, i) => {
         const d = i + 1;
@@ -863,7 +920,74 @@ function MonthTab() {
         <td style="padding:3px 5px;border:1px solid #E2E8F0;white-space:nowrap;background:#F8FAFC;font-size:9px;font-weight:600;color:#1E293B">${emp.fullName}<br/><span style="font-size:7px;color:#64748B;font-weight:400">${tagLabel}</span></td>
         ${cells}
       </tr>`;
-    }).join('');
+    };
+
+    // Build employee rows with group headers
+    const groupSeparatorRow = (groupName: string, bgColor: string, textColor: string) =>
+      `<tr><td colspan="${daysCount + 1}" style="background:${bgColor};padding:3px 6px;font-size:9px;font-weight:700;color:${textColor};border:1px solid #CBD5E1;letter-spacing:0.5px">${groupName}</td></tr>`;
+
+    let rows = '';
+    const validGroups = monthShiftGroups.filter(g => g.name.trim());
+    if (validGroups.length > 0) {
+      // 依分組設定的順序顯示分區標題，並將屬於該分組的班次的員工排列在其下
+      // 注意：分組是對班次的，我們用 tag 屬性將員工分區，並使用分組名稱作為標題
+      // 將分組名稱映射到 tag：如果分組名稱包含「內場」就對應 indoor，「外場」對應 outdoor，「干部」對應 supervisor
+      // 其他分組名稱就直接用分組名稱顯示，並將未被其他分組包含的員工放入對應分組
+      const tagToGroupName: Record<string, string> = {};
+      validGroups.forEach(g => {
+        const n = g.name;
+        if (n.includes('內場')) tagToGroupName['indoor'] = n;
+        else if (n.includes('外場')) tagToGroupName['outdoor'] = n;
+        else if (n.includes('干部') || n.includes('主管')) tagToGroupName['supervisor'] = n;
+      });
+      // 對每個分組，找出屬於該分組 tag 的員工
+      const groupColors = ['#EFF6FF', '#F0FDF4', '#FFF7ED', '#F5F3FF', '#ECFEFF', '#FEF2F2'];
+      const groupTextColors = ['#1D4ED8', '#15803D', '#C2410C', '#7C3AED', '#0891B2', '#DC2626'];
+      const renderedEmpIds = new Set<number>();
+      validGroups.forEach((group, gi) => {
+        const bg = groupColors[gi % groupColors.length];
+        const tc = groupTextColors[gi % groupTextColors.length];
+        // 找出該分組對應的 tag
+        const matchedTag = Object.entries(tagToGroupName).find(([, v]) => v === group.name)?.[0];
+        let groupEmps: typeof printEmployees;
+        if (matchedTag) {
+          groupEmps = printEmployees.filter(e => (e as any).tag === matchedTag);
+        } else {
+          // 其他分組：將尚未被分配的員工放入最後一個分組
+          groupEmps = [];
+        }
+        if (groupEmps.length > 0) {
+          rows += groupSeparatorRow(group.name, bg, tc);
+          groupEmps.forEach(emp => { rows += buildEmpRow(emp); renderedEmpIds.add(emp.id); });
+        }
+      });
+      // 未分組的員工
+      const ungroupedEmps = printEmployees.filter(e => !renderedEmpIds.has(e.id));
+      if (ungroupedEmps.length > 0) {
+        rows += groupSeparatorRow('其他', '#F8FAFC', '#64748B');
+        ungroupedEmps.forEach(emp => { rows += buildEmpRow(emp); });
+      }
+    } else {
+      // 沒有分組設定，用原本 tag 分區
+      const tagGroups = [
+        { tag: 'indoor', label: '內場', bg: '#EFF6FF', tc: '#1D4ED8' },
+        { tag: 'outdoor', label: '外場', bg: '#F0FDF4', tc: '#15803D' },
+        { tag: 'supervisor', label: '干部', bg: '#FFF7ED', tc: '#C2410C' },
+      ];
+      const renderedEmpIds = new Set<number>();
+      tagGroups.forEach(({ tag, label, bg, tc }) => {
+        const groupEmps = printEmployees.filter(e => (e as any).tag === tag);
+        if (groupEmps.length > 0) {
+          rows += groupSeparatorRow(label, bg, tc);
+          groupEmps.forEach(emp => { rows += buildEmpRow(emp); renderedEmpIds.add(emp.id); });
+        }
+      });
+      const ungroupedEmps = printEmployees.filter(e => !renderedEmpIds.has(e.id));
+      if (ungroupedEmps.length > 0) {
+        rows += groupSeparatorRow('其他', '#F8FAFC', '#64748B');
+        ungroupedEmps.forEach(emp => { rows += buildEmpRow(emp); });
+      }
+    }
 
     // Build daily count rows
     const countRow = (label: string, filterFn: (emp: typeof printEmployees[0]) => boolean, bg: string, color: string) => {
@@ -1314,49 +1438,94 @@ function WorkShiftsTab() {
             </View>
           </View>
         )}
-        <ScrollView contentContainerStyle={{ padding: 14, gap: 10 }}>
-          <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4, textAlign: "center" }}>長按左側 ☰ 拖拽可調整順序</Text>
-          {localShifts.map((item, index) => (
-            <View
-              key={item.id}
-              // @ts-ignore
-              ref={(el: HTMLElement | null) => { (getShiftHandlers(index, item.name) as any).ref?.(el); }}
-              style={{
-                backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1,
-                borderColor: shiftOverIndex === index ? "#2563EB" : "#F1F5F9",
-                shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: shiftActiveIndex === index ? 0.15 : 0.05, shadowRadius: 3,
-                elevation: shiftActiveIndex === index ? 4 : 1,
-                opacity: shiftActiveIndex === index ? 0.5 : 1,
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-                {/* Drag handle: long press to activate sorting */}
-                <View
-                  {...(getShiftHandlers(index, item.name) as object)}
-                  style={{ justifyContent: "center", paddingRight: 10, paddingLeft: 2, paddingVertical: 4, cursor: "grab", userSelect: "none" } as unknown as object}
-                >
-                  <Text style={{ fontSize: 20, color: "#94A3B8" }}>⠿</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{item.name}</Text>
-                    {item.isDefaultWeekday && <View style={{ backgroundColor: "#EFF6FF", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}><Text style={{ fontSize: 11, color: "#2563EB", fontWeight: "600" }}>平日預設</Text></View>}
-                    {item.isDefaultHoliday && <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}><Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>假日預設</Text></View>}
+        <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 20 }}>
+          <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 12, textAlign: "center" }}>長按左側 ☰ 拖拽可調整順序</Text>
+          {(() => {
+            // 建立分組顯示結構
+            const assignedShiftIds = new Set(groups.flatMap(g => g.shiftIds));
+            const ungroupedShifts = localShifts.filter(s => !assignedShiftIds.has(s.id));
+
+            const renderShiftCard = (item: WorkShift, index: number) => (
+              <View
+                key={item.id}
+                // @ts-ignore
+                ref={(el: HTMLElement | null) => { (getShiftHandlers(index, item.name) as any).ref?.(el); }}
+                style={{
+                  backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1,
+                  borderColor: shiftOverIndex === index ? "#2563EB" : "#F1F5F9",
+                  shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: shiftActiveIndex === index ? 0.15 : 0.05, shadowRadius: 3,
+                  elevation: shiftActiveIndex === index ? 4 : 1,
+                  opacity: shiftActiveIndex === index ? 0.5 : 1,
+                  marginBottom: 8,
+                }}
+              >
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <View
+                    {...(getShiftHandlers(index, item.name) as object)}
+                    style={{ justifyContent: "center", paddingRight: 10, paddingLeft: 2, paddingVertical: 4, cursor: "grab", userSelect: "none" } as unknown as object}
+                  >
+                    <Text style={{ fontSize: 20, color: "#94A3B8" }}>⠿</Text>
                   </View>
-                  <Text style={{ fontSize: 14, color: "#475569" }}>🕐 {item.startTime} ~ {item.endTime}</Text>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <TouchableOpacity onPress={() => openEdit(item as unknown as WorkShift)} style={{ backgroundColor: "#F1F5F9", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
-                    <Text style={{ fontSize: 13, color: "#475569" }}>編輯</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDelete(item.id, item.name)} style={{ backgroundColor: "#FEF2F2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
-                    <Text style={{ fontSize: 13, color: "#EF4444" }}>刪除</Text>
-                  </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{item.name}</Text>
+                      {item.isDefaultWeekday && <View style={{ backgroundColor: "#EFF6FF", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}><Text style={{ fontSize: 11, color: "#2563EB", fontWeight: "600" }}>平日預設</Text></View>}
+                      {item.isDefaultHoliday && <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}><Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>假日預設</Text></View>}
+                    </View>
+                    <Text style={{ fontSize: 14, color: "#475569" }}>🕐 {item.startTime} ~ {item.endTime}</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity onPress={() => openEdit(item as unknown as WorkShift)} style={{ backgroundColor: "#F1F5F9", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                      <Text style={{ fontSize: 13, color: "#475569" }}>編輯</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDelete(item.id, item.name)} style={{ backgroundColor: "#FEF2F2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                      <Text style={{ fontSize: 13, color: "#EF4444" }}>刪除</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))}
+            );
+
+            return (
+              <>
+                {/* 已分組的班次 */}
+                {groups.filter(g => g.name.trim()).map(group => {
+                  const groupShifts = localShifts.filter(s => group.shiftIds.includes(s.id));
+                  if (groupShifts.length === 0) return null;
+                  return (
+                    <View key={group.id} style={{ marginBottom: 16 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <View style={{ height: 1, flex: 1, backgroundColor: "#E2E8F0" }} />
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748B", paddingHorizontal: 4 }}>{group.name}</Text>
+                        <View style={{ height: 1, flex: 1, backgroundColor: "#E2E8F0" }} />
+                      </View>
+                      {groupShifts.map(item => {
+                        const index = localShifts.findIndex(s => s.id === item.id);
+                        return renderShiftCard(item, index);
+                      })}
+                    </View>
+                  );
+                })}
+                {/* 未分組的班次 */}
+                {ungroupedShifts.length > 0 && (
+                  <View style={{ marginBottom: 16 }}>
+                    {groups.filter(g => g.name.trim()).length > 0 && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <View style={{ height: 1, flex: 1, backgroundColor: "#E2E8F0" }} />
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8", paddingHorizontal: 4 }}>未分組</Text>
+                        <View style={{ height: 1, flex: 1, backgroundColor: "#E2E8F0" }} />
+                      </View>
+                    )}
+                    {ungroupedShifts.map(item => {
+                      const index = localShifts.findIndex(s => s.id === item.id);
+                      return renderShiftCard(item, index);
+                    })}
+                  </View>
+                )}
+              </>
+            );
+          })()}
         </ScrollView>
         </>
       )}
