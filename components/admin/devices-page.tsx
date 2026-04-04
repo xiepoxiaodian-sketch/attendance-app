@@ -196,12 +196,9 @@ export default function DevicesScreen() {
 
                 {/* Device info */}
                 <View style={{ backgroundColor: "#F8FAFC", borderRadius: 8, padding: 10, gap: 3, marginBottom: 10 }}>
-                  <Text style={{ fontSize: 12, color: "#475569" }}>裝置名稱：{item.deviceName ?? "未知"}</Text>
+                  <Text style={{ fontSize: 12, color: "#475569" }}>裝置型號：{item.deviceName ?? "未知"}</Text>
                   <Text style={{ fontSize: 12, color: "#475569" }}>平台：{item.platform ?? "未知"}</Text>
                   <Text style={{ fontSize: 12, color: "#475569" }}>申請時間：{formatDate(item.registeredAt)}</Text>
-                  <Text style={{ fontSize: 11, color: "#94A3B8" }} numberOfLines={1}>
-                    ID：{item.deviceId?.substring(0, 30)}...
-                  </Text>
                 </View>
 
                 {/* Actions */}
