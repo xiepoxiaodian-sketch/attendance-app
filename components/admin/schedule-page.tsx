@@ -1314,6 +1314,7 @@ function WorkShiftsTab() {
 
   const { getCardRef: getShiftCardRef, getHandleHandlersOnly: getShiftHandleOnly, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize, ghostOffset: shiftGhostOffset } = useDragSort({
     items: localShifts,
+    getId: (item) => String(item.id),
     onReorder: (newList) => {
       setLocalShifts(newList);
       reorderMutation.mutate({ orderedIds: newList.map(s => s.id) });
@@ -1455,7 +1456,7 @@ function WorkShiftsTab() {
               <View
                 key={item.id}
                 // @ts-ignore
-                ref={getShiftCardRef(index, String(item.id))}
+                ref={getShiftCardRef(String(item.id))}
                 style={{
                   backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1,
                   borderColor: shiftOverIndex === index ? "#2563EB" : "#F1F5F9",
