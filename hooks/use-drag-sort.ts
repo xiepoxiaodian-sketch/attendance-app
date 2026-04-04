@@ -3,12 +3,14 @@ import { Platform } from "react-native";
 
 /**
  * A touch + mouse drag-sort hook for web.
- * Returns handlers to attach to each list item and ghost element info.
+ * - Long press (500ms) to activate drag on touch devices
+ * - Mouse: long press (300ms) to activate drag
+ * - Ghost card uses fixed positioning to follow finger/cursor accurately
  *
  * Usage:
- *   const { getItemHandlers, ghostPos, ghostLabel, ghostSize, activeIndex, overActiveIndex } = useDragSort({ items, onReorder });
- *   items.map((item, index) => <View {...getItemHandlers(index, item.name)} key={item.id}>...</View>)
- *   // Render ghost card outside the list using ghostPos + ghostLabel + ghostSize
+ *   const { getHandleHandlers, ghostPos, ghostLabel, ghostSize, activeIndex, overActiveIndex } = useDragSort({ items, onReorder });
+ *   // Attach getHandleHandlers to the drag handle element (left side ☰ icon)
+ *   // Attach item ref via itemRefs to each list item for position detection
  */
 export function useDragSort<T>({
   items,
@@ -19,6 +21,10 @@ export function useDragSort<T>({
 }) {
   const dragIndex = useRef<number | null>(null);
   const overIndex = useRef<number | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDragging = useRef(false);
+  const startPos = useRef<{ x: number; y: number } | null>(null);
+
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [overActiveIndex, setOverActiveIndex] = useState<number | null>(null);
   const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
@@ -27,7 +33,11 @@ export function useDragSort<T>({
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
 
   const finishDrag = useCallback(() => {
-    if (dragIndex.current !== null && overIndex.current !== null && dragIndex.current !== overIndex.current) {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    if (isDragging.current && dragIndex.current !== null && overIndex.current !== null && dragIndex.current !== overIndex.current) {
       const newList = [...items];
       const [moved] = newList.splice(dragIndex.current, 1);
       newList.splice(overIndex.current, 0, moved);
@@ -35,38 +45,66 @@ export function useDragSort<T>({
     }
     dragIndex.current = null;
     overIndex.current = null;
+    isDragging.current = false;
+    startPos.current = null;
     setActiveIndex(null);
     setOverActiveIndex(null);
     setGhostPos(null);
   }, [items, onReorder]);
 
-  const getItemHandlers = useCallback((index: number, label?: string) => {
+  // Returns handlers to attach to the drag HANDLE element (☰ icon), not the whole card
+  const getHandleHandlers = useCallback((index: number, label?: string) => {
     if (Platform.OS !== "web") return {};
 
     return {
       // @ts-ignore
       ref: (el: HTMLElement | null) => { itemRefs.current[index] = el; },
-      // Touch events for mobile
+
+      // ── Touch: long press 500ms to start drag ──────────────────────────────
       onTouchStart: (e: React.TouchEvent) => {
-        dragIndex.current = index;
-        overIndex.current = index;
-        setActiveIndex(index);
-        setOverActiveIndex(index);
-        setGhostLabel(label ?? String(index + 1));
+        e.stopPropagation();
         const touch = e.touches[0];
-        setGhostPos({ x: touch.clientX, y: touch.clientY });
-        // Capture size of the dragged element
-        const el = itemRefs.current[index];
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          setGhostSize({ width: rect.width, height: rect.height });
-        }
+        startPos.current = { x: touch.clientX, y: touch.clientY };
+
+        longPressTimer.current = setTimeout(() => {
+          isDragging.current = true;
+          dragIndex.current = index;
+          overIndex.current = index;
+          setActiveIndex(index);
+          setOverActiveIndex(index);
+          setGhostLabel(label ?? String(index + 1));
+          setGhostPos({ x: touch.clientX, y: touch.clientY });
+          // Capture size from the parent card (itemRefs stores the card element)
+          const el = itemRefs.current[index];
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            setGhostSize({ width: rect.width, height: rect.height });
+          }
+          // Haptic feedback if available
+          if (typeof navigator !== "undefined" && (navigator as any).vibrate) {
+            (navigator as any).vibrate(30);
+          }
+        }, 500);
       },
       onTouchMove: (e: React.TouchEvent) => {
-        e.preventDefault();
         const touch = e.touches[0];
+        // Cancel long press if moved too much before activation
+        if (!isDragging.current && startPos.current) {
+          const dx = Math.abs(touch.clientX - startPos.current.x);
+          const dy = Math.abs(touch.clientY - startPos.current.y);
+          if (dx > 8 || dy > 8) {
+            if (longPressTimer.current) {
+              clearTimeout(longPressTimer.current);
+              longPressTimer.current = null;
+            }
+            return;
+          }
+        }
+        if (!isDragging.current) return;
+        e.preventDefault();
+        // Ghost follows finger using fixed coordinates (viewport-relative)
         setGhostPos({ x: touch.clientX, y: touch.clientY });
-        // Find which item we're hovering over
+        // Detect which item we're hovering over
         const elements = itemRefs.current;
         for (let i = 0; i < elements.length; i++) {
           const el = elements[i];
@@ -79,22 +117,53 @@ export function useDragSort<T>({
           }
         }
       },
-      onTouchEnd: () => { finishDrag(); },
-      // Mouse events for desktop
-      onMouseDown: (e: React.MouseEvent) => {
-        dragIndex.current = index;
-        overIndex.current = index;
-        setActiveIndex(index);
-        setOverActiveIndex(index);
-        setGhostLabel(label ?? String(index + 1));
-        setGhostPos({ x: e.clientX, y: e.clientY });
-        // Capture size of the dragged element
-        const el = itemRefs.current[index];
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          setGhostSize({ width: rect.width, height: rect.height });
+      onTouchEnd: () => {
+        if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
         }
+        finishDrag();
+      },
+      onTouchCancel: () => {
+        if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+        }
+        finishDrag();
+      },
+
+      // ── Mouse: long press 300ms to start drag ─────────────────────────────
+      onMouseDown: (e: React.MouseEvent) => {
+        e.stopPropagation();
+        startPos.current = { x: e.clientX, y: e.clientY };
+
+        longPressTimer.current = setTimeout(() => {
+          isDragging.current = true;
+          dragIndex.current = index;
+          overIndex.current = index;
+          setActiveIndex(index);
+          setOverActiveIndex(index);
+          setGhostLabel(label ?? String(index + 1));
+          setGhostPos({ x: e.clientX, y: e.clientY });
+          const el = itemRefs.current[index];
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            setGhostSize({ width: rect.width, height: rect.height });
+          }
+        }, 300);
+
         const onMouseMove = (ev: MouseEvent) => {
+          if (!isDragging.current && startPos.current) {
+            const dx = Math.abs(ev.clientX - startPos.current.x);
+            const dy = Math.abs(ev.clientY - startPos.current.y);
+            if (dx > 5 || dy > 5) {
+              if (longPressTimer.current) {
+                clearTimeout(longPressTimer.current);
+                longPressTimer.current = null;
+              }
+            }
+          }
+          if (!isDragging.current) return;
           setGhostPos({ x: ev.clientX, y: ev.clientY });
           const elements = itemRefs.current;
           for (let i = 0; i < elements.length; i++) {
@@ -119,12 +188,17 @@ export function useDragSort<T>({
     };
   }, [finishDrag]);
 
+  // Keep backward compat: getItemHandlers now just wraps getHandleHandlers
+  const getItemHandlers = getHandleHandlers;
+
   return {
     getItemHandlers,
+    getHandleHandlers,
     activeIndex,
     overActiveIndex,
     ghostPos,
     ghostLabel,
     ghostSize,
+    isDragging: isDragging.current,
   };
 }

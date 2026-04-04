@@ -1170,7 +1170,7 @@ function WorkShiftsTab() {
   // Sync local state when server data arrives
   useEffect(() => { if (shifts) setLocalShifts(shifts as WorkShift[]); }, [shifts]);
 
-  const { getItemHandlers: getShiftHandlers, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize } = useDragSort({
+  const { getHandleHandlers: getShiftHandlers, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize } = useDragSort({
     items: localShifts,
     onReorder: (newList) => {
       setLocalShifts(newList);
@@ -1222,12 +1222,12 @@ function WorkShiftsTab() {
         </View>
       ) : (
         <>
-        {/* Ghost card: floating card that follows finger/cursor during drag */}
+        {/* Ghost card: fixed positioning follows finger/cursor accurately */}
         {shiftGhostPos && (
           <View
             pointerEvents="none"
             style={{
-              position: "absolute" as any,
+              position: "fixed" as any,
               left: shiftGhostPos.x - shiftGhostSize.width / 2,
               top: shiftGhostPos.y - shiftGhostSize.height / 2,
               width: shiftGhostSize.width,
@@ -1239,11 +1239,11 @@ function WorkShiftsTab() {
               borderColor: "#2563EB",
               shadowColor: "#2563EB",
               shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.25,
+              shadowOpacity: 0.3,
               shadowRadius: 16,
               elevation: 20,
-              opacity: 0.95,
-              transform: [{ rotate: "2deg" }],
+              opacity: 0.92,
+              transform: [{ rotate: "1deg" }],
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -1257,7 +1257,8 @@ function WorkShiftsTab() {
           {localShifts.map((item, index) => (
             <View
               key={item.id}
-              {...(getShiftHandlers(index, item.name) as object)}
+              // @ts-ignore
+              ref={(el: HTMLElement | null) => { (getShiftHandlers(index, item.name) as any).ref?.(el); }}
               style={{
                 backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1,
                 borderColor: shiftOverIndex === index ? "#2563EB" : "#F1F5F9",
@@ -1268,8 +1269,12 @@ function WorkShiftsTab() {
               }}
             >
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <View style={{ justifyContent: "center", paddingRight: 10, cursor: "grab" } as unknown as object}>
-                  <Text style={{ fontSize: 18, color: "#CBD5E1" }}>☰</Text>
+                {/* Drag handle: long press to activate sorting */}
+                <View
+                  {...(getShiftHandlers(index, item.name) as object)}
+                  style={{ justifyContent: "center", paddingRight: 10, paddingLeft: 2, paddingVertical: 4, cursor: "grab", userSelect: "none" } as unknown as object}
+                >
+                  <Text style={{ fontSize: 20, color: "#94A3B8" }}>⠿</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
