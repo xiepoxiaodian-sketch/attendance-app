@@ -1,0 +1,1 @@
+ALTER TABLE `employees` ADD `sortOrder` int DEFAULT 0 NOT NULL;

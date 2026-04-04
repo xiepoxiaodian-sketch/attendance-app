@@ -43,6 +43,7 @@ export const employees = mysqlTable("employees", {
   phone: varchar("phone", { length: 32 }),
   needsSetup: boolean("needsSetup").default(true).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -86,6 +87,7 @@ export const workShifts = mysqlTable("workShifts", {
   isDefaultWeekday: boolean("isDefaultWeekday").default(false).notNull(),
   isDefaultHoliday: boolean("isDefaultHoliday").default(false).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

@@ -114,13 +114,31 @@ export async function getUserByOpenId(openId: string) {
 export async function getAllEmployees() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(employees).orderBy(employees.fullName);
+  return db.select().from(employees).orderBy(employees.sortOrder, employees.username);
 }
 
 export async function getActiveEmployees() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(employees).where(eq(employees.isActive, true)).orderBy(employees.fullName);
+  return db.select().from(employees).where(eq(employees.isActive, true)).orderBy(employees.sortOrder, employees.username);
+}
+
+export async function reorderEmployees(orderedIds: number[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await Promise.all(orderedIds.map((id, index) =>
+    db.update(employees).set({ sortOrder: index }).where(eq(employees.id, id))
+  ));
+}
+
+export async function createEmployee(data: InsertEmployee) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Assign sortOrder = current max + 1 so new employees go to the end
+  const existing = await db.select({ sortOrder: employees.sortOrder }).from(employees).orderBy(employees.sortOrder);
+  const maxOrder = existing.length > 0 ? Math.max(...existing.map(e => e.sortOrder)) : -1;
+  const result = await db.insert(employees).values({ ...data, sortOrder: maxOrder + 1 });
+  return result[0].insertId;
 }
 
 export async function getEmployeeById(id: number) {
@@ -135,13 +153,6 @@ export async function getEmployeeByUsername(username: string) {
   if (!db) return undefined;
   const result = await db.select().from(employees).where(eq(employees.username, username)).limit(1);
   return result[0];
-}
-
-export async function createEmployee(data: InsertEmployee) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(employees).values(data);
-  return result[0].insertId;
 }
 
 export async function updateEmployee(id: number, data: Partial<InsertEmployee>) {
@@ -254,20 +265,31 @@ export async function getTodayAttendanceSummary() {
 export async function getAllWorkShifts() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(workShifts).orderBy(workShifts.startTime);
+  return db.select().from(workShifts).orderBy(workShifts.sortOrder, workShifts.createdAt);
 }
 
 export async function getActiveWorkShifts() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(workShifts).where(eq(workShifts.isActive, true)).orderBy(workShifts.startTime);
+  return db.select().from(workShifts).where(eq(workShifts.isActive, true)).orderBy(workShifts.sortOrder, workShifts.createdAt);
 }
 
 export async function createWorkShift(data: InsertWorkShift) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(workShifts).values(data);
+  // Assign sortOrder = current max + 1 so new shifts go to the end
+  const existing = await db.select({ sortOrder: workShifts.sortOrder }).from(workShifts).orderBy(workShifts.sortOrder);
+  const maxOrder = existing.length > 0 ? Math.max(...existing.map(s => s.sortOrder)) : -1;
+  const result = await db.insert(workShifts).values({ ...data, sortOrder: maxOrder + 1 });
   return result[0].insertId;
+}
+
+export async function reorderWorkShifts(orderedIds: number[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await Promise.all(orderedIds.map((id, index) =>
+    db.update(workShifts).set({ sortOrder: index }).where(eq(workShifts.id, id))
+  ));
 }
 
 export async function updateWorkShift(id: number, data: Partial<InsertWorkShift>) {

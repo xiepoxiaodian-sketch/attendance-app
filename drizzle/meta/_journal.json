@@ -22,6 +22,20 @@
       "when": 1775178877446,
       "tag": "0002_past_the_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1775298416557,
+      "tag": "0003_serious_magma",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1775298597278,
+      "tag": "0004_fat_northstar",
+      "breakpoints": true
     }
   ]
 }

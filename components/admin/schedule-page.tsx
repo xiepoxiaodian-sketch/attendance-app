@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal,
   ActivityIndicator, FlatList, TextInput, Switch, RefreshControl,
@@ -8,6 +8,8 @@ import { AdminHeader } from "@/components/admin-header";
 import { TimePickerWheel } from "@/components/time-picker-wheel";
 import { ConfirmDialog, AlertDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
+import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -69,7 +71,7 @@ function WeekTab() {
   });
   const [alertMsg, setAlertMsg] = useState<{ title: string; message: string } | null>(null);
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState(false);
-  const [staffingPopup, setStaffingPopup] = useState<{ dateStr: string; hour: number; names: string[] } | null>(null);
+  const [staffingPopup, setStaffingPopup] = useState<{ dateStr: string; slot: number; names: string[] } | null>(null);
   const [showStaffingView, setShowStaffingView] = useState(true);
 
   const weekDates = getWeekDates(weekOffset);
@@ -177,14 +179,19 @@ function WeekTab() {
   const leaveDuration = leave.mode === "allDay" ? 8 : calcDuration(leave.start, leave.end);
 
   // ── 時段人力計算 ─────────────────────────────────────────────────────────
-  // 計算每天每小時的在班人數與人員名單
+  // 計算每天每30分鐘時段的在班人數與人員名單（10:00~23:00，共26個slot）
+  // slot = 分鐘數 / 30，例如 slot 20 = 600min = 10:00, slot 21 = 630min = 10:30
+  const SLOT_START = 20; // 10:00 = 600min / 30
+  const SLOT_END = 46;   // 23:00 = 1380min / 30（不含23:00本身）
+  const SLOTS = Array.from({ length: SLOT_END - SLOT_START }, (_, i) => SLOT_START + i);
+
   const staffingByDayHour = useMemo(() => {
-    // result[dateStr][hour] = [empName, ...]
+    // result[dateStr][slot] = [empName, ...]
     const result: Record<string, Record<number, string[]>> = {};
     for (const d of weekDates) {
       const dateStr = toDateStr(d);
       result[dateStr] = {};
-      for (let h = 6; h <= 23; h++) result[dateStr][h] = [];
+      for (let s = SLOT_START; s < SLOT_END; s++) result[dateStr][s] = [];
     }
     for (const emp of activeEmployees) {
       for (const d of weekDates) {
@@ -197,12 +204,12 @@ function WeekTab() {
           const [eh, em] = shift.endTime.split(":").map(Number);
           const startMin = sh * 60 + sm;
           const endMin = eh * 60 + em;
-          for (let h = 6; h <= 23; h++) {
-            const slotStart = h * 60;
-            const slotEnd = (h + 1) * 60;
+          for (let s = SLOT_START; s < SLOT_END; s++) {
+            const slotStart = s * 30;
+            const slotEnd = (s + 1) * 30;
             if (startMin < slotEnd && endMin > slotStart) {
-              if (!result[dateStr][h].includes(emp.fullName))
-                result[dateStr][h].push(emp.fullName);
+              if (!result[dateStr][s].includes(emp.fullName))
+                result[dateStr][s].push(emp.fullName);
             }
           }
         }
@@ -290,47 +297,62 @@ function WeekTab() {
         </TouchableOpacity>
 
         {showStaffingView && (() => {
-          const HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
-          const COL_W = 36;
+          // 30分鐘一格，10:00~23:00
+          const COL_W = 28;
           const ROW_H = 36;
           const LABEL_W = 58;
+          // 將 slot 轉為時間字串，例如 slot 20 => "10:00"
+          const slotToTime = (s: number) => {
+            const totalMin = s * 30;
+            const h = Math.floor(totalMin / 60);
+            const m = totalMin % 60;
+            return `${h}:${m === 0 ? "00" : "30"}`;
+          };
 
           return (
             <View style={{ paddingBottom: 12 }}>
               {/* Popup panel */}
-              {staffingPopup && (
-                <View style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "#EFF6FF", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "#BFDBFE" }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <View style={{ backgroundColor: "#2563EB", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>
-                          {staffingPopup.hour}:00–{staffingPopup.hour + 1}:00
+              {staffingPopup && (() => {
+                const slotMin = staffingPopup.slot * 30;
+                const endMin = slotMin + 30;
+                const startLabel = slotToTime(staffingPopup.slot);
+                const endH = Math.floor(endMin / 60);
+                const endM = endMin % 60;
+                const endLabel = `${endH}:${endM === 0 ? "00" : "30"}`;
+                return (
+                  <View style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "#EFF6FF", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "#BFDBFE" }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <View style={{ backgroundColor: "#2563EB", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>
+                            {startLabel}–{endLabel}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 13, color: "#475569" }}>
+                          週{["日","一","二","三","四","五","六"][new Date(staffingPopup.dateStr).getDay()]} {staffingPopup.dateStr.slice(5).replace("-", "/")}
                         </Text>
                       </View>
-                      <Text style={{ fontSize: 13, color: "#475569" }}>
-                        週{["日","一","二","三","四","五","六"][new Date(staffingPopup.dateStr).getDay()]} {staffingPopup.dateStr.slice(5).replace("-", "/")}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#1D4ED8" }}>{staffingPopup.names.length} 人在班</Text>
+                        <TouchableOpacity onPress={() => setStaffingPopup(null)} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center" }}>
+                          <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "700" }}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#1D4ED8" }}>{staffingPopup.names.length} 人在班</Text>
-                      <TouchableOpacity onPress={() => setStaffingPopup(null)} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "700" }}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
+                    {staffingPopup.names.length === 0 ? (
+                      <Text style={{ fontSize: 13, color: "#94A3B8" }}>此時段無人排班</Text>
+                    ) : (
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                        {staffingPopup.names.map((name, i) => (
+                          <View key={i} style={{ backgroundColor: "white", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: "#BFDBFE" }}>
+                            <Text style={{ fontSize: 13, color: "#1D4ED8", fontWeight: "600" }}>{name}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
-                  {staffingPopup.names.length === 0 ? (
-                    <Text style={{ fontSize: 13, color: "#94A3B8" }}>此時段無人排班</Text>
-                  ) : (
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                      {staffingPopup.names.map((name, i) => (
-                        <View key={i} style={{ backgroundColor: "white", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: "#BFDBFE" }}>
-                          <Text style={{ fontSize: 13, color: "#1D4ED8", fontWeight: "600" }}>{name}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              )}
+                );
+              })()}
 
               {/* Grid */}
               <ScrollView horizontal showsHorizontalScrollIndicator={true}>
@@ -338,15 +360,21 @@ function WeekTab() {
                   {/* Time header row */}
                   <View style={{ flexDirection: "row", marginBottom: 4 }}>
                     <View style={{ width: LABEL_W, height: 24 }} />
-                    {HOURS.map(h => (
-                      <View key={h} style={{ width: COL_W, height: 24, alignItems: "center", justifyContent: "flex-end", paddingBottom: 2 }}>
-                        {h % 2 === 0 && (
-                          <Text style={{ fontSize: 10, fontWeight: h % 6 === 0 ? "700" : "400", color: h % 6 === 0 ? "#374151" : "#9CA3AF" }}>
-                            {h}時
-                          </Text>
-                        )}
-                      </View>
-                    ))}
+                    {SLOTS.map(s => {
+                      const totalMin = s * 30;
+                      const h = Math.floor(totalMin / 60);
+                      const m = totalMin % 60;
+                      const showLabel = m === 0; // 每整時顯示時間標籤
+                      return (
+                        <View key={s} style={{ width: COL_W, height: 24, alignItems: "center", justifyContent: "flex-end", paddingBottom: 2 }}>
+                          {showLabel && (
+                            <Text style={{ fontSize: 9, fontWeight: "700", color: "#374151" }}>
+                              {h}時
+                            </Text>
+                          )}
+                        </View>
+                      );
+                    })}
                   </View>
 
                   {/* Day rows */}
@@ -381,11 +409,14 @@ function WeekTab() {
                           </View>
                         </View>
 
-                        {/* Hour cells */}
-                        {HOURS.map(h => {
-                          const names = staffingByDayHour[dateStr]?.[h] ?? [];
+                        {/* 30-min slot cells */}
+                        {SLOTS.map(s => {
+                          const names = staffingByDayHour[dateStr]?.[s] ?? [];
                           const count = names.length;
-                          const isActive = staffingPopup?.dateStr === dateStr && staffingPopup?.hour === h;
+                          const isActive = staffingPopup?.dateStr === dateStr && staffingPopup?.slot === s;
+                          const totalMin = s * 30;
+                          const m = totalMin % 60;
+                          const isHalfHour = m === 30;
                           const bg = isActive ? "#1D4ED8"
                             : count === 0 ? (isWeekend ? "#F9FAFB" : "#F3F4F6")
                             : count <= 2 ? "#DBEAFE"
@@ -395,21 +426,24 @@ function WeekTab() {
 
                           return (
                             <TouchableOpacity
-                              key={h}
-                              onPress={() => setStaffingPopup(isActive ? null : { dateStr, hour: h, names })}
+                              key={s}
+                              onPress={() => setStaffingPopup(isActive ? null : { dateStr, slot: s, names })}
                               style={{
                                 width: COL_W,
                                 height: ROW_H,
                                 backgroundColor: bg,
-                                borderRadius: 5,
-                                marginHorizontal: 1,
+                                borderRadius: 3,
+                                marginHorizontal: 0.5,
                                 alignItems: "center",
                                 justifyContent: "center",
                                 borderWidth: isActive ? 2 : 0,
                                 borderColor: "#1D4ED8",
+                                // 半整時格左邊加一條細線區分小時
+                                borderLeftWidth: isHalfHour ? 1 : 0,
+                                borderLeftColor: "#E5E7EB",
                               }}
                             >
-                              <Text style={{ fontSize: 14, fontWeight: "700", color: textColor }}>
+                              <Text style={{ fontSize: 12, fontWeight: "700", color: textColor }}>
                                 {count > 0 ? count : ""}
                               </Text>
                             </TouchableOpacity>
@@ -865,7 +899,7 @@ function MonthTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 // WORK SHIFTS TAB
 // ═══════════════════════════════════════════════════════════════════════════
-type WorkShift = { id: number; name: string; startTime: string; endTime: string; isDefaultWeekday: boolean; isDefaultHoliday: boolean; isActive: boolean };
+type WorkShift = { id: number; name: string; startTime: string; endTime: string; isDefaultWeekday: boolean; isDefaultHoliday: boolean; isActive: boolean; sortOrder: number };
 const INITIAL_FORM = { name: "", startTime: "09:00", endTime: "18:00", isDefaultWeekday: false, isDefaultHoliday: false };
 
 function WorkShiftsTab() {
@@ -875,11 +909,17 @@ function WorkShiftsTab() {
   const [editId, setEditId] = useState<number | null>(null);
   const [formError, setFormError] = useState("");
   const [confirmDeleteShift, setConfirmDeleteShift] = useState<{ id: number; name: string } | null>(null);
+  const [localShifts, setLocalShifts] = useState<WorkShift[]>([]);
 
   const { data: shifts, refetch, isLoading } = trpc.workShifts.list.useQuery();
   const createMutation = trpc.workShifts.create.useMutation({ onSuccess: () => { refetch(); setShowModal(false); } });
   const updateMutation = trpc.workShifts.update.useMutation({ onSuccess: () => { refetch(); setShowModal(false); } });
   const deleteMutation = trpc.workShifts.delete.useMutation({ onSuccess: () => refetch() });
+  const reorderMutation = trpc.workShifts.reorder.useMutation();
+
+  // Sync local state when server data arrives
+  useCallback(() => { if (shifts) setLocalShifts(shifts as WorkShift[]); }, [shifts]);
+  if (shifts && localShifts.length !== shifts.length) setLocalShifts(shifts as WorkShift[]);
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
 

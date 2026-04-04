@@ -332,6 +332,13 @@ const employeesRouter = router({
       await db.deleteDevicesByEmployee(input.id);
       return { success: true };
     }),
+
+  reorder: publicProcedure
+    .input(z.object({ orderedIds: z.array(z.number()) }))
+    .mutation(async ({ input }) => {
+      await db.reorderEmployees(input.orderedIds);
+      return { success: true };
+    }),
 });
 
 // ============================================================
@@ -373,6 +380,13 @@ const workShiftsRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await db.deleteWorkShift(input.id);
+      return { success: true };
+    }),
+
+  reorder: publicProcedure
+    .input(z.object({ orderedIds: z.array(z.number()) }))
+    .mutation(async ({ input }) => {
+      await db.reorderWorkShifts(input.orderedIds);
       return { success: true };
     }),
 });
