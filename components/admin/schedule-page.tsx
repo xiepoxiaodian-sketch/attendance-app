@@ -1312,7 +1312,7 @@ function WorkShiftsTab() {
     }
   }, [settingsData]);
 
-  const { getHandleHandlers: getShiftHandlers, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize } = useDragSort({
+  const { getHandleHandlers: getShiftHandlers, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize, ghostOffset: shiftGhostOffset } = useDragSort({
     items: localShifts,
     onReorder: (newList) => {
       setLocalShifts(newList);
@@ -1414,8 +1414,8 @@ function WorkShiftsTab() {
             pointerEvents="none"
             style={{
               position: "fixed" as any,
-              left: shiftGhostPos.x - shiftGhostSize.width / 2,
-              top: shiftGhostPos.y - shiftGhostSize.height / 2,
+              left: shiftGhostPos.x - shiftGhostOffset.x,
+              top: shiftGhostPos.y - shiftGhostOffset.y,
               width: shiftGhostSize.width,
               zIndex: 9999,
               backgroundColor: "white",
@@ -1424,12 +1424,11 @@ function WorkShiftsTab() {
               borderWidth: 2,
               borderColor: "#2563EB",
               shadowColor: "#2563EB",
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.3,
-              shadowRadius: 16,
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.25,
+              shadowRadius: 12,
               elevation: 20,
-              opacity: 0.92,
-              transform: [{ rotate: "1deg" }],
+              opacity: 0.95,
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>

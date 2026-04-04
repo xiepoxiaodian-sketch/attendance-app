@@ -6,9 +6,10 @@ import { Platform } from "react-native";
  * - Long press (500ms) to activate drag on touch devices
  * - Mouse: long press (300ms) to activate drag
  * - Ghost card uses fixed positioning to follow finger/cursor accurately
+ * - Ghost card anchors to the point where the user pressed (not centered)
  *
  * Usage:
- *   const { getHandleHandlers, ghostPos, ghostLabel, ghostSize, activeIndex, overActiveIndex } = useDragSort({ items, onReorder });
+ *   const { getHandleHandlers, ghostPos, ghostLabel, ghostSize, ghostOffset, activeIndex, overActiveIndex } = useDragSort({ items, onReorder });
  *   // Attach getHandleHandlers to the drag handle element (left side ☰ icon)
  *   // Attach item ref via itemRefs to each list item for position detection
  */
@@ -30,6 +31,8 @@ export function useDragSort<T>({
   const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
   const [ghostLabel, setGhostLabel] = useState<string>("");
   const [ghostSize, setGhostSize] = useState<{ width: number; height: number }>({ width: 200, height: 56 });
+  // Offset from card's top-left corner to the press point
+  const [ghostOffset, setGhostOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
 
   const finishDrag = useCallback(() => {
@@ -74,11 +77,16 @@ export function useDragSort<T>({
           setOverActiveIndex(index);
           setGhostLabel(label ?? String(index + 1));
           setGhostPos({ x: touch.clientX, y: touch.clientY });
-          // Capture size from the parent card (itemRefs stores the card element)
+          // Capture size and compute offset from card top-left to press point
           const el = itemRefs.current[index];
           if (el) {
             const rect = el.getBoundingClientRect();
             setGhostSize({ width: rect.width, height: rect.height });
+            // Offset = press point relative to card's top-left corner
+            setGhostOffset({
+              x: touch.clientX - rect.left,
+              y: touch.clientY - rect.top,
+            });
           }
           // Haptic feedback if available
           if (typeof navigator !== "undefined" && (navigator as any).vibrate) {
@@ -149,6 +157,11 @@ export function useDragSort<T>({
           if (el) {
             const rect = el.getBoundingClientRect();
             setGhostSize({ width: rect.width, height: rect.height });
+            // Offset = press point relative to card's top-left corner
+            setGhostOffset({
+              x: e.clientX - rect.left,
+              y: e.clientY - rect.top,
+            });
           }
         }, 300);
 
@@ -199,6 +212,7 @@ export function useDragSort<T>({
     ghostPos,
     ghostLabel,
     ghostSize,
+    ghostOffset,
     isDragging: isDragging.current,
   };
 }
