@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Platform } from "react-native";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal,
@@ -1408,32 +1408,39 @@ function WorkShiftsTab() {
         </View>
       ) : (
         <>
-        {/* Ghost card: fixed positioning follows finger/cursor accurately */}
+        {/* Ghost overlay: fixed full-screen overlay so ghost card uses absolute coords relative to viewport */}
         {shiftGhostPos && (
           <View
             pointerEvents="none"
             style={{
               position: "fixed" as any,
-              left: shiftGhostPos.x - shiftGhostOffset.x,
-              top: shiftGhostPos.y - shiftGhostOffset.y,
-              width: shiftGhostSize.width,
+              top: 0, left: 0, right: 0, bottom: 0,
               zIndex: 9999,
-              backgroundColor: "white",
-              borderRadius: 12,
-              padding: 14,
-              borderWidth: 2,
-              borderColor: "#2563EB",
-              shadowColor: "#2563EB",
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.25,
-              shadowRadius: 12,
-              elevation: 20,
-              opacity: 0.95,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Text style={{ fontSize: 18, color: "#2563EB" }}>☰</Text>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{shiftGhostLabel}</Text>
+            <View
+              style={{
+                position: "absolute" as any,
+                left: shiftGhostPos.x,
+                top: shiftGhostPos.y,
+                width: shiftGhostSize.width,
+                backgroundColor: "white",
+                borderRadius: 12,
+                padding: 14,
+                borderWidth: 2,
+                borderColor: "#2563EB",
+                shadowColor: "#2563EB",
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.25,
+                shadowRadius: 12,
+                elevation: 20,
+                opacity: 0.95,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={{ fontSize: 18, color: "#2563EB" }}>☰</Text>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{shiftGhostLabel}</Text>
+              </View>
             </View>
           </View>
         )}
