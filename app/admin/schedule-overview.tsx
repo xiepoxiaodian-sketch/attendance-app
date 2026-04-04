@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { useState, useMemo, useCallback, useRef } from "react";
+import { View, Text, ScrollView, TouchableOpacity, Platform, Modal } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
 import { trpc } from "@/lib/trpc";
@@ -16,12 +16,170 @@ function formatDate(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+const LEAVE_LABELS: Record<string, { label: string; color: string }> = {
+  annual:       { label: "特休", color: "#2563EB" },
+  sick:         { label: "病假", color: "#DC2626" },
+  personal:     { label: "事假", color: "#D97706" },
+  marriage:     { label: "婚假", color: "#7C3AED" },
+  bereavement:  { label: "喪假", color: "#475569" },
+  official:     { label: "公假", color: "#0891B2" },
+  other:        { label: "休假", color: "#64748B" },
+};
+
+const TAG_COLORS: Record<string, string> = {
+  indoor: "#2563EB",
+  outdoor: "#16A34A",
+  supervisor: "#D97706",
+};
+const TAG_LABELS: Record<string, string> = {
+  indoor: "內場",
+  outdoor: "外場",
+  supervisor: "幹部",
+};
+
+type ScheduleEntry = {
+  shifts: Array<{ startTime: string; endTime: string; label: string }>;
+  leaveType?: string | null;
+};
+
+function buildPrintHTML(
+  year: number,
+  month: number,
+  activeEmployees: Array<{ id: number; fullName: string; tag?: string | null }>,
+  scheduleMap: Record<string, Record<number, ScheduleEntry>>,
+  todayStr: string,
+): string {
+  const daysCount = getDaysInMonth(year, month);
+  const days = Array.from({ length: daysCount }, (_, i) => i + 1);
+  const monthStr = String(month + 1).padStart(2, "0");
+
+  const headerCells = days.map(d => {
+    const dateStr = `${year}-${monthStr}-${String(d).padStart(2, "0")}`;
+    const dow = new Date(year, month, d).getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const isToday = dateStr === todayStr;
+    const dowLabel = ["日","一","二","三","四","五","六"][dow];
+    const bg = isToday ? "#2563EB" : isWeekend ? "#475569" : "#1E293B";
+    return `<th style="background:${bg};color:#fff;text-align:center;font-size:8pt;font-weight:600;padding:4px 2px;border:1px solid #CBD5E1;">${d}<span style="display:block;font-size:7pt;opacity:0.8;">${dowLabel}</span></th>`;
+  }).join("");
+
+  const empRows = activeEmployees.map(emp => {
+    const tagColor = TAG_COLORS[emp.tag ?? ""] ?? "#94A3B8";
+    const tagLabel = TAG_LABELS[emp.tag ?? ""] ?? "";
+    const cells = days.map(d => {
+      const dateStr = `${year}-${monthStr}-${String(d).padStart(2, "0")}`;
+      const entry = scheduleMap[dateStr]?.[emp.id];
+      const dow = new Date(year, month, d).getDay();
+      const isWeekend = dow === 0 || dow === 6;
+      const isToday = dateStr === todayStr;
+      const todayOutline = isToday ? "outline:2px solid #2563EB;outline-offset:-2px;" : "";
+      if (isWeekend && !entry) {
+        return `<td style="background:#F8FAFC;border:1px solid #CBD5E1;text-align:center;font-size:7pt;color:#CBD5E1;${todayOutline}"></td>`;
+      }
+      if (entry?.leaveType) {
+        const lv = LEAVE_LABELS[entry.leaveType];
+        const lvLabel = lv?.label ?? "假";
+        const lvColor = lv?.color ?? "#64748B";
+        const lvBg = lvColor + "22";
+        return `<td style="background:${lvBg};border:1px solid #CBD5E1;text-align:center;font-size:7pt;${todayOutline}"><span style="font-weight:700;color:${lvColor};font-size:7pt;">${lvLabel}</span></td>`;
+      }
+      if (entry?.shifts && entry.shifts.length > 0) {
+        const shiftLines = entry.shifts.map(s =>
+          `<span style="display:block;font-weight:600;color:#1D4ED8;font-size:7pt;line-height:1.4;">${s.startTime}<br/>${s.endTime}</span>`
+        ).join("");
+        return `<td style="background:#EFF6FF;border:1px solid #CBD5E1;text-align:center;vertical-align:top;padding:3px 2px;${todayOutline}">${shiftLines}</td>`;
+      }
+      return `<td style="border:1px solid #CBD5E1;${todayOutline}"></td>`;
+    }).join("");
+    return `<tr>
+      <td style="width:52px;text-align:center;font-weight:600;background:#F8FAFC;font-size:8pt;border:1px solid #CBD5E1;padding:3px 4px;">
+        ${emp.fullName}<br/><span style="font-size:6.5pt;color:${tagColor};">${tagLabel}</span>
+      </td>${cells}
+    </tr>`;
+  }).join("");
+
+  const statCells = days.map(d => {
+    const dateStr = `${year}-${monthStr}-${String(d).padStart(2, "0")}`;
+    const dayMap = scheduleMap[dateStr] ?? {};
+    const dow = new Date(year, month, d).getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const isToday = dateStr === todayStr;
+    const todayOutline = isToday ? "outline:2px solid #2563EB;outline-offset:-2px;" : "";
+    const count = Object.values(dayMap).filter(e => e.shifts && e.shifts.length > 0).length;
+    const indoorCount = activeEmployees.filter(e => e.tag === "indoor" && (dayMap[e.id]?.shifts?.length ?? 0) > 0).length;
+    const outdoorCount = activeEmployees.filter(e => e.tag === "outdoor" && (dayMap[e.id]?.shifts?.length ?? 0) > 0).length;
+    if (isWeekend && count === 0) {
+      return `<td colspan="3" style="background:#F1F5F9;text-align:center;font-size:7.5pt;font-weight:600;color:#94A3B8;border:1px solid #CBD5E1;${todayOutline}">—</td>`;
+    }
+    return `<td style="background:#F1F5F9;text-align:center;font-size:7.5pt;font-weight:700;color:#334155;border:1px solid #CBD5E1;${todayOutline}">${count}</td><td style="background:#EFF6FF;text-align:center;font-size:7.5pt;font-weight:700;color:#2563EB;border:1px solid #CBD5E1;">${indoorCount}</td><td style="background:#F0FDF4;text-align:center;font-size:7.5pt;font-weight:700;color:#16A34A;border:1px solid #CBD5E1;">${outdoorCount}</td>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>${year}年${month + 1}月排班表</title>
+<style>
+@page { size: A4 landscape; margin: 8mm 6mm; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "PingFang TC","Microsoft JhengHei",sans-serif; background:#fff; color:#1E293B; font-size:9pt; }
+.header { display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1E293B; padding-bottom:5px; margin-bottom:8px; }
+.header-title { font-size:13pt; font-weight:700; }
+.header-meta { font-size:8pt; color:#64748B; }
+table { width:100%; border-collapse:collapse; table-layout:fixed; }
+th.name-col, td.name-col { width:52px; }
+.legend { display:flex; gap:14px; margin-top:6px; font-size:7.5pt; color:#64748B; align-items:center; flex-wrap:wrap; }
+.legend-box { width:11px; height:11px; border-radius:2px; border:1px solid #CBD5E1; display:inline-block; margin-right:3px; vertical-align:middle; }
+.stat-label { background:#E2E8F0; text-align:center; font-size:7.5pt; font-weight:700; color:#334155; border:1px solid #CBD5E1; padding:3px 2px; }
+@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="header-title">${year} 年 ${month + 1} 月排班表</div>
+    <div class="header-meta">列印時間：${new Date().toLocaleDateString("zh-TW")}　共 ${activeEmployees.length} 位員工</div>
+  </div>
+  <div class="header-meta" style="text-align:right;">
+    <span style="color:#2563EB;">■</span> 內場　<span style="color:#16A34A;">■</span> 外場　<span style="color:#D97706;">■</span> 幹部<br/>
+    橫向 A4 / 底部統計：總人數 / 內場 / 外場
+  </div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th class="name-col" style="background:#1E293B;color:#fff;text-align:center;font-size:8pt;font-weight:600;padding:4px 2px;border:1px solid #CBD5E1;">員工</th>
+      ${headerCells}
+    </tr>
+  </thead>
+  <tbody>
+    ${empRows}
+    <tr>
+      <td class="stat-label">上班<br/>內場<br/>外場</td>
+      ${statCells}
+    </tr>
+  </tbody>
+</table>
+<div class="legend">
+  <span><span class="legend-box" style="background:#EFF6FF;"></span>正常上班</span>
+  <span><span class="legend-box" style="background:#DBEAFE22;border-color:#2563EB;"></span>特休</span>
+  <span><span class="legend-box" style="background:#FEE2E222;border-color:#DC2626;"></span>病假</span>
+  <span><span class="legend-box" style="background:#FEF3C722;border-color:#D97706;"></span>事假</span>
+  <span><span class="legend-box" style="background:#F8FAFC;"></span>休假日（六日）</span>
+  <span><span class="legend-box" style="outline:2px solid #2563EB;outline-offset:-2px;"></span>今日</span>
+</div>
+</body>
+</html>`;
+}
+
 export default function ScheduleOverview() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   const startDate = `${year}-${String(month + 1).padStart(2, "0")}-01`;
   const lastDay = getDaysInMonth(year, month);
@@ -30,22 +188,10 @@ export default function ScheduleOverview() {
   const { data: allSchedules } = trpc.schedules.getWeekAll.useQuery({ startDate, endDate });
   const { data: allEmployees } = trpc.employees.list.useQuery();
 
-  const activeEmployees = useMemo(() => allEmployees?.filter((e) => e.isActive) ?? [], [allEmployees]);
-
-  const LEAVE_LABELS: Record<string, { label: string; color: string }> = {
-    annual:       { label: "特休", color: "#2563EB" },
-    sick:         { label: "病假", color: "#DC2626" },
-    personal:     { label: "事假", color: "#D97706" },
-    marriage:     { label: "婚假", color: "#7C3AED" },
-    bereavement:  { label: "喪假", color: "#475569" },
-    official:     { label: "公假", color: "#0891B2" },
-    other:        { label: "休假", color: "#64748B" },
-  };
-
-  type ScheduleEntry = {
-    shifts: Array<{ startTime: string; endTime: string; label: string }>;
-    leaveType?: string | null;
-  };
+  const activeEmployees = useMemo(
+    () => (allEmployees?.filter((e) => e.isActive) ?? []) as Array<{ id: number; fullName: string; isActive: boolean; tag?: string | null }>,
+    [allEmployees]
+  );
 
   const scheduleMap = useMemo(() => {
     const map: Record<string, Record<number, ScheduleEntry>> = {};
@@ -69,9 +215,9 @@ export default function ScheduleOverview() {
     setSelectedDate(null);
   };
 
+  const todayStr = today.toISOString().slice(0, 10);
   const daysInMonth = getDaysInMonth(year, month);
   const firstDow = getFirstDayOfWeek(year, month);
-  const todayStr = today.toISOString().slice(0, 10);
 
   const calendarCells: Array<{ day: number | null; dateStr: string | null }> = [];
   for (let i = 0; i < firstDow; i++) calendarCells.push({ day: null, dateStr: null });
@@ -81,10 +227,43 @@ export default function ScheduleOverview() {
   const selectedDaySchedules = selectedDate ? scheduleMap[selectedDate] ?? {} : {};
   const filteredEmployees = activeEmployees.filter(e => selectedEmployeeId === null || e.id === selectedEmployeeId);
 
+  // ── 列印預覽 ──────────────────────────────────────────────────────────
+  const printHTML = useMemo(() => {
+    if (!showPrintPreview) return "";
+    return buildPrintHTML(year, month, activeEmployees, scheduleMap, todayStr);
+  }, [showPrintPreview, year, month, activeEmployees, scheduleMap, todayStr]);
+
+  const handleOpenPreview = useCallback(() => {
+    setShowPrintPreview(true);
+  }, []);
+
+  const handleConfirmPrint = useCallback(() => {
+    if (Platform.OS !== "web") return;
+    // Open a new window with the HTML and trigger print
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(printHTML.replace("</body>", "<script>window.onload=function(){window.print();}<\/script></body>"));
+    printWindow.document.close();
+  }, [printHTML]);
+  // ─────────────────────────────────────────────────────────────────────
+
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
         <AdminHeader title="排班總覽" subtitle={`${year} 年 ${month + 1} 月`} />
+
+        {/* 列印按鈕列 */}
+        {Platform.OS === "web" && (
+          <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4, flexDirection: "row", justifyContent: "flex-end" }}>
+            <TouchableOpacity
+              onPress={handleOpenPreview}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#2563EB", paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 }}
+            >
+              <Text style={{ fontSize: 13, color: "white", fontWeight: "600" }}>🖨 預覽並列印</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={{ padding: 14, gap: 12 }}>
 
           {/* Calendar Card */}
@@ -176,7 +355,6 @@ export default function ScheduleOverview() {
                 </TouchableOpacity>
               </View>
 
-              {/* Employee filter chips */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
                 <View style={{ flexDirection: "row", padding: 10, gap: 8 }}>
                   <TouchableOpacity
@@ -214,8 +392,8 @@ export default function ScheduleOverview() {
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 14, fontWeight: "600", color: hasShift ? "#1E293B" : "#94A3B8" }}>{emp.fullName}</Text>
                         {hasShift ? (
-                          <View style={{ marginTop: 3, gap: 2 }}>
-                            {shifts!.map((shift: { startTime: string; endTime: string; label: string }, si: number) => (
+                          <View style={{ gap: 2, marginTop: 2 }}>
+                            {shifts.map((shift, si) => (
                               <View key={si} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#2563EB" }} />
                                 <Text style={{ fontSize: 12, color: "#475569" }}>
@@ -251,7 +429,6 @@ export default function ScheduleOverview() {
               activeEmployees.map((emp, i) => {
                 const empEntries = Object.values(scheduleMap).map(dayMap => dayMap[emp.id]).filter(Boolean);
                 const scheduledDays = empEntries.filter(e => e.shifts && e.shifts.length > 0).length;
-                // Count leave days by type
                 const leaveCounts: Record<string, number> = {};
                 for (const entry of empEntries) {
                   if (entry.leaveType) {
@@ -293,6 +470,53 @@ export default function ScheduleOverview() {
 
         </View>
       </ScrollView>
+
+      {/* ── 列印預覽 Modal ── */}
+      {Platform.OS === "web" && showPrintPreview && (
+        <Modal
+          visible={showPrintPreview}
+          animationType="slide"
+          onRequestClose={() => setShowPrintPreview(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: "#1E293B" }}>
+            {/* Preview Toolbar */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#0F172A" }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>
+                📄 {year} 年 {month + 1} 月排班表預覽
+              </Text>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  onPress={handleConfirmPrint}
+                  style={{ backgroundColor: "#2563EB", paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, flexDirection: "row", alignItems: "center", gap: 6 }}
+                >
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>🖨 確認列印</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowPrintPreview(false)}
+                  style={{ backgroundColor: "#475569", paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 }}
+                >
+                  <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>✕ 關閉</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            {/* iframe preview */}
+            <View style={{ flex: 1, margin: 12, borderRadius: 8, overflow: "hidden", backgroundColor: "white" }}>
+              {/* @ts-ignore – iframe is web-only */}
+              <iframe
+                ref={iframeRef}
+                srcDoc={printHTML}
+                style={{ width: "100%", height: "100%", border: "none" }}
+                title="列印預覽"
+              />
+            </View>
+            <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+              <Text style={{ fontSize: 11, color: "#64748B", textAlign: "center" }}>
+                預覽使用實際資料庫資料 · 點擊「確認列印」開啟系統列印對話框
+              </Text>
+            </View>
+          </View>
+        </Modal>
+      )}
     </ScreenContainer>
   );
 }
