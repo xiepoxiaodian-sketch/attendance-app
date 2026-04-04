@@ -162,3 +162,24 @@ export const leaveRequests = mysqlTable("leaveRequests", {
 
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type InsertLeaveRequest = typeof leaveRequests.$inferInsert;
+
+/**
+ * Punch correction requests - employees submit when they missed a clock-in/out
+ */
+export const punchCorrections = mysqlTable("punchCorrections", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  date: date("date").notNull(),
+  type: mysqlEnum("type", ["clock_in", "clock_out", "both"]).notNull(),
+  requestedClockIn: varchar("requestedClockIn", { length: 8 }),   // HH:MM
+  requestedClockOut: varchar("requestedClockOut", { length: 8 }),  // HH:MM
+  reason: text("reason").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  reviewedBy: int("reviewedBy"),
+  reviewNote: text("reviewNote"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PunchCorrection = typeof punchCorrections.$inferSelect;
+export type InsertPunchCorrection = typeof punchCorrections.$inferInsert;

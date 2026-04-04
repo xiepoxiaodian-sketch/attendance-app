@@ -10,12 +10,14 @@ import {
   devices,
   settings,
   leaveRequests,
+  punchCorrections,
   InsertEmployee,
   InsertAttendance,
   InsertWorkShift,
   InsertSchedule,
   InsertDevice,
   InsertLeaveRequest,
+  InsertPunchCorrection,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -532,4 +534,105 @@ export async function deleteLeaveRequest(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(leaveRequests).where(eq(leaveRequests.id, id));
+}
+
+// ─── Punch Correction Functions ────────────────────────────────────────────
+
+export async function createPunchCorrection(data: {
+  employeeId: number;
+  date: string;
+  type: "clock_in" | "clock_out" | "both";
+  requestedClockIn?: string;
+  requestedClockOut?: string;
+  reason: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(punchCorrections).values({
+    employeeId: data.employeeId,
+    date: data.date as unknown as Date,
+    type: data.type,
+    requestedClockIn: data.requestedClockIn ?? null,
+    requestedClockOut: data.requestedClockOut ?? null,
+    reason: data.reason,
+    status: "pending",
+  });
+  return result[0].insertId;
+}
+
+export async function getPunchCorrectionsByEmployee(employeeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(punchCorrections)
+    .where(eq(punchCorrections.employeeId, employeeId))
+    .orderBy(desc(punchCorrections.createdAt));
+}
+
+export async function getAllPunchCorrections(status?: "pending" | "approved" | "rejected") {
+  const db = await getDb();
+  if (!db) return [];
+  const allEmployees = await db.select({ id: employees.id, fullName: employees.fullName, username: employees.username }).from(employees);
+  const empMap = new Map(allEmployees.map(e => [e.id, e]));
+  const conditions = status ? [eq(punchCorrections.status, status)] : [];
+  const rows = await db.select().from(punchCorrections)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(punchCorrections.createdAt));
+  return rows.map(r => ({
+    ...r,
+    employee: empMap.get(r.employeeId) ?? null,
+  }));
+}
+
+export async function reviewPunchCorrection(
+  id: number,
+  reviewedBy: number,
+  status: "approved" | "rejected",
+  reviewNote?: string,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(punchCorrections)
+    .set({ status, reviewedBy, reviewNote: reviewNote ?? null })
+    .where(eq(punchCorrections.id, id));
+
+  if (status === "approved") {
+    // Auto-apply the correction to attendance record
+    const [req] = await db.select().from(punchCorrections).where(eq(punchCorrections.id, id));
+    if (!req) return;
+    const dateStr = typeof req.date === "string" ? req.date : (req.date as Date).toISOString().split("T")[0];
+    const existing = await db.select().from(attendance)
+      .where(and(eq(attendance.employeeId, req.employeeId), sql`DATE(${attendance.date}) = ${dateStr}`))
+      .limit(1);
+
+    const toDateTime = (dateStr: string, timeStr: string) => {
+      return new Date(`${dateStr}T${timeStr}:00`);
+    };
+
+    if (existing.length > 0) {
+      const record = existing[0];
+      const updates: Partial<InsertAttendance> = {};
+      if ((req.type === "clock_in" || req.type === "both") && req.requestedClockIn) {
+        updates.clockInTime = toDateTime(dateStr, req.requestedClockIn);
+      }
+      if ((req.type === "clock_out" || req.type === "both") && req.requestedClockOut) {
+        updates.clockOutTime = toDateTime(dateStr, req.requestedClockOut);
+      }
+      updates.note = `[補打卡已核准] ${req.reason}`;
+      await db.update(attendance).set(updates).where(eq(attendance.id, record.id));
+    } else {
+      // Create new attendance record
+      const newRecord: InsertAttendance = {
+        employeeId: req.employeeId,
+        date: req.date as unknown as Date,
+        note: `[補打卡已核准] ${req.reason}`,
+      };
+      if ((req.type === "clock_in" || req.type === "both") && req.requestedClockIn) {
+        newRecord.clockInTime = toDateTime(dateStr, req.requestedClockIn);
+      }
+      if ((req.type === "clock_out" || req.type === "both") && req.requestedClockOut) {
+        newRecord.clockOutTime = toDateTime(dateStr, req.requestedClockOut);
+      }
+      await db.insert(attendance).values(newRecord);
+    }
+  }
 }

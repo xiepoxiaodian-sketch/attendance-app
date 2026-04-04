@@ -19,7 +19,7 @@ const LEAVE_TYPES = [
   { value: "annual", label: "年假", icon: "🌴" },
   { value: "sick", label: "病假", icon: "🏥" },
   { value: "personal", label: "事假", icon: "📋" },
-  { value: "other", label: "其他", icon: "📝" },
+  { value: "other", label: "休假", icon: "🌴" },
 ];
 
 function StatusBadge({ status }: { status: string }) {

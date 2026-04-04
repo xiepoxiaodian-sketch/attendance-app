@@ -5,6 +5,10 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  ScrollView,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useEmployeeAuth } from "@/lib/employee-auth";
@@ -43,9 +47,121 @@ function StatusBadge({ status }: { status: string | null | undefined }) {
   );
 }
 
+function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
+  visible: boolean;
+  onClose: () => void;
+  employeeId: number;
+  onSuccess: () => void;
+}) {
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [type, setType] = useState<"clock_in" | "clock_out" | "both">("clock_in");
+  const [clockIn, setClockIn] = useState("");
+  const [clockOut, setClockOut] = useState("");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const createMutation = trpc.punchCorrection.create.useMutation();
+
+  const handleSubmit = async () => {
+    if (!reason.trim()) { setError("請填寫原因"); return; }
+    if ((type === "clock_in" || type === "both") && !clockIn) { setError("請填寫補打上班時間"); return; }
+    if ((type === "clock_out" || type === "both") && !clockOut) { setError("請填寫補打下班時間"); return; }
+    setError("");
+    setSubmitting(true);
+    try {
+      await createMutation.mutateAsync({
+        employeeId,
+        date,
+        type,
+        requestedClockIn: (type === "clock_in" || type === "both") ? clockIn : undefined,
+        requestedClockOut: (type === "clock_out" || type === "both") ? clockOut : undefined,
+        reason: reason.trim(),
+      });
+      setReason(""); setClockIn(""); setClockOut("");
+      onSuccess();
+      onClose();
+    } catch (e: any) {
+      setError(e.message ?? "提交失敗");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+        {/* Header */}
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
+          <TouchableOpacity onPress={onClose}><Text style={{ color: "#64748B", fontSize: 15 }}>取消</Text></TouchableOpacity>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>補打卡申請</Text>
+          <TouchableOpacity onPress={handleSubmit} disabled={submitting}>
+            <Text style={{ color: submitting ? "#94A3B8" : "#2563EB", fontSize: 15, fontWeight: "600" }}>{submitting ? "提交中..." : "提交"}</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          {/* Date */}
+          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>補打日期</Text>
+            <TextInput
+              value={date}
+              onChangeText={setDate}
+              placeholder="YYYY-MM-DD"
+              style={{ fontSize: 15, color: "#1E293B", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 10 }}
+              returnKeyType="done"
+            />
+          </View>
+          {/* Type */}
+          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>補打類型</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {([{ value: "clock_in", label: "補上班" }, { value: "clock_out", label: "補下班" }, { value: "both", label: "上下班都補" }] as const).map(t => (
+                <TouchableOpacity key={t.value} onPress={() => setType(t.value)}
+                  style={{ flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: type === t.value ? "#EFF6FF" : "#F8FAFC", borderWidth: 1.5, borderColor: type === t.value ? "#2563EB" : "#E2E8F0", alignItems: "center" }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: type === t.value ? "#2563EB" : "#94A3B8" }}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          {/* Times */}
+          {(type === "clock_in" || type === "both") && (
+            <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>補打上班時間（HH:MM）</Text>
+              <TextInput value={clockIn} onChangeText={setClockIn} placeholder="例：09:00" style={{ fontSize: 15, color: "#1E293B", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 10 }} returnKeyType="done" />
+            </View>
+          )}
+          {(type === "clock_out" || type === "both") && (
+            <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>補打下班時間（HH:MM）</Text>
+              <TextInput value={clockOut} onChangeText={setClockOut} placeholder="例：18:00" style={{ fontSize: 15, color: "#1E293B", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 10 }} returnKeyType="done" />
+            </View>
+          )}
+          {/* Reason */}
+          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>原因說明</Text>
+            <TextInput
+              value={reason}
+              onChangeText={setReason}
+              placeholder="請說明未能正常打卡的原因（如：系統異常、忘記打卡等）"
+              multiline
+              numberOfLines={4}
+              style={{ fontSize: 14, color: "#1E293B", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 10, minHeight: 80, textAlignVertical: "top" }}
+            />
+          </View>
+          {error ? <Text style={{ color: "#EF4444", fontSize: 13, textAlign: "center" }}>{error}</Text> : null}
+          <View style={{ backgroundColor: "#FFF7ED", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "#FED7AA" }}>
+            <Text style={{ fontSize: 12, color: "#92400E" }}>⚠️ 補打卡申請需經管理員審核，核准後系統將自動補登打卡記錄。</Text>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 export default function RecordsScreen() {
   const { employee } = useEmployeeAuth();
   const [refreshing, setRefreshing] = useState(false);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
 
   const endDate = new Date().toISOString().split("T")[0];
   const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];

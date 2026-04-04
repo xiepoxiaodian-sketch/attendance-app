@@ -36,6 +36,13 @@
       "when": 1775298597278,
       "tag": "0004_fat_northstar",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1775301813122,
+      "tag": "0005_rainy_sinister_six",
+      "breakpoints": true
     }
   ]
 }

@@ -47,7 +47,7 @@ const LEAVE_TYPES: { value: LeaveTypeValue; label: string; color: string; bg: st
   { value: "marriage", label: "婚假", color: "#7C3AED", bg: "#F5F3FF" },
   { value: "bereavement",  label: "喪假", color: "#475569", bg: "#F8FAFC" },
   { value: "official", label: "公假", color: "#0891B2", bg: "#ECFEFF" },
-  { value: "other",    label: "其他", color: "#64748B", bg: "#F1F5F9" },
+  { value: "other",    label: "休假", color: "#64748B", bg: "#F1F5F9" },
 ];
 type ShiftEntry = { startTime: string; endTime: string; label: string };
 

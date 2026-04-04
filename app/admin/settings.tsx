@@ -451,7 +451,7 @@ function LeaveReview({ adminId }: { adminId: number }) {
   const getEmployeeName = (id: number) => employees?.find(e => e.id === id)?.fullName ?? `#${id}`;
 
   const LEAVE_LABELS: Record<string, string> = {
-    annual: "年假", sick: "病假", personal: "事假", other: "其他"
+    annual: "年假", sick: "病假", personal: "事假", other: "休假"
   };
 
   const allSorted = [...(allLeave ?? [])].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());

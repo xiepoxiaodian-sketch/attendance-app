@@ -567,6 +567,45 @@ const leaveRouter = router({
 });
 
 // ============================================================
+// Punch Correction Router
+// ============================================================
+const punchCorrectionRouter = router({
+  create: publicProcedure
+    .input(z.object({
+      employeeId: z.number(),
+      date: z.string(),
+      type: z.enum(["clock_in", "clock_out", "both"]),
+      requestedClockIn: z.string().optional(),
+      requestedClockOut: z.string().optional(),
+      reason: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const id = await db.createPunchCorrection(input);
+      return { success: true, id };
+    }),
+
+  getByEmployee: publicProcedure
+    .input(z.object({ employeeId: z.number() }))
+    .query(async ({ input }) => db.getPunchCorrectionsByEmployee(input.employeeId)),
+
+  getAll: publicProcedure
+    .input(z.object({ status: z.enum(["pending", "approved", "rejected"]).optional() }))
+    .query(async ({ input }) => db.getAllPunchCorrections(input.status)),
+
+  review: publicProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(["approved", "rejected"]),
+      reviewedBy: z.number(),
+      reviewNote: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      await db.reviewPunchCorrection(input.id, input.reviewedBy, input.status, input.reviewNote);
+      return { success: true };
+    }),
+});
+
+// ============================================================
 // Main App Router
 // ============================================================
 export const appRouter = router({
@@ -587,6 +626,7 @@ export const appRouter = router({
   devices: devicesRouter,
   settings: settingsRouter,
   leave: leaveRouter,
+  punchCorrection: punchCorrectionRouter,
 });
 
 export type AppRouter = typeof appRouter;

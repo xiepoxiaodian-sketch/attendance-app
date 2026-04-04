@@ -21,7 +21,7 @@ const LEAVE_TYPES: Record<string, { label: string; color: string; bg: string }> 
   marriage:    { label: "婚假", color: "#7C3AED", bg: "#F5F3FF" },
   bereavement: { label: "喪假", color: "#475569", bg: "#F8FAFC" },
   official:    { label: "公假", color: "#0891B2", bg: "#ECFEFF" },
-  other:       { label: "其他", color: "#64748B", bg: "#F1F5F9" },
+  other:       { label: "休假", color: "#64748B", bg: "#F1F5F9" },
 };
 
 export default function ScheduleViewScreen() {

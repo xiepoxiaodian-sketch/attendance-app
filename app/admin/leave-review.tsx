@@ -18,7 +18,7 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
   annual: "年假",
   sick: "病假",
   personal: "事假",
-  other: "其他",
+  other: "休假",
 };
 
 function formatDate(d: any) {

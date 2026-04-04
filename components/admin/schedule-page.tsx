@@ -48,7 +48,7 @@ const LEAVE_TYPES: { value: LeaveTypeValue; label: string; color: string; bg: st
   { value: "marriage", label: "婚假", color: "#7C3AED", bg: "#F5F3FF" },
   { value: "bereavement",  label: "喪假", color: "#475569", bg: "#F8FAFC" },
   { value: "official", label: "公假", color: "#0891B2", bg: "#ECFEFF" },
-  { value: "other",    label: "其他", color: "#64748B", bg: "#F1F5F9" },
+  { value: "other",    label: "休假", color: "#64748B", bg: "#F1F5F9" },
 ];
 type ShiftEntry = { startTime: string; endTime: string; label: string };
 
@@ -637,11 +637,11 @@ function WeekTab() {
                   <TouchableOpacity
                     onPress={() => {
                       setShifts([]);
-                      setLeave({ enabled: true, type: "annual" as LeaveTypeValue, mode: "allDay", start: "09:00", end: "18:00" });
+                      setLeave({ enabled: true, type: "other" as LeaveTypeValue, mode: "allDay", start: "09:00", end: "18:00" });
                     }}
-                    style={{ backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#EF4444", borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" }}
+                    style={{ backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#64748B", borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" }}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#EF4444" }}>休假</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#64748B" }}>休假</Text>
                   </TouchableOpacity>
                   {/* 工作時段快速套用 */}
                   {(workShifts ?? []).filter(ws => ws.isActive).map(ws => (

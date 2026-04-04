@@ -74,7 +74,7 @@ async function exportCsv(filename: string, csv: string) {
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   annual: "特休", sick: "病假", personal: "事假",
-  marriage: "婚假", bereavement: "喪假", official: "公假", other: "其他",
+  marriage: "婚假", bereavement: "喪假", official: "公假", other: "休假",
 };
 const STATUS_LABELS: Record<string, string> = {
   normal: "正常", late: "遲到", early_leave: "早退", absent: "缺勤",
@@ -404,11 +404,11 @@ export default function ReportsScreen() {
               </TouchableOpacity>
             </View>
             {monthLeaves.slice(0, 8).map((l, i) => {
-              const leaveLabel = LEAVE_TYPE_LABELS[l.leaveType ?? ""] ?? l.leaveType ?? "其他";
+              const leaveLabel = LEAVE_TYPE_LABELS[l.leaveType ?? ""] ?? l.leaveType ?? "休假";
               const leaveColors: Record<string, { color: string; bg: string }> = {
                 特休: { color: "#2563EB", bg: "#EFF6FF" }, 病假: { color: "#DC2626", bg: "#FEF2F2" },
                 事假: { color: "#D97706", bg: "#FFFBEB" }, 婚假: { color: "#7C3AED", bg: "#F5F3FF" },
-                喪假: { color: "#475569", bg: "#F8FAFC" }, 公假: { color: "#0891B2", bg: "#ECFEFF" }, 其他: { color: "#64748B", bg: "#F1F5F9" },
+                喪假: { color: "#475569", bg: "#F8FAFC" }, 公假: { color: "#0891B2", bg: "#ECFEFF" }, 休假: { color: "#64748B", bg: "#F1F5F9" },
               };
               const lc = leaveColors[leaveLabel] ?? { color: "#64748B", bg: "#F1F5F9" };
               return (
