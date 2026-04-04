@@ -25,6 +25,13 @@ type Employee = {
   phone: string | null;
   isActive: boolean;
   needsSetup: boolean;
+  tag?: "indoor" | "outdoor" | "supervisor" | null;
+};
+
+const TAG_LABELS: Record<string, { label: string; bg: string; text: string }> = {
+  indoor:     { label: "內場", bg: "#EFF6FF", text: "#2563EB" },
+  outdoor:    { label: "外場", bg: "#F0FDF4", text: "#16A34A" },
+  supervisor: { label: "幹部", bg: "#FEF3C7", text: "#D97706" },
 };
 
 const INITIAL_FORM = {
@@ -35,6 +42,7 @@ const INITIAL_FORM = {
   employeeType: "full_time" as "full_time" | "part_time",
   jobTitle: "",
   phone: "",
+  tag: "" as "" | "indoor" | "outdoor" | "supervisor",
 };
 
 function FormField({
@@ -174,7 +182,7 @@ export default function AdminEmployeesScreen() {
       setFormError("密碼至少需要 6 個字元");
       return;
     }
-    createMutation.mutate(form);
+    createMutation.mutate({ ...form, tag: form.tag || undefined });
   };
 
   const handleEdit = (emp: Employee) => {
@@ -187,6 +195,7 @@ export default function AdminEmployeesScreen() {
       employeeType: emp.employeeType as "full_time" | "part_time",
       jobTitle: emp.jobTitle || "",
       phone: emp.phone || "",
+      tag: (emp.tag as "" | "indoor" | "outdoor" | "supervisor") || "",
     });
     setFormError("");
     setShowModal(true);
@@ -201,6 +210,7 @@ export default function AdminEmployeesScreen() {
       employeeType: form.employeeType,
       jobTitle: form.jobTitle || undefined,
       phone: form.phone || undefined,
+      tag: form.tag || null,
     });
   };
 
@@ -322,7 +332,7 @@ export default function AdminEmployeesScreen() {
 
                 {/* Info */}
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <Text style={{ fontSize: 15, fontWeight: "600", color: item.isActive ? "#1E293B" : "#94A3B8" }}>
                       {item.fullName}
                     </Text>
@@ -334,6 +344,11 @@ export default function AdminEmployeesScreen() {
                     {item.isActive && (
                       <View style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 }}>
                         <Text style={{ fontSize: 10, color: "#16A34A", fontWeight: "600" }}>在職</Text>
+                      </View>
+                    )}
+                    {item.tag && TAG_LABELS[item.tag] && (
+                      <View style={{ backgroundColor: TAG_LABELS[item.tag].bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 }}>
+                        <Text style={{ fontSize: 10, color: TAG_LABELS[item.tag].text, fontWeight: "600" }}>{TAG_LABELS[item.tag].label}</Text>
                       </View>
                     )}
                   </View>
@@ -473,6 +488,29 @@ export default function AdminEmployeesScreen() {
               value={form.employeeType}
               onChange={(v) => setForm(f => ({ ...f, employeeType: v as "full_time" | "part_time" }))}
             />
+
+            {/* Tag */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 }}>標籤</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {[{ label: "無", value: "" }, { label: "內場", value: "indoor" }, { label: "外場", value: "outdoor" }, { label: "幹部", value: "supervisor" }].map(opt => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    onPress={() => setForm(f => ({ ...f, tag: opt.value as "" | "indoor" | "outdoor" | "supervisor" }))}
+                    style={{
+                      flex: 1, paddingVertical: 9, alignItems: "center", borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: form.tag === opt.value ? (opt.value ? TAG_LABELS[opt.value]?.text ?? "#2563EB" : "#2563EB") : "#E2E8F0",
+                      backgroundColor: form.tag === opt.value ? (opt.value ? TAG_LABELS[opt.value]?.bg ?? "#EFF6FF" : "#EFF6FF") : "white",
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: form.tag === opt.value ? (opt.value ? TAG_LABELS[opt.value]?.text ?? "#2563EB" : "#2563EB") : "#64748B" }}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </ScrollView>
         </View>
       </Modal>

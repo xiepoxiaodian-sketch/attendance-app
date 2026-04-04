@@ -7,6 +7,8 @@ import {
   TextInput,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
@@ -39,11 +41,155 @@ function getStatusStyle(status: string | null | undefined) {
   }
 }
 
+// Parse "HH:MM" from a Date/ISO string
+function toTimeStr(date: any): string {
+  if (!date) return "";
+  return new Date(date).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+// Build ISO datetime string from date + "HH:MM"
+function buildDateTime(dateStr: string, timeStr: string): string | null {
+  if (!timeStr || !timeStr.match(/^\d{2}:\d{2}$/)) return null;
+  const [h, m] = timeStr.split(":").map(Number);
+  const d = new Date(dateStr);
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+}
+
+interface EditModalProps {
+  visible: boolean;
+  record: any;
+  employeeName: string;
+  onClose: () => void;
+  onSave: (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string }) => void;
+  saving: boolean;
+}
+
+function EditModal({ visible, record, employeeName, onClose, onSave, saving }: EditModalProps) {
+  const [clockIn, setClockIn] = useState("");
+  const [clockOut, setClockOut] = useState("");
+  const [note, setNote] = useState("");
+
+  // Reset when record changes
+  const initValues = useCallback(() => {
+    setClockIn(record ? toTimeStr(record.clockInTime) : "");
+    setClockOut(record ? toTimeStr(record.clockOutTime) : "");
+    setNote(record?.note ?? "");
+  }, [record]);
+
+  // Call init when modal opens
+  const handleOpen = () => { initValues(); };
+
+  const handleSave = () => {
+    if (!record) return;
+    const dateStr = typeof record.date === "string" ? record.date.slice(0, 10) : new Date(record.date).toISOString().slice(0, 10);
+    const newClockIn = clockIn ? buildDateTime(dateStr, clockIn) : null;
+    const newClockOut = clockOut ? buildDateTime(dateStr, clockOut) : null;
+    onSave({ clockInTime: newClockIn, clockOutTime: newClockOut, note });
+  };
+
+  if (!record) return null;
+  const dateStr = typeof record.date === "string" ? record.date.slice(0, 10) : new Date(record.date).toISOString().slice(0, 10);
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onShow={handleOpen}>
+      <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+        {/* Header */}
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
+          <TouchableOpacity onPress={onClose}><Text style={{ color: "#64748B", fontSize: 15 }}>取消</Text></TouchableOpacity>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>修改打卡記錄</Text>
+          <TouchableOpacity onPress={handleSave} disabled={saving}>
+            <Text style={{ color: saving ? "#94A3B8" : "#2563EB", fontSize: 15, fontWeight: "600" }}>{saving ? "儲存中..." : "儲存"}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          {/* Employee Info */}
+          <View style={{ backgroundColor: "#EFF6FF", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#2563EB" }}>{employeeName[0] ?? "?"}</Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{employeeName}</Text>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>{dateStr} · {record.shiftLabel || "一般班"}</Text>
+            </View>
+          </View>
+
+          {/* Clock In/Out Times */}
+          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 14 }}>打卡時間（格式：HH:MM）</Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#22C55E", marginBottom: 6 }}>上班時間</Text>
+                <TextInput
+                  value={clockIn}
+                  onChangeText={setClockIn}
+                  placeholder="08:30"
+                  keyboardType="numbers-and-punctuation"
+                  returnKeyType="done"
+                  maxLength={5}
+                  style={{
+                    borderWidth: 1.5, borderColor: "#BBF7D0", borderRadius: 10,
+                    paddingHorizontal: 12, paddingVertical: 12,
+                    fontSize: 22, fontWeight: "700", color: "#16A34A", textAlign: "center",
+                    backgroundColor: "#F0FDF4",
+                  }}
+                />
+              </View>
+              <View style={{ alignItems: "center", justifyContent: "flex-end", paddingBottom: 12 }}>
+                <Text style={{ fontSize: 20, color: "#94A3B8" }}>→</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#3B82F6", marginBottom: 6 }}>下班時間</Text>
+                <TextInput
+                  value={clockOut}
+                  onChangeText={setClockOut}
+                  placeholder="17:30"
+                  keyboardType="numbers-and-punctuation"
+                  returnKeyType="done"
+                  maxLength={5}
+                  style={{
+                    borderWidth: 1.5, borderColor: "#BFDBFE", borderRadius: 10,
+                    paddingHorizontal: 12, paddingVertical: 12,
+                    fontSize: 22, fontWeight: "700", color: "#2563EB", textAlign: "center",
+                    backgroundColor: "#EFF6FF",
+                  }}
+                />
+              </View>
+            </View>
+            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 10, textAlign: "center" }}>留空表示清除該欄位的打卡記錄</Text>
+          </View>
+
+          {/* Note */}
+          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 8 }}>備注（選填）</Text>
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              placeholder="管理員備注..."
+              multiline
+              numberOfLines={3}
+              returnKeyType="done"
+              style={{
+                borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8,
+                padding: 10, minHeight: 70, textAlignVertical: "top",
+                fontSize: 14, color: "#1E293B",
+              }}
+            />
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 export default function AdminAttendanceScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<{ id?: number; batch?: boolean } | null>(null);
+  const [editRecord, setEditRecord] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
 
   const today = new Date().toISOString().split("T")[0];
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -57,6 +203,7 @@ export default function AdminAttendanceScreen() {
   const deleteBatchMutation = trpc.attendance.deleteBatch.useMutation({
     onSuccess: () => { setSelectedIds([]); refetch(); },
   });
+  const adminUpdateMutation = trpc.attendance.adminUpdate.useMutation({ onSuccess: () => refetch() });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -64,14 +211,8 @@ export default function AdminAttendanceScreen() {
     setRefreshing(false);
   }, []);
 
-  const handleDelete = (id: number) => {
-    setConfirmDelete({ id });
-  };
-
-  const handleDeleteSelected = () => {
-    if (selectedIds.length === 0) return;
-    setConfirmDelete({ batch: true });
-  };
+  const handleDelete = (id: number) => setConfirmDelete({ id });
+  const handleDeleteSelected = () => { if (selectedIds.length > 0) setConfirmDelete({ batch: true }); };
 
   const handleConfirmDelete = () => {
     if (confirmDelete?.id !== undefined) {
@@ -80,6 +221,17 @@ export default function AdminAttendanceScreen() {
       deleteBatchMutation.mutate({ ids: selectedIds });
     }
     setConfirmDelete(null);
+  };
+
+  const handleSaveEdit = async (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string }) => {
+    if (!editRecord) return;
+    setSaving(true);
+    try {
+      await adminUpdateMutation.mutateAsync({ id: editRecord.id, ...data });
+      setEditRecord(null);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleSelect = (id: number) => {
@@ -103,6 +255,16 @@ export default function AdminAttendanceScreen() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      <EditModal
+        visible={!!editRecord}
+        record={editRecord}
+        employeeName={editRecord ? getEmployeeName(editRecord.employeeId) : ""}
+        onClose={() => setEditRecord(null)}
+        onSave={handleSaveEdit}
+        saving={saving}
+      />
+
       <AdminHeader title="打卡紀錄" subtitle={`共 ${filteredRecords.length} 筆紀錄`} onRefresh={onRefresh} refreshing={refreshing} />
       {selectedIds.length > 0 && (
         <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>
@@ -125,16 +287,7 @@ export default function AdminAttendanceScreen() {
               onChangeText={setStartDate}
               placeholder="YYYY-MM-DD"
               returnKeyType="done"
-              style={{
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderRadius: 8,
-                paddingHorizontal: 10,
-                paddingVertical: 8,
-                fontSize: 13,
-                color: "#1E293B",
-              }}
+              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -144,16 +297,7 @@ export default function AdminAttendanceScreen() {
               onChangeText={setEndDate}
               placeholder="YYYY-MM-DD"
               returnKeyType="done"
-              style={{
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderRadius: 8,
-                paddingHorizontal: 10,
-                paddingVertical: 8,
-                fontSize: 13,
-                color: "#1E293B",
-              }}
+              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
             />
           </View>
         </View>
@@ -162,16 +306,7 @@ export default function AdminAttendanceScreen() {
           onChangeText={setSearchQuery}
           placeholder="搜尋員工姓名..."
           returnKeyType="search"
-          style={{
-            backgroundColor: "#F8FAFC",
-            borderWidth: 1,
-            borderColor: "#E2E8F0",
-            borderRadius: 8,
-            paddingHorizontal: 10,
-            paddingVertical: 8,
-            fontSize: 13,
-            color: "#1E293B",
-          }}
+          style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
           placeholderTextColor="#94A3B8"
         />
       </View>
@@ -179,13 +314,10 @@ export default function AdminAttendanceScreen() {
       {/* Select All Bar */}
       {filteredRecords.length > 0 && (
         <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ fontSize: 12, color: "#94A3B8" }}>長按選取 · 可批量刪除</Text>
+          <Text style={{ fontSize: 12, color: "#94A3B8" }}>長按選取 · 可批量刪除 · 點擊可編輯</Text>
           <TouchableOpacity onPress={() => {
-            if (selectedIds.length === filteredRecords.length) {
-              setSelectedIds([]);
-            } else {
-              setSelectedIds(filteredRecords.map(r => r.id));
-            }
+            if (selectedIds.length === filteredRecords.length) setSelectedIds([]);
+            else setSelectedIds(filteredRecords.map(r => r.id));
           }}>
             <Text style={{ color: "#2563EB", fontSize: 13, fontWeight: "500" }}>
               {selectedIds.length === filteredRecords.length && filteredRecords.length > 0 ? "取消全選" : "全選"}
@@ -215,7 +347,7 @@ export default function AdminAttendanceScreen() {
             return (
               <TouchableOpacity
                 onLongPress={() => toggleSelect(item.id)}
-                onPress={() => selectedIds.length > 0 ? toggleSelect(item.id) : undefined}
+                onPress={() => selectedIds.length > 0 ? toggleSelect(item.id) : setEditRecord(item)}
                 style={{
                   backgroundColor: isSelected ? "#EFF6FF" : "white",
                   borderRadius: 12,
@@ -253,6 +385,9 @@ export default function AdminAttendanceScreen() {
                     <View style={{ backgroundColor: statusStyle.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
                       <Text style={{ fontSize: 11, color: statusStyle.text, fontWeight: "600" }}>{statusStyle.label}</Text>
                     </View>
+                    <TouchableOpacity onPress={() => setEditRecord(item)} style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                      <Text style={{ color: "#2563EB", fontSize: 12, fontWeight: "600" }}>編輯</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDelete(item.id)}>
                       <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "500" }}>刪除</Text>
                     </TouchableOpacity>
@@ -275,6 +410,9 @@ export default function AdminAttendanceScreen() {
                   <Text style={{ fontSize: 12, color: "#94A3B8" }}>
                     {calcHours(item.clockInTime, item.clockOutTime)}
                   </Text>
+                  {item.note && (
+                    <Text style={{ fontSize: 11, color: "#94A3B8", flex: 1 }} numberOfLines={1}>📝 {item.note}</Text>
+                  )}
                 </View>
               </TouchableOpacity>
             );

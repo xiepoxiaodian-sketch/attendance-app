@@ -251,6 +251,23 @@ const attendanceRouter = router({
       return db.getAllAttendance(input.startDate, input.endDate, input.employeeId);
     }),
 
+  adminUpdate: publicProcedure
+    .input(z.object({
+      id: z.number(),
+      clockInTime: z.string().nullable().optional(),
+      clockOutTime: z.string().nullable().optional(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { id, clockInTime, clockOutTime, note } = input;
+      const updateData: Record<string, any> = {};
+      if (clockInTime !== undefined) updateData.clockInTime = clockInTime ? new Date(clockInTime) : null;
+      if (clockOutTime !== undefined) updateData.clockOutTime = clockOutTime ? new Date(clockOutTime) : null;
+      if (note !== undefined) updateData.note = note;
+      await db.updateAttendance(id, updateData);
+      return { success: true };
+    }),
+
   delete: publicProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
@@ -289,6 +306,7 @@ const employeesRouter = router({
       employeeType: z.enum(["full_time", "part_time"]).default("full_time"),
       jobTitle: z.string().optional(),
       phone: z.string().optional(),
+      tag: z.enum(["indoor", "outdoor", "supervisor"]).optional(),
     }))
     .mutation(async ({ input }) => {
       const existing = await db.getEmployeeByUsername(input.username);
@@ -307,6 +325,7 @@ const employeesRouter = router({
       jobTitle: z.string().optional(),
       phone: z.string().optional(),
       isActive: z.boolean().optional(),
+      tag: z.enum(["indoor", "outdoor", "supervisor"]).nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const { id, ...data } = input;

@@ -44,6 +44,7 @@ export const employees = mysqlTable("employees", {
   needsSetup: boolean("needsSetup").default(true).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
+  tag: mysqlEnum("tag", ["indoor", "outdoor", "supervisor"]),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -32,12 +32,30 @@ export default function ScheduleOverview() {
 
   const activeEmployees = useMemo(() => allEmployees?.filter((e) => e.isActive) ?? [], [allEmployees]);
 
+  const LEAVE_LABELS: Record<string, { label: string; color: string }> = {
+    annual:       { label: "特休", color: "#2563EB" },
+    sick:         { label: "病假", color: "#DC2626" },
+    personal:     { label: "事假", color: "#D97706" },
+    marriage:     { label: "婚假", color: "#7C3AED" },
+    bereavement:  { label: "喪假", color: "#475569" },
+    official:     { label: "公假", color: "#0891B2" },
+    other:        { label: "休假", color: "#64748B" },
+  };
+
+  type ScheduleEntry = {
+    shifts: Array<{ startTime: string; endTime: string; label: string }>;
+    leaveType?: string | null;
+  };
+
   const scheduleMap = useMemo(() => {
-    const map: Record<string, Record<number, Array<{ startTime: string; endTime: string; label: string }>>> = {};
-    for (const s of (allSchedules ?? []) as Array<{ date: string | Date; employeeId: number; shifts: unknown }>) {
+    const map: Record<string, Record<number, ScheduleEntry>> = {};
+    for (const s of (allSchedules ?? []) as Array<{ date: string | Date; employeeId: number; shifts: unknown; leaveType?: string | null }>) {
       const dateStr = typeof s.date === "string" ? s.date.slice(0, 10) : new Date(s.date as Date).toISOString().slice(0, 10);
       if (!map[dateStr]) map[dateStr] = {};
-      map[dateStr][s.employeeId] = s.shifts as Array<{ startTime: string; endTime: string; label: string }>;
+      map[dateStr][s.employeeId] = {
+        shifts: s.shifts as Array<{ startTime: string; endTime: string; label: string }>,
+        leaveType: s.leaveType,
+      };
     }
     return map;
   }, [allSchedules]);
@@ -185,7 +203,8 @@ export default function ScheduleOverview() {
                 </View>
               ) : (
                 filteredEmployees.map((emp, i) => {
-                  const shifts = selectedDaySchedules[emp.id];
+                  const entry = selectedDaySchedules[emp.id];
+                  const shifts = entry?.shifts;
                   const hasShift = shifts && shifts.length > 0;
                   return (
                     <View key={emp.id} style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: i < filteredEmployees.length - 1 ? 1 : 0, borderBottomColor: "#F8FAFC", flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -196,7 +215,7 @@ export default function ScheduleOverview() {
                         <Text style={{ fontSize: 14, fontWeight: "600", color: hasShift ? "#1E293B" : "#94A3B8" }}>{emp.fullName}</Text>
                         {hasShift ? (
                           <View style={{ marginTop: 3, gap: 2 }}>
-                            {shifts.map((shift, si) => (
+                            {shifts!.map((shift: { startTime: string; endTime: string; label: string }, si: number) => (
                               <View key={si} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#2563EB" }} />
                                 <Text style={{ fontSize: 12, color: "#475569" }}>
@@ -230,17 +249,42 @@ export default function ScheduleOverview() {
               </View>
             ) : (
               activeEmployees.map((emp, i) => {
-                const scheduledDays = Object.values(scheduleMap).filter(dayMap => dayMap[emp.id] && dayMap[emp.id].length > 0).length;
+                const empEntries = Object.values(scheduleMap).map(dayMap => dayMap[emp.id]).filter(Boolean);
+                const scheduledDays = empEntries.filter(e => e.shifts && e.shifts.length > 0).length;
+                // Count leave days by type
+                const leaveCounts: Record<string, number> = {};
+                for (const entry of empEntries) {
+                  if (entry.leaveType) {
+                    leaveCounts[entry.leaveType] = (leaveCounts[entry.leaveType] ?? 0) + 1;
+                  }
+                }
+                const leaveEntries = Object.entries(leaveCounts);
                 return (
-                  <View key={emp.id} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: i < activeEmployees.length - 1 ? 1 : 0, borderBottomColor: "#F8FAFC" }}>
-                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563EB" }}>{emp.fullName[0]}</Text>
+                  <View key={emp.id} style={{ paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: i < activeEmployees.length - 1 ? 1 : 0, borderBottomColor: "#F8FAFC" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563EB" }}>{emp.fullName[0]}</Text>
+                      </View>
+                      <Text style={{ flex: 1, fontSize: 14, color: "#1E293B", fontWeight: "500" }}>{emp.fullName}</Text>
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text style={{ fontSize: 16, fontWeight: "700", color: scheduledDays > 0 ? "#2563EB" : "#94A3B8" }}>{scheduledDays}</Text>
+                        <Text style={{ fontSize: 10, color: "#94A3B8" }}>天</Text>
+                      </View>
                     </View>
-                    <Text style={{ flex: 1, fontSize: 14, color: "#1E293B", fontWeight: "500" }}>{emp.fullName}</Text>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={{ fontSize: 16, fontWeight: "700", color: scheduledDays > 0 ? "#2563EB" : "#94A3B8" }}>{scheduledDays}</Text>
-                      <Text style={{ fontSize: 10, color: "#94A3B8" }}>天</Text>
-                    </View>
+                    {leaveEntries.length > 0 && (
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6, marginLeft: 42 }}>
+                        {leaveEntries.map(([type, count]) => {
+                          const info = LEAVE_LABELS[type];
+                          if (!info) return null;
+                          return (
+                            <View key={type} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: info.color, marginRight: 4 }} />
+                              <Text style={{ fontSize: 11, color: info.color, fontWeight: "600" }}>{info.label} {count}天</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
                   </View>
                 );
               })

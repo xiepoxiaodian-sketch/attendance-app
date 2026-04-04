@@ -81,6 +81,13 @@ function WeekTab() {
 
   const activeEmployees = (employees ?? []).filter(e => e.isActive && e.role === "employee");
 
+  // Tag labels
+  const TAG_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+    indoor:     { bg: "#EFF6FF", text: "#2563EB", label: "內場" },
+    outdoor:    { bg: "#F0FDF4", text: "#16A34A", label: "外場" },
+    supervisor: { bg: "#FEF3C7", text: "#D97706", label: "幹部" },
+  };
+
   const scheduleMap = useMemo(() => {
     const map: Record<number, Record<string, {
       id: number; shifts: ShiftEntry[];
@@ -100,6 +107,25 @@ function WeekTab() {
     }
     return map;
   }, [weekSchedules]);
+
+  // Compute per-day indoor/outdoor scheduled counts
+  const tagCountsByDate = useMemo(() => {
+    const result: Record<string, { indoor: number; outdoor: number }> = {};
+    for (const emp of activeEmployees) {
+      const tag = (emp as any).tag as string | null | undefined;
+      if (tag !== "indoor" && tag !== "outdoor") continue;
+      for (const d of weekDates) {
+        const dateStr = toDateStr(d);
+        const schedule = scheduleMap[emp.id]?.[dateStr];
+        if (schedule?.shifts?.length) {
+          if (!result[dateStr]) result[dateStr] = { indoor: 0, outdoor: 0 };
+          if (tag === "indoor") result[dateStr].indoor++;
+          else result[dateStr].outdoor++;
+        }
+      }
+    }
+    return result;
+  }, [activeEmployees, scheduleMap, weekDates]);
 
   const utils = trpc.useUtils();
 
@@ -233,6 +259,11 @@ function WeekTab() {
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#2563EB" }}>{emp.fullName[0]}</Text>
               </View>
               <Text style={{ fontSize: 9, fontWeight: "600", color: "#1E293B" }} numberOfLines={2}>{emp.fullName}</Text>
+              {(emp as any).tag && TAG_COLORS[(emp as any).tag] && (
+                <View style={{ marginTop: 2, backgroundColor: TAG_COLORS[(emp as any).tag].bg, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 }}>
+                  <Text style={{ fontSize: 8, color: TAG_COLORS[(emp as any).tag].text, fontWeight: "700" }}>{TAG_COLORS[(emp as any).tag].label}</Text>
+                </View>
+              )}
             </View>
             {weekDates.map((d, i) => {
               const dateStr = toDateStr(d);
@@ -281,6 +312,26 @@ function WeekTab() {
         ))}
       </ScrollView>
 
+      {/* Per-day indoor/outdoor count row */}
+      {activeEmployees.some(e => (e as any).tag === "indoor" || (e as any).tag === "outdoor") && (
+        <View style={{ backgroundColor: "#F8FAFC", borderTopWidth: 1, borderTopColor: "#E2E8F0", flexDirection: "row", paddingVertical: 6 }}>
+          <View style={{ width: 60, paddingLeft: 10, justifyContent: "center" }}>
+            <Text style={{ fontSize: 8, color: "#94A3B8", fontWeight: "600" }}>內/外</Text>
+          </View>
+          {weekDates.map((d, i) => {
+            const dateStr = toDateStr(d);
+            const counts = tagCountsByDate[dateStr];
+            return (
+              <View key={i} style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 1 }}>
+                {counts?.indoor ? <Text style={{ fontSize: 8, color: "#2563EB", fontWeight: "700", lineHeight: 11 }}>內{counts.indoor}</Text> : null}
+                {counts?.outdoor ? <Text style={{ fontSize: 8, color: "#16A34A", fontWeight: "700", lineHeight: 11 }}>外{counts.outdoor}</Text> : null}
+                {!counts?.indoor && !counts?.outdoor && <Text style={{ fontSize: 8, color: "#E2E8F0" }}>—</Text>}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
       {/* Schedule Modal */}
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
@@ -319,7 +370,7 @@ function WeekTab() {
                 <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{employees?.find(e => e.id === selectedEmployee)?.fullName ?? "員工"}</Text>
                 <Text style={{ fontSize: 13, color: "#64748B" }}>{selectedDate}</Text>
               </View>
-              {selectedEmployee && selectedDate && scheduleMap[selectedEmployee]?.[selectedDate] && (
+              {!confirmDeleteSchedule && selectedEmployee && selectedDate && scheduleMap[selectedEmployee]?.[selectedDate] && (
                 <TouchableOpacity onPress={handleDeleteSchedule} style={{ backgroundColor: "#FEF2F2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
                   <Text style={{ fontSize: 13, color: "#EF4444", fontWeight: "600" }}>刪除</Text>
                 </TouchableOpacity>
@@ -401,7 +452,7 @@ function WeekTab() {
               <View key={i} style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <TextInput value={shift.label} onChangeText={v => updateShift(i, "label", v)} style={{ fontSize: 15, fontWeight: "700", color: "#1E293B", flex: 1 }} returnKeyType="done" />
-                  {shifts.length > 1 && <TouchableOpacity onPress={() => removeShift(i)}><Text style={{ color: "#EF4444", fontSize: 13, fontWeight: "500" }}>移除</Text></TouchableOpacity>}
+                  <TouchableOpacity onPress={() => removeShift(i)}><Text style={{ color: "#EF4444", fontSize: 13, fontWeight: "500" }}>移除</Text></TouchableOpacity>
                 </View>
                 <View style={{ flexDirection: "row", gap: 16, justifyContent: "center" }}>
                   <TimePickerWheel label="上班時間" value={shift.startTime} onChange={v => updateShift(i, "startTime", v)} />
