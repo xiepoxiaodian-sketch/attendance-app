@@ -373,6 +373,8 @@ const workShiftsRouter = router({
       endTime: z.string().regex(/^\d{2}:\d{2}$/),
       isDefaultWeekday: z.boolean().default(false),
       isDefaultHoliday: z.boolean().default(false),
+      category: z.enum(["indoor", "outdoor", "pt"]).default("indoor"),
+      dayType: z.enum(["weekday", "holiday", "both"]).default("both"),
     }))
     .mutation(async ({ input }) => {
       const id = await db.createWorkShift({ ...input, isActive: true });
@@ -388,6 +390,8 @@ const workShiftsRouter = router({
       isDefaultWeekday: z.boolean().optional(),
       isDefaultHoliday: z.boolean().optional(),
       isActive: z.boolean().optional(),
+      category: z.enum(["indoor", "outdoor", "pt"]).optional(),
+      dayType: z.enum(["weekday", "holiday", "both"]).optional(),
     }))
     .mutation(async ({ input }) => {
       const { id, ...data } = input;

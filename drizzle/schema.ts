@@ -89,6 +89,8 @@ export const workShifts = mysqlTable("workShifts", {
   isDefaultHoliday: boolean("isDefaultHoliday").default(false).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
+  category: mysqlEnum("category", ["indoor", "outdoor", "pt"]).default("indoor"),
+  dayType: mysqlEnum("dayType", ["weekday", "holiday", "both"]).default("both"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

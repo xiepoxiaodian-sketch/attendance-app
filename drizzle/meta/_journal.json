@@ -50,6 +50,13 @@
       "when": 1775311082466,
       "tag": "0006_goofy_bruce_banner",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1775314887528,
+      "tag": "0007_legal_purple_man",
+      "breakpoints": true
     }
   ]
 }
