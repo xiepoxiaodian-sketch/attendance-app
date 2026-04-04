@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Switch,
+  Platform,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
@@ -75,6 +76,69 @@ function SystemSettings() {
     onSuccess: () => { refetch(); setAlertMsg({ title: "成功", message: "設定已儲存" }); },
     onError: (err) => setAlertMsg({ title: "錯誤", message: err.message }),
   });
+  // Push notification state
+  const [pushStatus, setPushStatus] = useState<"idle" | "subscribed" | "unsupported">("idle");
+  const [pushLoading, setPushLoading] = useState(false);
+  const { data: vapidData } = trpc.push.getVapidKey.useQuery();
+  const subscribeMutation = trpc.push.subscribe.useMutation();
+  const unsubscribeMutation = trpc.push.unsubscribe.useMutation();
+  const testPushMutation = trpc.push.test.useMutation({
+    onSuccess: () => setAlertMsg({ title: "測試通知已發送", message: "請確認您的瀏覽器是否收到通知" }),
+    onError: (err) => setAlertMsg({ title: "發送失敗", message: err.message }),
+  });
+
+  useEffect(() => {
+    if (Platform.OS !== "web") { setPushStatus("unsupported"); return; }
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) { setPushStatus("unsupported"); return; }
+    navigator.serviceWorker.ready.then(reg => {
+      reg.pushManager.getSubscription().then(sub => {
+        setPushStatus(sub ? "subscribed" : "idle");
+      });
+    }).catch(() => setPushStatus("unsupported"));
+  }, []);
+
+  const handleSubscribePush = async () => {
+    if (!vapidData?.publicKey) return;
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidData.publicKey,
+      });
+      const json = sub.toJSON();
+      await subscribeMutation.mutateAsync({
+        endpoint: sub.endpoint,
+        p256dh: (json.keys as any).p256dh,
+        auth: (json.keys as any).auth,
+        userAgent: navigator.userAgent,
+      });
+      setPushStatus("subscribed");
+      setAlertMsg({ title: "成功", message: "推播通知已啟用！員工打卡異常時您將收到即時通知。" });
+    } catch (e: any) {
+      setAlertMsg({ title: "訂閱失敗", message: e.message || "請確認瀏覽器已允許通知權限" });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleUnsubscribePush = async () => {
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await unsubscribeMutation.mutateAsync({ endpoint: sub.endpoint });
+        await sub.unsubscribe();
+      }
+      setPushStatus("idle");
+      setAlertMsg({ title: "已停用", message: "推播通知已關閉" });
+    } catch (e: any) {
+      setAlertMsg({ title: "錯誤", message: e.message });
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   const [form, setForm] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -184,6 +248,81 @@ function SystemSettings() {
             />
           </View>
         ))}
+      </View>
+
+      {/* Push Notification Settings */}
+      <View style={{ backgroundColor: "white", borderRadius: 14, padding: 16, marginBottom: 16 }}>
+        <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginBottom: 12 }}>推播通知設定</Text>
+        {pushStatus === "unsupported" ? (
+          <Text style={{ fontSize: 13, color: "#94A3B8" }}>此瀏覽器不支援推播通知，請使用 Chrome 或 Edge</Text>
+        ) : (
+          <>
+            {/* Notify late */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ fontSize: 14, color: "#1E293B" }}>遲到通知</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>員工遲到打卡時發送通知</Text>
+              </View>
+              <Switch
+                value={form.push_notify_late === "true"}
+                onValueChange={(v) => setForm(f => ({ ...f, push_notify_late: v ? "true" : "false" }))}
+                trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
+                thumbColor={form.push_notify_late === "true" ? "#1E40AF" : "#94A3B8"}
+              />
+            </View>
+            {/* Notify early leave */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ fontSize: 14, color: "#1E293B" }}>早退通知</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>員工提早打卡下班時發送通知</Text>
+              </View>
+              <Switch
+                value={form.push_notify_early_leave === "true"}
+                onValueChange={(v) => setForm(f => ({ ...f, push_notify_early_leave: v ? "true" : "false" }))}
+                trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
+                thumbColor={form.push_notify_early_leave === "true" ? "#1E40AF" : "#94A3B8"}
+              />
+            </View>
+            {/* Subscribe / Unsubscribe button */}
+            {pushStatus === "subscribed" ? (
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => testPushMutation.mutate()}
+                  disabled={testPushMutation.isPending}
+                  style={{ flex: 1, backgroundColor: "#F0FDF4", borderRadius: 10, paddingVertical: 10, alignItems: "center", borderWidth: 1, borderColor: "#BBF7D0" }}
+                >
+                  <Text style={{ color: "#16A34A", fontSize: 14, fontWeight: "600" }}>
+                    {testPushMutation.isPending ? "發送中..." : "📨 發送測試通知"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleUnsubscribePush}
+                  disabled={pushLoading}
+                  style={{ flex: 1, backgroundColor: "#FEF2F2", borderRadius: 10, paddingVertical: 10, alignItems: "center", borderWidth: 1, borderColor: "#FECACA" }}
+                >
+                  <Text style={{ color: "#DC2626", fontSize: 14, fontWeight: "600" }}>
+                    {pushLoading ? "處理中..." : "🔕 停用通知"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={handleSubscribePush}
+                disabled={pushLoading}
+                style={{ backgroundColor: "#1E40AF", borderRadius: 10, paddingVertical: 12, alignItems: "center", opacity: pushLoading ? 0.7 : 1 }}
+              >
+                {pushLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>🔔 在此裝置啟用推播通知</Text>
+                )}
+              </TouchableOpacity>
+            )}
+            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>
+              {pushStatus === "subscribed" ? "✅ 此裝置已啟用推播通知" : "點擊後瀏覽器會請求通知權限，請選擇「允許」"}
+            </Text>
+          </>
+        )}
       </View>
 
       <TouchableOpacity

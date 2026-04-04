@@ -1,5 +1,5 @@
 // 好好上班 PWA Service Worker
-const CACHE_NAME = "haohao-v1";
+const CACHE_NAME = "haohao-v2";
 const OFFLINE_URL = "/";
 
 // 安裝時快取核心資源
@@ -28,15 +28,12 @@ self.addEventListener("activate", (event) => {
 
 // 網路優先策略：優先從網路取得，失敗時回退到快取
 self.addEventListener("fetch", (event) => {
-  // 只處理 GET 請求
   if (event.request.method !== "GET") return;
-  // 跳過 API 請求（不快取動態資料）
   if (event.request.url.includes("/api/") || event.request.url.includes("/trpc/")) return;
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // 快取成功的靜態資源
         if (response.ok && event.request.url.includes("/_expo/static/")) {
           const cloned = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
@@ -44,8 +41,52 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() => {
-        // 網路失敗時回退到快取
         return caches.match(event.request).then((cached) => cached || caches.match(OFFLINE_URL));
       })
+  );
+});
+
+// ============================================================
+// Push Notification Handler
+// ============================================================
+self.addEventListener("push", (event) => {
+  let data = { title: "好好上班", body: "有新的打卡通知", icon: "/favicon.png" };
+  if (event.data) {
+    try {
+      data = { ...data, ...JSON.parse(event.data.text()) };
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || "/favicon.png",
+      badge: "/favicon.png",
+      vibrate: [200, 100, 200],
+      tag: "attendance-alert",
+      renotify: true,
+      data: { url: self.location.origin + "/admin" },
+    })
+  );
+});
+
+// 點擊通知時開啟後台管理頁面
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || self.location.origin + "/admin";
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes("/admin") && "focus" in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
   );
 });

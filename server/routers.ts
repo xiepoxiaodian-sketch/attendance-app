@@ -1,5 +1,30 @@
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import webpush from "web-push";
+
+// VAPID keys
+const VAPID_PUBLIC_KEY = "BPs2MLc_pyu9-Nq3uO7tdqKisCip0hd7eAobAfDchzafO-nTBnNxqSsDILb5H75NlLaEk54Uz-KKTKkSIT1VKmQ";
+const VAPID_PRIVATE_KEY = "nj757QiuhOc-r7YvA9qxwyfUwgfsOHgMIMZtm5s620g";
+webpush.setVapidDetails("mailto:admin@goodwork.app", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+// Helper: send push to all subscribers
+async function sendPushToAll(payload: { title: string; body: string; icon?: string }) {
+  const subs = await db.getAllPushSubscriptions();
+  const deadEndpoints: string[] = [];
+  await Promise.allSettled(subs.map(async (sub) => {
+    try {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        JSON.stringify(payload)
+      );
+    } catch (err: any) {
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        deadEndpoints.push(sub.endpoint);
+      }
+    }
+  }));
+  for (const ep of deadEndpoints) await db.deletePushSubscription(ep);
+}
 import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -141,6 +166,22 @@ const attendanceRouter = router({
         shiftLabel,
         status,
       });
+
+      // Push notification for late clock-in
+      if (status === "late") {
+        const notifyEnabled = await db.getSetting("push_notify_late");
+        if (notifyEnabled === "true") {
+          const employee = await db.getEmployeeById(input.employeeId);
+          const name = employee?.fullName || `員工 #${input.employeeId}`;
+          const timeStr = now.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+          sendPushToAll({
+            title: "⚠️ 遲到通知",
+            body: `${name} 於 ${timeStr} 打卡上班（遲到）`,
+            icon: "/favicon.png",
+          }).catch(() => {});
+        }
+      }
+
       return { success: true, id, time: now.toISOString(), status };
     }),
 
@@ -220,6 +261,22 @@ const attendanceRouter = router({
         clockOutLng: input.lng?.toString() as unknown as any,
         status: status || "normal",
       });
+
+      // Push notification for early leave
+      if (status === "early_leave") {
+        const notifyEnabled = await db.getSetting("push_notify_early_leave");
+        if (notifyEnabled === "true") {
+          const employee = await db.getEmployeeById(input.employeeId);
+          const name = employee?.fullName || `員工 #${input.employeeId}`;
+          const timeStr = now.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+          sendPushToAll({
+            title: "⚠️ 早退通知",
+            body: `${name} 於 ${timeStr} 提早打卡下班`,
+            icon: "/favicon.png",
+          }).catch(() => {});
+        }
+      }
+
       return { success: true, time: now.toISOString() };
     }),
 
@@ -629,6 +686,42 @@ const punchCorrectionRouter = router({
 });
 
 // ============================================================
+// Push Notification Router
+// ============================================================
+const pushRouter = router({
+  getVapidKey: publicProcedure.query(() => ({ publicKey: VAPID_PUBLIC_KEY })),
+
+  subscribe: publicProcedure
+    .input(z.object({
+      endpoint: z.string(),
+      p256dh: z.string(),
+      auth: z.string(),
+      userAgent: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      await db.savePushSubscription(input);
+      return { success: true };
+    }),
+
+  unsubscribe: publicProcedure
+    .input(z.object({ endpoint: z.string() }))
+    .mutation(async ({ input }) => {
+      await db.deletePushSubscription(input.endpoint);
+      return { success: true };
+    }),
+
+  test: publicProcedure
+    .mutation(async () => {
+      await sendPushToAll({
+        title: "好好上班 - 測試通知",
+        body: "推播通知設定成功！您將收到打卡異常的即時通知。",
+        icon: "/favicon.png",
+      });
+      return { success: true };
+    }),
+});
+
+// ============================================================
 // Main App Router
 // ============================================================
 export const appRouter = router({
@@ -650,6 +743,7 @@ export const appRouter = router({
   settings: settingsRouter,
   leave: leaveRouter,
   punchCorrection: punchCorrectionRouter,
+  push: pushRouter,
 });
 
 export type AppRouter = typeof appRouter;

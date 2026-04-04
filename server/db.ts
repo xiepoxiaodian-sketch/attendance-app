@@ -11,6 +11,7 @@ import {
   settings,
   leaveRequests,
   punchCorrections,
+  pushSubscriptions,
   InsertEmployee,
   InsertAttendance,
   InsertWorkShift,
@@ -635,4 +636,37 @@ export async function reviewPunchCorrection(
       await db.insert(attendance).values(newRecord);
     }
   }
+}
+
+// ============================================================
+// Push Subscriptions
+// ============================================================
+export async function savePushSubscription(data: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, data.endpoint));
+  if (existing.length > 0) {
+    await db.update(pushSubscriptions)
+      .set({ p256dh: data.p256dh, auth: data.auth, userAgent: data.userAgent })
+      .where(eq(pushSubscriptions.endpoint, data.endpoint));
+  } else {
+    await db.insert(pushSubscriptions).values(data);
+  }
+}
+
+export async function deletePushSubscription(endpoint: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+}
+
+export async function getAllPushSubscriptions() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(pushSubscriptions);
 }

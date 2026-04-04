@@ -186,3 +186,18 @@ export const punchCorrections = mysqlTable("punchCorrections", {
 
 export type PunchCorrection = typeof punchCorrections.$inferSelect;
 export type InsertPunchCorrection = typeof punchCorrections.$inferInsert;
+
+/**
+ * Web Push subscriptions - stores browser push subscription endpoints for admins
+ */
+export const pushSubscriptions = mysqlTable("pushSubscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: varchar("userAgent", { length: 512 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
