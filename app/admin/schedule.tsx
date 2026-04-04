@@ -284,16 +284,22 @@ function WeekTab() {
       {/* Schedule Modal */}
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
-          <ConfirmDialog
-            visible={confirmDeleteSchedule}
-            title="刪除排班"
-            message="確定要刪除此日的排班嗎？"
-            confirmText="刪除"
-            confirmStyle="destructive"
-            onConfirm={handleConfirmDeleteSchedule}
-            onCancel={() => setConfirmDeleteSchedule(false)}
-          />
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#E2E8F0", backgroundColor: "white" }}>
+          {/* Inline delete confirmation — replaces nested Modal (RN doesn't support nested Modals) */}
+          {confirmDeleteSchedule ? (
+            <View style={{ backgroundColor: "#FEF2F2", borderBottomWidth: 1, borderBottomColor: "#FECACA", padding: 16 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: "#991B1B", marginBottom: 6 }}>確定要刪除此日的排班？</Text>
+              <Text style={{ fontSize: 13, color: "#B91C1C", marginBottom: 14 }}>此操作無法復原。</Text>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity onPress={() => setConfirmDeleteSchedule(false)} style={{ flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: "#FECACA", alignItems: "center", backgroundColor: "white" }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B" }}>取消</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleConfirmDeleteSchedule} disabled={deleteMutation.isPending} style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: "#EF4444", alignItems: "center" }}>
+                  {deleteMutation.isPending ? <ActivityIndicator size="small" color="white" /> : <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>確認刪除</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#E2E8F0", backgroundColor: "white" }}>
             <TouchableOpacity onPress={() => setShowModal(false)}>
               <Text style={{ color: "#64748B", fontSize: 16 }}>取消</Text>
             </TouchableOpacity>
@@ -302,6 +308,7 @@ function WeekTab() {
               {upsertMutation.isPending ? <ActivityIndicator size="small" color="#2563EB" /> : <Text style={{ color: "#2563EB", fontSize: 16, fontWeight: "700" }}>儲存</Text>}
             </TouchableOpacity>
           </View>
+          )}
           <ScrollView contentContainerStyle={{ padding: 16 }}>
             {/* Info Card */}
             <View style={{ backgroundColor: "#EFF6FF", borderRadius: 10, padding: 12, marginBottom: 16, flexDirection: "row", alignItems: "center", gap: 8 }}>
