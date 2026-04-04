@@ -175,3 +175,12 @@
 - [ ] 前端 API URL 改為可配置環境變數
 - [ ] 建立 GitHub 倉庫並上傳程式碼
 - [ ] 引導用戶在 Railway 完成部署
+## 推播通知功能（Web Push）
+- [x] 資料庫 pushSubscriptions 表新增 employeeId 欄位（null = 管理員訂閱）
+- [x] db.ts 新增 getPushSubscriptionsByEmployee 和 getAdminPushSubscriptions 函數
+- [x] push router subscribe 支援 employeeId 參數
+- [x] cron-jobs.ts：每分鐘掃描排班，未打卡提醒（管理員）和打卡前5分鐘提醒（員工）
+- [x] server/_core/index.ts 整合 startCronJobs()
+- [x] 管理員設定頁新增「未打卡提醒」開關和延遲分鐘數設定
+- [x] 管理員設定頁新增「打卡前提醒（員工）」開關
+- [x] 員工打卡頁新增推播訂閱按鈕（僅在管理員開啟打卡前提醒時顯示）

@@ -271,7 +271,7 @@ function SystemSettings() {
               />
             </View>
             {/* Notify early leave */}
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
               <View style={{ flex: 1, marginRight: 12 }}>
                 <Text style={{ fontSize: 14, color: "#1E293B" }}>早退通知</Text>
                 <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>員工提早打卡下班時發送通知</Text>
@@ -281,6 +281,45 @@ function SystemSettings() {
                 onValueChange={(v) => setForm(f => ({ ...f, push_notify_early_leave: v ? "true" : "false" }))}
                 trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
                 thumbColor={form.push_notify_early_leave === "true" ? "#1E40AF" : "#94A3B8"}
+              />
+            </View>
+            {/* Notify missing clock-in (admin) */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ fontSize: 14, color: "#1E293B" }}>未打卡提醒（管理員）</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>員工超過指定時間未打卡時通知管理員</Text>
+              </View>
+              <Switch
+                value={form.push_notify_missing === "true"}
+                onValueChange={(v) => setForm(f => ({ ...f, push_notify_missing: v ? "true" : "false" }))}
+                trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
+                thumbColor={form.push_notify_missing === "true" ? "#1E40AF" : "#94A3B8"}
+              />
+            </View>
+            {form.push_notify_missing === "true" && (
+              <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9", gap: 8 }}>
+                <Text style={{ fontSize: 13, color: "#64748B", flex: 1 }}>班次開始後幾分鐘未打卡才提醒</Text>
+                <TextInput
+                  value={form.push_missing_threshold_minutes ?? "15"}
+                  onChangeText={(v) => setForm(f => ({ ...f, push_missing_threshold_minutes: v.replace(/[^0-9]/g, "") }))}
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                  style={{ width: 60, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 14, textAlign: "center", color: "#1E293B" }}
+                />
+                <Text style={{ fontSize: 13, color: "#64748B" }}>分鐘</Text>
+              </View>
+            )}
+            {/* Notify pre-shift reminder (employee) */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ fontSize: 14, color: "#1E293B" }}>打卡前提醒（員工）</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>班次開始前 5 分鐘提醒員工打卡</Text>
+              </View>
+              <Switch
+                value={form.push_notify_reminder === "true"}
+                onValueChange={(v) => setForm(f => ({ ...f, push_notify_reminder: v ? "true" : "false" }))}
+                trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
+                thumbColor={form.push_notify_reminder === "true" ? "#1E40AF" : "#94A3B8"}
               />
             </View>
             {/* Subscribe / Unsubscribe button */}

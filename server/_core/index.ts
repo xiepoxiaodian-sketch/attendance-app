@@ -8,6 +8,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { startCronJobs } from "../cron-jobs";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -108,3 +109,6 @@ async function startServer() {
 }
 
 startServer().catch(console.error);
+
+// Start cron jobs for push notifications
+startCronJobs();

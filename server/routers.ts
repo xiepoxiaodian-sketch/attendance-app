@@ -697,9 +697,10 @@ const pushRouter = router({
       p256dh: z.string(),
       auth: z.string(),
       userAgent: z.string().optional(),
+      employeeId: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
-      await db.savePushSubscription(input);
+      await db.savePushSubscription({ ...input, employeeId: input.employeeId ?? null });
       return { success: true };
     }),
 

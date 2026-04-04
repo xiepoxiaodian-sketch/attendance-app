@@ -188,7 +188,8 @@ export type PunchCorrection = typeof punchCorrections.$inferSelect;
 export type InsertPunchCorrection = typeof punchCorrections.$inferInsert;
 
 /**
- * Web Push subscriptions - stores browser push subscription endpoints for admins
+ * Web Push subscriptions - stores browser push subscription endpoints
+ * employeeId = null means admin subscription; non-null = employee subscription for clock-in reminders
  */
 export const pushSubscriptions = mysqlTable("pushSubscriptions", {
   id: int("id").autoincrement().primaryKey(),
@@ -196,6 +197,7 @@ export const pushSubscriptions = mysqlTable("pushSubscriptions", {
   p256dh: text("p256dh").notNull(),
   auth: text("auth").notNull(),
   userAgent: varchar("userAgent", { length: 512 }),
+  employeeId: int("employeeId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

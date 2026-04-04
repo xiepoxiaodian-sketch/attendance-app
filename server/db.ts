@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -646,13 +646,14 @@ export async function savePushSubscription(data: {
   p256dh: string;
   auth: string;
   userAgent?: string;
+  employeeId?: number | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const existing = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, data.endpoint));
   if (existing.length > 0) {
     await db.update(pushSubscriptions)
-      .set({ p256dh: data.p256dh, auth: data.auth, userAgent: data.userAgent })
+      .set({ p256dh: data.p256dh, auth: data.auth, userAgent: data.userAgent, employeeId: data.employeeId ?? null })
       .where(eq(pushSubscriptions.endpoint, data.endpoint));
   } else {
     await db.insert(pushSubscriptions).values(data);
@@ -669,4 +670,20 @@ export async function getAllPushSubscriptions() {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(pushSubscriptions);
+}
+
+/** Get push subscriptions for a specific employee */
+export async function getPushSubscriptionsByEmployee(employeeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(pushSubscriptions)
+    .where(eq(pushSubscriptions.employeeId, employeeId));
+}
+
+/** Get admin push subscriptions (employeeId IS NULL) */
+export async function getAdminPushSubscriptions() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(pushSubscriptions)
+    .where(isNull(pushSubscriptions.employeeId));
 }

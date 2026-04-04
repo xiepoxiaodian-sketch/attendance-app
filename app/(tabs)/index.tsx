@@ -522,8 +522,104 @@ export default function ClockScreen() {
               <Text style={{ fontSize: 12, color: "#1E40AF" }}>📍 GPS 定位記錄</Text>
             )}
           </View>
+          {/* Push notification subscription for employee */}
+          {Platform.OS === "web" && <EmployeePushSubscription employeeId={employee?.id ?? 0} />}
         </View>
       </ScrollView>
     </ScreenContainer>
+  );
+}
+
+// ─── Employee Push Subscription Component ────────────────────────────────────
+function EmployeePushSubscription({ employeeId }: { employeeId: number }) {
+  const [status, setStatus] = useState<"idle" | "subscribed" | "unsupported">("idle");
+  const [loading, setLoading] = useState(false);
+  const { data: vapidData } = trpc.push.getVapidKey.useQuery();
+  const subscribeMutation = trpc.push.subscribe.useMutation();
+  const unsubscribeMutation = trpc.push.unsubscribe.useMutation();
+  const { data: settings } = trpc.settings.getAll.useQuery();
+
+  // Only show if reminder feature is enabled
+  const reminderEnabled = settings?.push_notify_reminder === "true";
+
+  useEffect(() => {
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+      setStatus("unsupported");
+      return;
+    }
+    navigator.serviceWorker.ready.then(reg => {
+      reg.pushManager.getSubscription().then(sub => {
+        setStatus(sub ? "subscribed" : "idle");
+      });
+    }).catch(() => setStatus("unsupported"));
+  }, []);
+
+  if (status === "unsupported" || !reminderEnabled) return null;
+
+  const handleSubscribe = async () => {
+    if (!vapidData?.publicKey) return;
+    setLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidData.publicKey,
+      });
+      const json = sub.toJSON();
+      await subscribeMutation.mutateAsync({
+        endpoint: sub.endpoint,
+        p256dh: (json.keys as any).p256dh,
+        auth: (json.keys as any).auth,
+        userAgent: navigator.userAgent,
+        employeeId,
+      });
+      setStatus("subscribed");
+    } catch (e: any) {
+      Alert.alert("訂閱失敗", e.message || "請確認瀏覽器已允許通知權限");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnsubscribe = async () => {
+    setLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await unsubscribeMutation.mutateAsync({ endpoint: sub.endpoint });
+        await sub.unsubscribe();
+      }
+      setStatus("idle");
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (status === "subscribed") {
+    return (
+      <View style={{ backgroundColor: "#F0FDF4", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#BBF7D0", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ fontSize: 12, color: "#16A34A", flex: 1 }}>🔔 已開啟打卡前提醒通知</Text>
+        <TouchableOpacity onPress={handleUnsubscribe} disabled={loading}>
+          <Text style={{ fontSize: 12, color: "#94A3B8" }}>關閉</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      onPress={handleSubscribe}
+      disabled={loading}
+      style={{ backgroundColor: "#F8FAFC", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#E2E8F0", alignItems: "center", opacity: loading ? 0.7 : 1 }}
+    >
+      {loading ? (
+        <ActivityIndicator color="#64748B" size="small" />
+      ) : (
+        <Text style={{ fontSize: 13, color: "#64748B" }}>🔔 開啟打卡前 5 分鐘提醒</Text>
+      )}
+    </TouchableOpacity>
   );
 }
