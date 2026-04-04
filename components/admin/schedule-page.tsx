@@ -8,8 +8,7 @@ import { AdminHeader } from "@/components/admin-header";
 import { TimePickerWheel } from "@/components/time-picker-wheel";
 import { ConfirmDialog, AlertDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
-import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useDragSort } from "@/hooks/use-drag-sort";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -945,22 +944,13 @@ function WorkShiftsTab() {
   // Sync local state when server data arrives
   useEffect(() => { if (shifts) setLocalShifts(shifts as WorkShift[]); }, [shifts]);
 
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-
-  const handleDragStart = (index: number) => setDragIndex(index);
-  const handleDragEnter = (index: number) => setDragOverIndex(index);
-  const handleDragEnd = () => {
-    if (dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
-      const newList = [...localShifts];
-      const [moved] = newList.splice(dragIndex, 1);
-      newList.splice(dragOverIndex, 0, moved);
+  const { getItemHandlers: getShiftHandlers, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex } = useDragSort({
+    items: localShifts,
+    onReorder: (newList) => {
       setLocalShifts(newList);
       reorderMutation.mutate({ orderedIds: newList.map(s => s.id) });
-    }
-    setDragIndex(null);
-    setDragOverIndex(null);
-  };
+    },
+  });
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
 
@@ -1010,15 +1000,15 @@ function WorkShiftsTab() {
           {localShifts.map((item, index) => (
             <View
               key={item.id}
-              // @ts-ignore web drag events
-              draggable
-              onDragStart={() => handleDragStart(index)}
-              onDragEnter={() => handleDragEnter(index)}
-              onDragEnd={handleDragEnd}
-              onDragOver={(e: unknown) => { (e as { preventDefault: () => void }).preventDefault?.(); }}
-              style={[
-                { backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: dragOverIndex === index ? "#2563EB" : "#F1F5F9", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: dragIndex === index ? 0.15 : 0.05, shadowRadius: 3, elevation: dragIndex === index ? 4 : 1, opacity: dragIndex === index ? 0.6 : 1 },
-              ]}
+              {...(getShiftHandlers(index, item.name) as object)}
+              style={{
+                backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1,
+                borderColor: shiftOverIndex === index ? "#2563EB" : "#F1F5F9",
+                shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: shiftActiveIndex === index ? 0.15 : 0.05, shadowRadius: 3,
+                elevation: shiftActiveIndex === index ? 4 : 1,
+                opacity: shiftActiveIndex === index ? 0.5 : 1,
+              }}
             >
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <View style={{ justifyContent: "center", paddingRight: 10, cursor: "grab" } as unknown as object}>

@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { useDragSort } from "@/hooks/use-drag-sort";
 import {
   View,
   Text,
@@ -127,25 +128,17 @@ export default function AdminEmployeesScreen() {
 
   const { data: employees, refetch, isLoading } = trpc.employees.list.useQuery();
   const [localEmployees, setLocalEmployees] = useState<Employee[]>([]);
-  const [empDragIndex, setEmpDragIndex] = useState<number | null>(null);
-  const [empDragOverIndex, setEmpDragOverIndex] = useState<number | null>(null);
   const reorderEmpMutation = trpc.employees.reorder.useMutation();
 
   useEffect(() => { if (employees) setLocalEmployees(employees as Employee[]); }, [employees]);
 
-  const handleEmpDragStart = (index: number) => setEmpDragIndex(index);
-  const handleEmpDragEnter = (index: number) => setEmpDragOverIndex(index);
-  const handleEmpDragEnd = () => {
-    if (empDragIndex !== null && empDragOverIndex !== null && empDragIndex !== empDragOverIndex) {
-      const newList = [...localEmployees];
-      const [moved] = newList.splice(empDragIndex, 1);
-      newList.splice(empDragOverIndex, 0, moved);
+  const { getItemHandlers: getEmpHandlers, activeIndex: empActiveIndex, overActiveIndex: empOverIndex } = useDragSort({
+    items: localEmployees,
+    onReorder: (newList) => {
       setLocalEmployees(newList);
       reorderEmpMutation.mutate({ orderedIds: newList.map(e => e.id) });
-    }
-    setEmpDragIndex(null);
-    setEmpDragOverIndex(null);
-  };
+    },
+  });
 
   const createMutation = trpc.employees.create.useMutation({
     onSuccess: () => {
@@ -314,24 +307,19 @@ export default function AdminEmployeesScreen() {
           ) : filteredEmployees.map((item, index) => (
             <View
               key={item.id}
-              // @ts-ignore web drag events
-              draggable={!searchQuery}
-              onDragStart={() => handleEmpDragStart(index)}
-              onDragEnter={() => handleEmpDragEnter(index)}
-              onDragEnd={handleEmpDragEnd}
-              onDragOver={(e: unknown) => { (e as { preventDefault: () => void }).preventDefault?.(); }}
+              {...(!searchQuery ? (getEmpHandlers(index, item.fullName) as object) : {})}
               style={{
               backgroundColor: "white",
               borderRadius: 12,
               padding: 14,
               borderWidth: 1,
-              borderColor: empDragOverIndex === index ? "#2563EB" : "#E2E8F0",
+              borderColor: empOverIndex === index ? "#2563EB" : "#E2E8F0",
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: empDragIndex === index ? 0.15 : 0.04,
+              shadowOpacity: empActiveIndex === index ? 0.15 : 0.04,
               shadowRadius: 3,
-              elevation: empDragIndex === index ? 4 : 1,
-              opacity: empDragIndex === index ? 0.6 : 1,
+              elevation: empActiveIndex === index ? 4 : 1,
+              opacity: empActiveIndex === index ? 0.5 : 1,
             }}>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 {/* Drag Handle */}

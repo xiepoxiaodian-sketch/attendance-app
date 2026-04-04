@@ -1,0 +1,115 @@
+import { useRef, useState, useCallback } from "react";
+import { Platform } from "react-native";
+
+/**
+ * A touch + mouse drag-sort hook for web.
+ * Returns handlers to attach to each list item and a ghost element position.
+ *
+ * Usage:
+ *   const { getItemHandlers, ghostStyle, ghostLabel } = useDragSort({ items, onReorder });
+ *   items.map((item, index) => <View {...getItemHandlers(index)} key={item.id}>...</View>)
+ */
+export function useDragSort<T>({
+  items,
+  onReorder,
+}: {
+  items: T[];
+  onReorder: (newItems: T[]) => void;
+}) {
+  const dragIndex = useRef<number | null>(null);
+  const overIndex = useRef<number | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [overActiveIndex, setOverActiveIndex] = useState<number | null>(null);
+  const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
+  const [ghostLabel, setGhostLabel] = useState<string>("");
+  const itemRefs = useRef<(HTMLElement | null)[]>([]);
+
+  const finishDrag = useCallback(() => {
+    if (dragIndex.current !== null && overIndex.current !== null && dragIndex.current !== overIndex.current) {
+      const newList = [...items];
+      const [moved] = newList.splice(dragIndex.current, 1);
+      newList.splice(overIndex.current, 0, moved);
+      onReorder(newList);
+    }
+    dragIndex.current = null;
+    overIndex.current = null;
+    setActiveIndex(null);
+    setOverActiveIndex(null);
+    setGhostPos(null);
+  }, [items, onReorder]);
+
+  const getItemHandlers = useCallback((index: number, label?: string) => {
+    if (Platform.OS !== "web") return {};
+
+    return {
+      // @ts-ignore
+      ref: (el: HTMLElement | null) => { itemRefs.current[index] = el; },
+      // Touch events for mobile
+      onTouchStart: (e: React.TouchEvent) => {
+        dragIndex.current = index;
+        overIndex.current = index;
+        setActiveIndex(index);
+        setOverActiveIndex(index);
+        setGhostLabel(label ?? String(index + 1));
+        const touch = e.touches[0];
+        setGhostPos({ x: touch.clientX, y: touch.clientY });
+      },
+      onTouchMove: (e: React.TouchEvent) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        setGhostPos({ x: touch.clientX, y: touch.clientY });
+        // Find which item we're hovering over
+        const elements = itemRefs.current;
+        for (let i = 0; i < elements.length; i++) {
+          const el = elements[i];
+          if (!el) continue;
+          const rect = el.getBoundingClientRect();
+          if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+            overIndex.current = i;
+            setOverActiveIndex(i);
+            break;
+          }
+        }
+      },
+      onTouchEnd: () => { finishDrag(); },
+      // Mouse events for desktop
+      onMouseDown: (e: React.MouseEvent) => {
+        dragIndex.current = index;
+        overIndex.current = index;
+        setActiveIndex(index);
+        setOverActiveIndex(index);
+        setGhostLabel(label ?? String(index + 1));
+        setGhostPos({ x: e.clientX, y: e.clientY });
+        const onMouseMove = (ev: MouseEvent) => {
+          setGhostPos({ x: ev.clientX, y: ev.clientY });
+          const elements = itemRefs.current;
+          for (let i = 0; i < elements.length; i++) {
+            const el = elements[i];
+            if (!el) continue;
+            const rect = el.getBoundingClientRect();
+            if (ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
+              overIndex.current = i;
+              setOverActiveIndex(i);
+              break;
+            }
+          }
+        };
+        const onMouseUp = () => {
+          finishDrag();
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+        };
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+      },
+    };
+  }, [finishDrag]);
+
+  return {
+    getItemHandlers,
+    activeIndex,
+    overActiveIndex,
+    ghostPos,
+    ghostLabel,
+  };
+}
