@@ -182,15 +182,7 @@ function WeekTab() {
         message={alertMsg?.message ?? ""}
         onClose={() => setAlertMsg(null)}
       />
-      <ConfirmDialog
-        visible={confirmDeleteSchedule}
-        title="刪除排班"
-        message="確定要刪除此日的排班嗎？"
-        confirmText="刪除"
-        confirmStyle="destructive"
-        onConfirm={handleConfirmDeleteSchedule}
-        onCancel={() => setConfirmDeleteSchedule(false)}
-      />
+
       {/* Week Navigation */}
       <View style={{ backgroundColor: "white", paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -292,6 +284,15 @@ function WeekTab() {
       {/* Schedule Modal */}
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+          <ConfirmDialog
+            visible={confirmDeleteSchedule}
+            title="刪除排班"
+            message="確定要刪除此日的排班嗎？"
+            confirmText="刪除"
+            confirmStyle="destructive"
+            onConfirm={handleConfirmDeleteSchedule}
+            onCancel={() => setConfirmDeleteSchedule(false)}
+          />
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#E2E8F0", backgroundColor: "white" }}>
             <TouchableOpacity onPress={() => setShowModal(false)}>
               <Text style={{ color: "#64748B", fontSize: 16 }}>取消</Text>
