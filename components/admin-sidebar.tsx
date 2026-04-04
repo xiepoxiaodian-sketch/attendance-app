@@ -12,6 +12,7 @@ const NAV_ITEMS: { label: string; icon: string; page: AdminPage }[] = [
   { label: "員工管理", icon: "person.2.fill", page: "employees" },
   { label: "排班管理", icon: "calendar.badge.clock", page: "schedule" },
   { label: "打卡紀錄", icon: "clock.fill", page: "attendance" },
+  { label: "工作時段", icon: "clock.badge.fill", page: "work-shifts" },
   { label: "請假審核", icon: "doc.text.fill", page: "leave-review" },
   { label: "補打卡審核", icon: "clock.badge.checkmark.fill", page: "punch-correction" },
   { label: "報表統計", icon: "chart.line.uptrend.xyaxis", page: "reports" },

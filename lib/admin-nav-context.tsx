@@ -10,12 +10,13 @@ export type AdminPage =
   | "punch-correction"
   | "reports"
   | "devices"
+  | "work-shifts"
   | "settings";
 
 const STORAGE_KEY = "admin_last_page";
 const VALID_PAGES: AdminPage[] = [
   "dashboard", "employees", "schedule", "attendance",
-  "leave-review", "punch-correction", "reports", "devices", "settings",
+  "leave-review", "punch-correction", "reports", "devices", "work-shifts", "settings",
 ];
 
 function getInitialPage(): AdminPage {

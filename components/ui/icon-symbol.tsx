@@ -84,6 +84,7 @@ const MAPPING = {
   "chart.line.uptrend.xyaxis": "trending-up",
   "clock.arrow.circlepath": "history",
   "clock.badge.checkmark.fill": "pending-actions",
+  "clock.badge.fill": "more-time",
   "rectangle.portrait.and.arrow.right": "logout",
 } as unknown as IconMapping;
 
