@@ -161,14 +161,23 @@ function WeekTab() {
   const handleDeleteSchedule = () => {
     if (!selectedEmployee || !selectedDate) return;
     const existing = scheduleMap[selectedEmployee]?.[selectedDate];
-    if (!existing) { setShowModal(false); return; }
+    if (!existing) {
+      // 尚未儲存的排班，直接關閉 Modal 即可
+      setShowModal(false);
+      return;
+    }
     setConfirmDeleteSchedule(true);
   };
 
   const handleConfirmDeleteSchedule = () => {
     if (!selectedEmployee || !selectedDate) return;
     const existing = scheduleMap[selectedEmployee]?.[selectedDate];
-    if (existing) deleteMutation.mutate({ id: existing.id });
+    if (existing) {
+      deleteMutation.mutate({ id: existing.id });
+    } else {
+      // 若排班不存在（例如尚未儲存），直接關閉
+      setShowModal(false);
+    }
     setConfirmDeleteSchedule(false);
   };
 
@@ -527,7 +536,7 @@ function WeekTab() {
                       ))}
                     </View>
                   ) : (
-                    <Text style={{ fontSize: 9, color: "#CBD5E1" }}>{isWeekend ? "休" : "—"}</Text>
+                    <Text style={{ fontSize: 9, color: "#CBD5E1" }}>—</Text>
                   )}
                 </TouchableOpacity>
               );
@@ -621,21 +630,41 @@ function WeekTab() {
 
             {/* Shift Section */}
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 10 }}>班次設定</Text>
-            {(workShifts ?? []).filter(ws => ws.isActive).length > 0 && (
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", marginBottom: 8 }}>快速套用</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    {(workShifts ?? []).filter(ws => ws.isActive).map(ws => (
-                      <TouchableOpacity key={ws.id} onPress={() => setShifts(prev => [...prev, { startTime: ws.startTime, endTime: ws.endTime, label: ws.name }])} style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#2563EB", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}>
-                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#2563EB" }}>{ws.name}</Text>
-                        <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{ws.startTime} ~ {ws.endTime}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
-            )}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", marginBottom: 8 }}>快速套用</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {/* 快速休假按鈕 */}
+                  {LEAVE_TYPES.map(lt => (
+                    <TouchableOpacity
+                      key={lt.value}
+                      onPress={() => {
+                        setShifts([]);
+                        setLeave({ enabled: true, type: lt.value as LeaveTypeValue, mode: "allDay", start: "09:00", end: "18:00" });
+                      }}
+                      style={{ backgroundColor: lt.bg, borderWidth: 1, borderColor: lt.color, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: lt.color }}>{lt.label}</Text>
+                      <Text style={{ fontSize: 10, color: lt.color, marginTop: 2, opacity: 0.8 }}>整天</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {/* 工作時段快速套用 */}
+                  {(workShifts ?? []).filter(ws => ws.isActive).map(ws => (
+                    <TouchableOpacity
+                      key={ws.id}
+                      onPress={() => {
+                        setLeave(p => ({ ...p, enabled: false }));
+                        setShifts(prev => [...prev, { startTime: ws.startTime, endTime: ws.endTime, label: ws.name }]);
+                      }}
+                      style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#2563EB", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#2563EB" }}>{ws.name}</Text>
+                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{ws.startTime} ~ {ws.endTime}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
             {shifts.map((shift, i) => (
               <View key={i} style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
