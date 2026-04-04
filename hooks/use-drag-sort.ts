@@ -3,17 +3,16 @@ import { Platform } from "react-native";
 
 /**
  * A touch + mouse drag-sort hook for web.
- * - Long press (500ms) to activate drag on touch devices
- * - Mouse: long press (300ms) to activate drag
  *
- * Ghost card positioning strategy:
- * - ghostLeft = card's rect.left (fixed horizontal, matches card column exactly)
- * - ghostTop  = clientY - cursorOffsetInCard (vertical follows cursor, offset from card top)
- * - Both use position:fixed in the rendered ghost card
+ * Key design:
+ * - itemRefs uses a Map<string, HTMLElement> keyed by a unique string ID (not array index)
+ *   This prevents ref collisions when the same item appears in multiple rendered groups.
+ * - getCardRef(index, id) stores the element under the ID key
+ * - getHandleHandlersOnly(index, id, label) looks up the element by ID
  *
- * Why not use rect.top for ghostTop?
- * - React Native Web's ScrollView adds transform:translateZ(0) which breaks position:fixed
- *   relative-to-viewport behaviour for children. Using clientY directly avoids this.
+ * Ghost card positioning:
+ * - Uses fixed full-screen overlay + absolute inner card
+ * - ghostLeft = card rect.left, ghostTop = clientY - cursorOffsetInCard
  */
 export function useDragSort<T>({
   items,
@@ -28,9 +27,8 @@ export function useDragSort<T>({
   const isDragging = useRef(false);
   const startPos = useRef<{ x: number; y: number } | null>(null);
 
-  // At drag start: record card's left edge and the cursor's offset from card top
-  const cardLeft = useRef<number>(0);
-  const cursorOffsetInCard = useRef<number>(0); // clientY - card.rect.top at drag start
+  // At drag start: cursor offset from card top
+  const cursorOffsetInCard = useRef<number>(0);
 
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [overActiveIndex, setOverActiveIndex] = useState<number | null>(null);
@@ -40,8 +38,10 @@ export function useDragSort<T>({
   const [ghostLabel, setGhostLabel] = useState<string>("");
   const [ghostSize, setGhostSize] = useState<{ width: number; height: number }>({ width: 200, height: 56 });
 
-  // itemRefs stores the CARD element (not the handle)
-  const itemRefs = useRef<(HTMLElement | null)[]>([]);
+  // itemRefs: keyed by unique string ID (not array index) to avoid collisions
+  const itemRefMap = useRef<Map<string, HTMLElement>>(new Map());
+  // Also keep an index→id mapping so we can look up by index during drag-over detection
+  const indexToId = useRef<Map<number, string>>(new Map());
 
   const finishDrag = useCallback(() => {
     if (longPressTimer.current) {
@@ -63,7 +63,7 @@ export function useDragSort<T>({
     setGhostVisible(false);
   }, [items, onReorder]);
 
-  const activateDrag = useCallback((index: number, label: string | undefined, clientX: number, clientY: number) => {
+  const activateDrag = useCallback((index: number, id: string, label: string | undefined, clientX: number, clientY: number) => {
     isDragging.current = true;
     dragIndex.current = index;
     overIndex.current = index;
@@ -71,11 +71,10 @@ export function useDragSort<T>({
     setOverActiveIndex(index);
     setGhostLabel(label ?? String(index + 1));
 
-    const cardEl = itemRefs.current[index];
+    const cardEl = itemRefMap.current.get(id);
     if (cardEl) {
       const rect = cardEl.getBoundingClientRect();
-      cardLeft.current = rect.left;
-      cursorOffsetInCard.current = clientY - rect.top; // how far from card top the cursor is
+      cursorOffsetInCard.current = clientY - rect.top;
       setGhostSize({ width: rect.width, height: rect.height });
       setGhostLeft(rect.left);
       setGhostTop(clientY - cursorOffsetInCard.current); // = rect.top at start
@@ -85,25 +84,35 @@ export function useDragSort<T>({
   }, []);
 
   const updateGhostPos = useCallback((clientY: number) => {
-    // left stays fixed at card's left edge
-    // top = clientY - cursorOffsetInCard (so cursor stays at same relative position in card)
     setGhostTop(clientY - cursorOffsetInCard.current);
   }, []);
 
   /**
    * Returns a ref callback to attach to the CARD element.
+   * @param index - position in localShifts array
+   * @param id - unique string ID of the item (e.g. shift.id)
    */
-  const getCardRef = useCallback((index: number) => {
+  const getCardRef = useCallback((index: number, id: string) => {
     if (Platform.OS !== "web") return undefined;
+    indexToId.current.set(index, id);
     // @ts-ignore
-    return (el: HTMLElement | null) => { itemRefs.current[index] = el; };
+    return (el: HTMLElement | null) => {
+      if (el) {
+        itemRefMap.current.set(id, el);
+      } else {
+        // Only delete if this ref is still pointing to the same element
+        // (avoid deleting when a second group renders the same id)
+      }
+    };
   }, []);
 
   /**
    * Returns event handlers to attach to the drag HANDLE element (☰ icon).
-   * Does NOT include ref.
+   * @param index - position in localShifts array
+   * @param id - unique string ID of the item
+   * @param label - display label for ghost card
    */
-  const getHandleHandlersOnly = useCallback((index: number, label?: string) => {
+  const getHandleHandlersOnly = useCallback((index: number, id: string, label?: string) => {
     if (Platform.OS !== "web") return {};
 
     return {
@@ -114,7 +123,7 @@ export function useDragSort<T>({
         startPos.current = { x: touch.clientX, y: touch.clientY };
 
         longPressTimer.current = setTimeout(() => {
-          activateDrag(index, label, touch.clientX, touch.clientY);
+          activateDrag(index, id, label, touch.clientX, touch.clientY);
           if (typeof navigator !== "undefined" && (navigator as any).vibrate) {
             (navigator as any).vibrate(30);
           }
@@ -133,9 +142,11 @@ export function useDragSort<T>({
         if (!isDragging.current) return;
         e.preventDefault();
         updateGhostPos(touch.clientY);
-        const elements = itemRefs.current;
-        for (let i = 0; i < elements.length; i++) {
-          const el = elements[i];
+        // Detect over index by checking all card rects
+        for (let i = 0; i < items.length; i++) {
+          const itemId = indexToId.current.get(i);
+          if (!itemId) continue;
+          const el = itemRefMap.current.get(itemId);
           if (!el) continue;
           const rect = el.getBoundingClientRect();
           if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
@@ -160,7 +171,7 @@ export function useDragSort<T>({
         startPos.current = { x: e.clientX, y: e.clientY };
 
         longPressTimer.current = setTimeout(() => {
-          activateDrag(index, label, e.clientX, e.clientY);
+          activateDrag(index, id, label, e.clientX, e.clientY);
         }, 300);
 
         const onMouseMove = (ev: MouseEvent) => {
@@ -173,11 +184,12 @@ export function useDragSort<T>({
           }
           if (!isDragging.current) return;
           updateGhostPos(ev.clientY);
-          const elements = itemRefs.current;
-          for (let i = 0; i < elements.length; i++) {
-            const elItem = elements[i];
-            if (!elItem) continue;
-            const rect = elItem.getBoundingClientRect();
+          for (let i = 0; i < items.length; i++) {
+            const itemId = indexToId.current.get(i);
+            if (!itemId) continue;
+            const el = itemRefMap.current.get(itemId);
+            if (!el) continue;
+            const rect = el.getBoundingClientRect();
             if (ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
               overIndex.current = i;
               setOverActiveIndex(i);
@@ -194,19 +206,20 @@ export function useDragSort<T>({
         window.addEventListener("mouseup", onMouseUp);
       },
     };
-  }, [activateDrag, updateGhostPos, finishDrag]);
+  }, [activateDrag, updateGhostPos, finishDrag, items]);
 
-  // Legacy combined handler for backward compat
+  // Legacy combined handler (index-only, no id) for backward compat
   const getHandleHandlers = useCallback((index: number, label?: string) => {
+    const id = String(index);
     return {
-      ref: getCardRef(index),
-      ...getHandleHandlersOnly(index, label),
+      ref: getCardRef(index, id),
+      ...getHandleHandlersOnly(index, id, label),
     };
   }, [getCardRef, getHandleHandlersOnly]);
 
   const getItemHandlers = getHandleHandlers;
 
-  // Expose ghostPos as {x, y} for backward compat, and ghostOffset as {x:0, y:0}
+  // Expose ghostPos as {x, y} for backward compat
   const ghostPos = ghostVisible ? { x: ghostLeft, y: ghostTop } : null;
   const ghostOffset = { x: 0, y: 0 };
 
