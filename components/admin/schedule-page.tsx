@@ -1150,6 +1150,7 @@ function MonthTab() {
 // WORK SHIFTS TAB
 // ═══════════════════════════════════════════════════════════════════════════
 type WorkShift = { id: number; name: string; startTime: string; endTime: string; isDefaultWeekday: boolean; isDefaultHoliday: boolean; isActive: boolean; sortOrder: number };
+type ShiftGroup = { id: string; name: string; shiftIds: number[] };
 const INITIAL_FORM = { name: "", startTime: "09:00", endTime: "18:00", isDefaultWeekday: false, isDefaultHoliday: false };
 
 function WorkShiftsTab() {
@@ -1161,14 +1162,31 @@ function WorkShiftsTab() {
   const [confirmDeleteShift, setConfirmDeleteShift] = useState<{ id: number; name: string } | null>(null);
   const [localShifts, setLocalShifts] = useState<WorkShift[]>([]);
 
+  // 分組管理狀態
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groups, setGroups] = useState<ShiftGroup[]>([]);
+  const [groupsSaving, setGroupsSaving] = useState(false);
+
   const { data: shifts, refetch, isLoading } = trpc.workShifts.list.useQuery();
   const createMutation = trpc.workShifts.create.useMutation({ onSuccess: () => { refetch(); setShowModal(false); } });
   const updateMutation = trpc.workShifts.update.useMutation({ onSuccess: () => { refetch(); setShowModal(false); } });
   const deleteMutation = trpc.workShifts.delete.useMutation({ onSuccess: () => refetch() });
   const reorderMutation = trpc.workShifts.reorder.useMutation();
+  const { data: settingsData, refetch: refetchSettings } = trpc.settings.getAll.useQuery();
+  const setSettingMutation = trpc.settings.set.useMutation();
 
   // Sync local state when server data arrives
   useEffect(() => { if (shifts) setLocalShifts(shifts as WorkShift[]); }, [shifts]);
+
+  // 載入分組設定
+  useEffect(() => {
+    if (settingsData && settingsData.shift_groups) {
+      try {
+        const parsed = JSON.parse(settingsData.shift_groups);
+        if (Array.isArray(parsed)) setGroups(parsed);
+      } catch {}
+    }
+  }, [settingsData]);
 
   const { getHandleHandlers: getShiftHandlers, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize } = useDragSort({
     items: localShifts,
@@ -1194,6 +1212,47 @@ function WorkShiftsTab() {
     setConfirmDeleteShift({ id, name });
   };
 
+  // 分組管理函數
+  const openGroupModal = () => {
+    setShowGroupModal(true);
+  };
+
+  const addGroup = () => {
+    const newGroup: ShiftGroup = {
+      id: Date.now().toString(),
+      name: "",
+      shiftIds: [],
+    };
+    setGroups(prev => [...prev, newGroup]);
+  };
+
+  const updateGroupName = (id: string, name: string) => {
+    setGroups(prev => prev.map(g => g.id === id ? { ...g, name } : g));
+  };
+
+  const toggleShiftInGroup = (groupId: string, shiftId: number) => {
+    setGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      const has = g.shiftIds.includes(shiftId);
+      return { ...g, shiftIds: has ? g.shiftIds.filter(id => id !== shiftId) : [...g.shiftIds, shiftId] };
+    }));
+  };
+
+  const deleteGroup = (id: string) => {
+    setGroups(prev => prev.filter(g => g.id !== id));
+  };
+
+  const saveGroups = async () => {
+    setGroupsSaving(true);
+    try {
+      await setSettingMutation.mutateAsync({ key: "shift_groups", value: JSON.stringify(groups) });
+      await refetchSettings();
+      setShowGroupModal(false);
+    } finally {
+      setGroupsSaving(false);
+    }
+  };
+
   return (
     <>
       <ConfirmDialog
@@ -1205,7 +1264,10 @@ function WorkShiftsTab() {
         onConfirm={() => { if (confirmDeleteShift) deleteMutation.mutate({ id: confirmDeleteShift.id }); setConfirmDeleteShift(null); }}
         onCancel={() => setConfirmDeleteShift(null)}
       />
-      <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>
+      <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
+        <TouchableOpacity onPress={openGroupModal} style={{ backgroundColor: "#F1F5F9", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: "#E2E8F0" }}>
+          <Text style={{ color: "#475569", fontWeight: "600", fontSize: 14 }}>⊞ 管理分組</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={openCreate} style={{ backgroundColor: "#2563EB", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 }}>
           <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>+ 新增班次</Text>
         </TouchableOpacity>
@@ -1299,7 +1361,87 @@ function WorkShiftsTab() {
         </>
       )}
 
-      {/* Modal */}
+      {/* 分組管理 Modal */}
+      <Modal visible={showGroupModal} transparent animationType="slide" onRequestClose={() => setShowGroupModal(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "90%" as any }}>
+            {/* Header */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#1E293B" }}>管理班次分組</Text>
+              <TouchableOpacity onPress={() => setShowGroupModal(false)}>
+                <Text style={{ fontSize: 20, color: "#94A3B8" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding: 16 }} contentContainerStyle={{ gap: 16, paddingBottom: 20 }}>
+              {groups.length === 0 && (
+                <View style={{ alignItems: "center", paddingVertical: 24 }}>
+                  <Text style={{ fontSize: 14, color: "#94A3B8" }}>尚未建立任何分組</Text>
+                  <Text style={{ fontSize: 12, color: "#CBD5E1", marginTop: 4 }}>點擊下方「新增分組」開始建立</Text>
+                </View>
+              )}
+              {groups.map((group) => (
+                <View key={group.id} style={{ backgroundColor: "#F8FAFC", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                  {/* 分組名稱 */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <TextInput
+                      value={group.name}
+                      onChangeText={v => updateGroupName(group.id, v)}
+                      placeholder="分組名稱（例：內場、外場、PT）"
+                      style={{ flex: 1, backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: "#1E293B" }}
+                      placeholderTextColor="#94A3B8"
+                      returnKeyType="done"
+                    />
+                    <TouchableOpacity onPress={() => deleteGroup(group.id)} style={{ backgroundColor: "#FEF2F2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 }}>
+                      <Text style={{ color: "#EF4444", fontSize: 13 }}>刪除</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {/* 班次 checkbox 列表 */}
+                  <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 8, fontWeight: "600" }}>選擇屬於此分組的班次：</Text>
+                  {localShifts.length === 0 ? (
+                    <Text style={{ fontSize: 12, color: "#94A3B8" }}>尚未建立班次</Text>
+                  ) : (
+                    <View style={{ gap: 6 }}>
+                      {localShifts.map(shift => {
+                        const checked = group.shiftIds.includes(shift.id);
+                        return (
+                          <TouchableOpacity
+                            key={shift.id}
+                            onPress={() => toggleShiftInGroup(group.id, shift.id)}
+                            style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 }}
+                          >
+                            <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: checked ? "#2563EB" : "#CBD5E1", backgroundColor: checked ? "#2563EB" : "white", alignItems: "center", justifyContent: "center" }}>
+                              {checked && <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>✓</Text>}
+                            </View>
+                            <Text style={{ fontSize: 14, color: "#1E293B" }}>{shift.name}</Text>
+                            <Text style={{ fontSize: 12, color: "#94A3B8" }}>{shift.startTime}~{shift.endTime}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              ))}
+              <TouchableOpacity
+                onPress={addGroup}
+                style={{ borderWidth: 1.5, borderColor: "#2563EB", borderStyle: "dashed" as any, borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
+              >
+                <Text style={{ color: "#2563EB", fontWeight: "600", fontSize: 14 }}>+ 新增分組</Text>
+              </TouchableOpacity>
+            </ScrollView>
+            {/* Footer buttons */}
+            <View style={{ flexDirection: "row", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+              <TouchableOpacity onPress={() => setShowGroupModal(false)} style={{ flex: 1, backgroundColor: "#F1F5F9", borderRadius: 12, paddingVertical: 13, alignItems: "center" }}>
+                <Text style={{ color: "#64748B", fontWeight: "600" }}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveGroups} disabled={groupsSaving} style={{ flex: 1, backgroundColor: groupsSaving ? "#93C5FD" : "#2563EB", borderRadius: 12, paddingVertical: 13, alignItems: "center" }}>
+                <Text style={{ color: "white", fontWeight: "600" }}>{groupsSaving ? "儲存中..." : "儲存"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 班次新增/編輯 Modal */}
       <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
           <View style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 }}>
