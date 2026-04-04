@@ -1312,13 +1312,32 @@ function WorkShiftsTab() {
     }
   }, [settingsData]);
 
-  const moveShift = (index: number, direction: "up" | "down") => {
-    const newList = [...localShifts];
+  // 全域排序（未分組區塊使用）
+  const moveShift = (index: number, direction: "up" | "down", shiftList: WorkShift[]) => {
     const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= newList.length) return;
-    [newList[index], newList[targetIndex]] = [newList[targetIndex], newList[index]];
+    if (targetIndex < 0 || targetIndex >= shiftList.length) return;
+    // 在全域 localShifts 中找到這兩個元素並交換
+    const newList = [...localShifts];
+    const idA = shiftList[index].id;
+    const idB = shiftList[targetIndex].id;
+    const globalA = newList.findIndex(s => s.id === idA);
+    const globalB = newList.findIndex(s => s.id === idB);
+    if (globalA === -1 || globalB === -1) return;
+    [newList[globalA], newList[globalB]] = [newList[globalB], newList[globalA]];
     setLocalShifts(newList);
     reorderMutation.mutate({ orderedIds: newList.map(s => s.id) });
+  };
+
+  // 分組內部排序
+  const moveShiftInGroup = (groupId: string, index: number, direction: "up" | "down", groupShifts: WorkShift[]) => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= groupShifts.length) return;
+    const newGroupShiftIds = groupShifts.map(s => s.id);
+    [newGroupShiftIds[index], newGroupShiftIds[targetIndex]] = [newGroupShiftIds[targetIndex], newGroupShiftIds[index]];
+    const newGroups = groups.map(g => g.id === groupId ? { ...g, shiftIds: newGroupShiftIds } : g);
+    setGroups(newGroups);
+    // 儲存分組設定
+    setSettingMutation.mutate({ key: "shift_groups", value: JSON.stringify(newGroups) });
   };
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
@@ -1415,9 +1434,16 @@ function WorkShiftsTab() {
             const assignedShiftIds = new Set(groups.flatMap(g => g.shiftIds));
             const ungroupedShifts = localShifts.filter(s => !assignedShiftIds.has(s.id));
 
-            const renderShiftCard = (item: WorkShift, index: number) => (
+            // renderShiftCard 接受獨立的 onMoveUp/onMoveDown，讓分組和未分組各自排序不互相影響
+            const renderShiftCard = (
+              item: WorkShift,
+              index: number,
+              listLength: number,
+              onMoveUp: () => void,
+              onMoveDown: () => void
+            ) => (
               <View
-                key={item.id}
+                key={`${item.id}`}
                 style={{
                   backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1,
                   borderColor: "#F1F5F9",
@@ -1428,19 +1454,19 @@ function WorkShiftsTab() {
                 }}
               >
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  {/* 上移/下移按鈕 */}
+                  {/* 上移/下移按鈕 - 在各自清單內獨立排序 */}
                   <View style={{ flexDirection: "column", gap: 2, paddingRight: 10 }}>
                     <TouchableOpacity
-                      onPress={() => moveShift(index, "up")}
+                      onPress={onMoveUp}
                       style={{ opacity: index === 0 ? 0.2 : 1, padding: 2 }}
                       disabled={index === 0}
                     >
                       <Text style={{ fontSize: 14, color: "#64748B", lineHeight: 16 }}>▲</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => moveShift(index, "down")}
-                      style={{ opacity: index === localShifts.length - 1 ? 0.2 : 1, padding: 2 }}
-                      disabled={index === localShifts.length - 1}
+                      onPress={onMoveDown}
+                      style={{ opacity: index === listLength - 1 ? 0.2 : 1, padding: 2 }}
+                      disabled={index === listLength - 1}
                     >
                       <Text style={{ fontSize: 14, color: "#64748B", lineHeight: 16 }}>▼</Text>
                     </TouchableOpacity>
@@ -1467,9 +1493,12 @@ function WorkShiftsTab() {
 
             return (
               <>
-                {/* 已分組的班次 */}
+                {/* 已分組的班次 - 每個分組獨立排序，互不影響 */}
                 {groups.filter(g => g.name.trim()).map(group => {
-                  const groupShifts = localShifts.filter(s => group.shiftIds.includes(s.id));
+                  // 依照 group.shiftIds 的順序顯示（保留分組內排序）
+                  const groupShifts = group.shiftIds
+                    .map(id => localShifts.find(s => s.id === id))
+                    .filter((s): s is WorkShift => !!s);
                   if (groupShifts.length === 0) return null;
                   return (
                     <View key={group.id} style={{ marginBottom: 16 }}>
@@ -1478,10 +1507,15 @@ function WorkShiftsTab() {
                         <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748B", paddingHorizontal: 4 }}>{group.name}</Text>
                         <View style={{ height: 1, flex: 1, backgroundColor: "#E2E8F0" }} />
                       </View>
-                      {groupShifts.map(item => {
-                        const index = localShifts.findIndex(s => s.id === item.id);
-                        return renderShiftCard(item, index);
-                      })}
+                      {groupShifts.map((item, idx) =>
+                        renderShiftCard(
+                          item,
+                          idx,
+                          groupShifts.length,
+                          () => moveShiftInGroup(group.id, idx, "up", groupShifts),
+                          () => moveShiftInGroup(group.id, idx, "down", groupShifts)
+                        )
+                      )}
                     </View>
                   );
                 })}
@@ -1495,10 +1529,15 @@ function WorkShiftsTab() {
                         <View style={{ height: 1, flex: 1, backgroundColor: "#E2E8F0" }} />
                       </View>
                     )}
-                    {ungroupedShifts.map(item => {
-                      const index = localShifts.findIndex(s => s.id === item.id);
-                      return renderShiftCard(item, index);
-                    })}
+                    {ungroupedShifts.map((item, idx) =>
+                      renderShiftCard(
+                        item,
+                        idx,
+                        ungroupedShifts.length,
+                        () => moveShift(idx, "up", ungroupedShifts),
+                        () => moveShift(idx, "down", ungroupedShifts)
+                      )
+                    )}
                   </View>
                 )}
               </>
