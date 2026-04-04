@@ -372,9 +372,48 @@ function ShiftsSettings() {
         <Text style={{ color: "white", fontSize: 15, fontWeight: "600" }}>+ 新增工作時段</Text>
       </TouchableOpacity>
 
-      <ShiftGroup catKey="indoor" items={indoorShifts} onEdit={handleEdit} onDelete={handleDeletePress} />
-      <ShiftGroup catKey="outdoor" items={outdoorShifts} onEdit={handleEdit} onDelete={handleDeletePress} />
-      <ShiftGroup catKey="pt" items={ptShifts} onEdit={handleEdit} onDelete={handleDeletePress} />
+      {allShifts.map((shift) => {
+        const catKey = (shift.category ?? "indoor") as keyof typeof SHIFT_CATEGORY_CONFIG;
+        const dayKey = (shift.dayType ?? "both") as keyof typeof SHIFT_DAY_TYPE_CONFIG;
+        const cat = SHIFT_CATEGORY_CONFIG[catKey] ?? SHIFT_CATEGORY_CONFIG.indoor;
+        const day = SHIFT_DAY_TYPE_CONFIG[dayKey] ?? SHIFT_DAY_TYPE_CONFIG.both;
+        return (
+          <View key={shift.id} style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: "#F1F5F9" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{shift.name}</Text>
+                  <View style={{ backgroundColor: cat.bg, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: cat.border }}>
+                    <Text style={{ fontSize: 11, color: cat.color, fontWeight: "600" }}>{cat.label}</Text>
+                  </View>
+                  <View style={{ backgroundColor: day.bg, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: day.border }}>
+                    <Text style={{ fontSize: 11, color: day.color, fontWeight: "600" }}>{day.label}</Text>
+                  </View>
+                  {shift.isDefaultWeekday && (
+                    <View style={{ backgroundColor: "#EFF6FF", borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 11, color: "#2563EB", fontWeight: "600" }}>平日預設</Text>
+                    </View>
+                  )}
+                  {shift.isDefaultHoliday && (
+                    <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>假日預設</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={{ fontSize: 14, color: "#475569" }}>🕐 {shift.startTime} ~ {shift.endTime}</Text>
+              </View>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity onPress={() => handleEdit(shift)} style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                  <Text style={{ color: "#1E40AF", fontSize: 13 }}>編輯</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDeletePress(shift)} style={{ backgroundColor: "#FEE2E2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                  <Text style={{ color: "#DC2626", fontSize: 13 }}>刪除</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        );
+      })}
 
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
