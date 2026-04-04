@@ -9,9 +9,9 @@ import { Platform } from "react-native";
  * - Ghost card anchors to the point where the user pressed (not centered)
  *
  * Usage:
- *   const { getHandleHandlers, ghostPos, ghostLabel, ghostSize, ghostOffset, activeIndex, overActiveIndex } = useDragSort({ items, onReorder });
- *   // Attach getHandleHandlers to the drag handle element (left side ☰ icon)
- *   // Attach item ref via itemRefs to each list item for position detection
+ *   const { getCardRef, getHandleHandlers, ghostPos, ghostOffset, ghostLabel, ghostSize, activeIndex, overActiveIndex } = useDragSort({ items, onReorder });
+ *   // Attach getCardRef to the card element (for size/position detection)
+ *   // Attach getHandleHandlers to the drag handle element (☰ icon) for events only
  */
 export function useDragSort<T>({
   items,
@@ -33,6 +33,7 @@ export function useDragSort<T>({
   const [ghostSize, setGhostSize] = useState<{ width: number; height: number }>({ width: 200, height: 56 });
   // Offset from card's top-left corner to the press point
   const [ghostOffset, setGhostOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  // itemRefs stores the CARD element (not the handle), for accurate rect detection
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
 
   const finishDrag = useCallback(() => {
@@ -55,14 +56,24 @@ export function useDragSort<T>({
     setGhostPos(null);
   }, [items, onReorder]);
 
-  // Returns handlers to attach to the drag HANDLE element (☰ icon), not the whole card
+  /**
+   * Returns a ref callback to attach to the CARD element.
+   * This stores the card's DOM element for size/position detection.
+   */
+  const getCardRef = useCallback((index: number) => {
+    if (Platform.OS !== "web") return undefined;
+    // @ts-ignore
+    return (el: HTMLElement | null) => { itemRefs.current[index] = el; };
+  }, []);
+
+  /**
+   * Returns event handlers to attach to the drag HANDLE element (☰ icon).
+   * Does NOT include ref — attach getCardRef separately to the card.
+   */
   const getHandleHandlers = useCallback((index: number, label?: string) => {
     if (Platform.OS !== "web") return {};
 
     return {
-      // @ts-ignore
-      ref: (el: HTMLElement | null) => { itemRefs.current[index] = el; },
-
       // ── Touch: long press 500ms to start drag ──────────────────────────────
       onTouchStart: (e: React.TouchEvent) => {
         e.stopPropagation();
@@ -77,12 +88,11 @@ export function useDragSort<T>({
           setOverActiveIndex(index);
           setGhostLabel(label ?? String(index + 1));
           setGhostPos({ x: touch.clientX, y: touch.clientY });
-          // Capture size and compute offset from card top-left to press point
-          const el = itemRefs.current[index];
-          if (el) {
-            const rect = el.getBoundingClientRect();
+          // Use CARD rect (itemRefs) for accurate size and offset calculation
+          const cardEl = itemRefs.current[index];
+          if (cardEl) {
+            const rect = cardEl.getBoundingClientRect();
             setGhostSize({ width: rect.width, height: rect.height });
-            // Offset = press point relative to card's top-left corner
             setGhostOffset({
               x: touch.clientX - rect.left,
               y: touch.clientY - rect.top,
@@ -110,9 +120,8 @@ export function useDragSort<T>({
         }
         if (!isDragging.current) return;
         e.preventDefault();
-        // Ghost follows finger using fixed coordinates (viewport-relative)
         setGhostPos({ x: touch.clientX, y: touch.clientY });
-        // Detect which item we're hovering over
+        // Detect which card we're hovering over using card rects
         const elements = itemRefs.current;
         for (let i = 0; i < elements.length; i++) {
           const el = elements[i];
@@ -153,11 +162,11 @@ export function useDragSort<T>({
           setOverActiveIndex(index);
           setGhostLabel(label ?? String(index + 1));
           setGhostPos({ x: e.clientX, y: e.clientY });
-          const el = itemRefs.current[index];
-          if (el) {
-            const rect = el.getBoundingClientRect();
+          // Use CARD rect (itemRefs) for accurate size and offset calculation
+          const cardEl = itemRefs.current[index];
+          if (cardEl) {
+            const rect = cardEl.getBoundingClientRect();
             setGhostSize({ width: rect.width, height: rect.height });
-            // Offset = press point relative to card's top-left corner
             setGhostOffset({
               x: e.clientX - rect.left,
               y: e.clientY - rect.top,
@@ -201,12 +210,22 @@ export function useDragSort<T>({
     };
   }, [finishDrag]);
 
-  // Keep backward compat: getItemHandlers now just wraps getHandleHandlers
+  // Keep backward compat
   const getItemHandlers = getHandleHandlers;
+
+  // Legacy combined handler (ref + events) — kept for backward compat but ref is now a no-op
+  const getHandleHandlersLegacy = useCallback((index: number, label?: string) => {
+    return {
+      ref: getCardRef(index),
+      ...getHandleHandlers(index, label),
+    };
+  }, [getCardRef, getHandleHandlers]);
 
   return {
     getItemHandlers,
-    getHandleHandlers,
+    getHandleHandlers: getHandleHandlersLegacy,
+    getCardRef,
+    getHandleHandlersOnly: getHandleHandlers,
     activeIndex,
     overActiveIndex,
     ghostPos,

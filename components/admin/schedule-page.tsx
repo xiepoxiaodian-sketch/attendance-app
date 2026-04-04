@@ -1312,7 +1312,7 @@ function WorkShiftsTab() {
     }
   }, [settingsData]);
 
-  const { getHandleHandlers: getShiftHandlers, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize, ghostOffset: shiftGhostOffset } = useDragSort({
+  const { getCardRef: getShiftCardRef, getHandleHandlersOnly: getShiftHandleOnly, activeIndex: shiftActiveIndex, overActiveIndex: shiftOverIndex, ghostPos: shiftGhostPos, ghostLabel: shiftGhostLabel, ghostSize: shiftGhostSize, ghostOffset: shiftGhostOffset } = useDragSort({
     items: localShifts,
     onReorder: (newList) => {
       setLocalShifts(newList);
@@ -1448,7 +1448,7 @@ function WorkShiftsTab() {
               <View
                 key={item.id}
                 // @ts-ignore
-                ref={(el: HTMLElement | null) => { (getShiftHandlers(index, item.name) as any).ref?.(el); }}
+                ref={getShiftCardRef(index)}
                 style={{
                   backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1,
                   borderColor: shiftOverIndex === index ? "#2563EB" : "#F1F5F9",
@@ -1461,7 +1461,7 @@ function WorkShiftsTab() {
               >
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <View
-                    {...(getShiftHandlers(index, item.name) as object)}
+                    {...(getShiftHandleOnly(index, item.name) as object)}
                     style={{ justifyContent: "center", paddingRight: 10, paddingLeft: 2, paddingVertical: 4, cursor: "grab", userSelect: "none" } as unknown as object}
                   >
                     <Text style={{ fontSize: 20, color: "#94A3B8" }}>⠿</Text>
