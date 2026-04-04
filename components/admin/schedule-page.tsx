@@ -63,7 +63,7 @@ function WeekTab() {
   const [showModal, setShowModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>("");
-  const [shifts, setShifts] = useState<ShiftEntry[]>([{ startTime: "09:00", endTime: "18:00", label: "班次1" }]);
+  const [shifts, setShifts] = useState<ShiftEntry[]>([]);
   const [leave, setLeave] = useState<{ enabled: boolean; type: LeaveTypeValue; mode: "allDay" | "partial"; start: string; end: string }>({
     enabled: false, type: "annual", mode: "allDay", start: "09:00", end: "18:00",
   });
@@ -135,8 +135,7 @@ function WeekTab() {
     if (existing?.shifts?.length) {
       setShifts(existing.shifts);
     } else {
-      const def = workShifts?.find(s => s.isDefaultWeekday && s.isActive);
-      setShifts(def ? [{ startTime: def.startTime, endTime: def.endTime, label: "班次1" }] : [{ startTime: "09:00", endTime: "18:00", label: "班次1" }]);
+      setShifts([]);
     }
     if (existing?.leaveType) {
       setLeave({ enabled: true, type: existing.leaveType as LeaveTypeValue, mode: (existing.leaveMode ?? "allDay") as "allDay" | "partial", start: existing.leaveStart ?? "09:00", end: existing.leaveEnd ?? "18:00" });
