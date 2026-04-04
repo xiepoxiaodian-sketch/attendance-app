@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { Platform } from "react-native";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal,
   ActivityIndicator, FlatList, TextInput, Switch, RefreshControl,
@@ -72,6 +73,77 @@ function WeekTab() {
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState(false);
   const [staffingPopup, setStaffingPopup] = useState<{ dateStr: string; slot: number; names: string[] } | null>(null);
   const [showStaffingView, setShowStaffingView] = useState(true);
+
+  const handlePrint = () => {
+    if (Platform.OS !== "web") return;
+    const dateRange = `${weekDates[0].toLocaleDateString("zh-TW", { month: "long", day: "numeric" })} – ${weekDates[6].toLocaleDateString("zh-TW", { month: "long", day: "numeric" })}`;
+    const year = weekDates[0].getFullYear();
+    const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
+    const LEAVE_LABEL: Record<string, string> = {
+      annual: "特休", sick: "病假", personal: "事假",
+      marriage: "婚假", bereavement: "喪假", official: "公假", other: "假",
+    };
+    const colHeaders = weekDates.map(d => {
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+      return `<th style="background:${isWeekend ? "#F1F5F9" : "#1E40AF"};color:${isWeekend ? "#64748B" : "white"};padding:8px 4px;font-size:12px;text-align:center;border:1px solid #CBD5E1;">
+        <div style="font-weight:700">${WEEKDAY_LABELS[d.getDay()]}</div>
+        <div style="font-size:11px;margin-top:2px">${d.getMonth() + 1}/${d.getDate()}</div>
+      </th>`;
+    }).join("");
+    const rows = activeEmployees.map(emp => {
+      const cells = weekDates.map(d => {
+        const dateStr = toDateStr(d);
+        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+        const schedule = scheduleMap[emp.id]?.[dateStr];
+        const hasSchedule = !!schedule?.shifts?.length;
+        let cellContent = `<span style="color:#CBD5E1">—</span>`;
+        let cellBg = isWeekend ? "#F8FAFC" : "white";
+        if (schedule?.leaveType && schedule.leaveMode === "allDay") {
+          const lbl = LEAVE_LABEL[schedule.leaveType] ?? "假";
+          cellBg = "#FEF2F2";
+          cellContent = `<span style="color:#DC2626;font-weight:700;font-size:12px">${lbl}</span>`;
+        } else if (hasSchedule) {
+          cellBg = "#EFF6FF";
+          cellContent = schedule.shifts.map((sh: any) =>
+            `<div style="font-size:11px;color:#1D4ED8;font-weight:600;line-height:1.4">${sh.startTime}<br/><span style="color:#93C5FD;font-size:10px">↓</span><br/>${sh.endTime}</div>`
+          ).join(`<div style="border-top:1px dashed #BFDBFE;margin:2px 0"></div>`);
+        }
+        return `<td style="background:${cellBg};padding:6px 4px;text-align:center;border:1px solid #E2E8F0;min-width:60px;vertical-align:middle">${cellContent}</td>`;
+      }).join("");
+      return `<tr>
+        <td style="padding:6px 10px;border:1px solid #E2E8F0;white-space:nowrap;background:#F8FAFC;font-size:12px;font-weight:600;color:#1E293B">${emp.fullName}</td>
+        ${cells}
+      </tr>`;
+    }).join("");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>排班表 ${year} ${dateRange}</title>
+<style>
+  body { font-family: -apple-system, "Microsoft JhengHei", sans-serif; margin: 0; padding: 16px; }
+  h1 { font-size: 18px; color: #1E293B; margin: 0 0 4px; }
+  .meta { font-size: 12px; color: #64748B; margin-bottom: 16px; }
+  table { border-collapse: collapse; width: 100%; }
+  @media print {
+    body { padding: 8px; }
+    button { display: none !important; }
+    @page { size: landscape; margin: 10mm; }
+  }
+</style>
+</head><body>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+  <div>
+    <h1>📅 週排班表</h1>
+    <div class="meta">${year} 年 ${dateRange} &nbsp;·&nbsp; 共 ${activeEmployees.length} 位員工 &nbsp;·&nbsp; 列印時間：${new Date().toLocaleString("zh-TW")}</div>
+  </div>
+  <button onclick="window.print()" style="background:#1E40AF;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;font-weight:600">🖨 列印</button>
+</div>
+<table>
+  <thead><tr><th style="background:#1E40AF;color:white;padding:8px 10px;font-size:12px;text-align:left;border:1px solid #CBD5E1;min-width:70px">員工</th>${colHeaders}</tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+</body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+  };
 
   const weekDates = getWeekDates(weekOffset);
   const startDate = toDateStr(weekDates[0]);
@@ -270,6 +342,14 @@ function WeekTab() {
           <TouchableOpacity onPress={() => setWeekOffset(w => w + 1)} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: "#475569", fontSize: 18, lineHeight: 22 }}>›</Text>
           </TouchableOpacity>
+          {Platform.OS === "web" && (
+            <TouchableOpacity
+              onPress={handlePrint}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#1E40AF", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ fontSize: 13, color: "white", fontWeight: "600" }}>🖨 列印</Text>
+            </TouchableOpacity>
+          )}
         </View>
         <View style={{ flexDirection: "row" }}>
           <View style={{ width: 60 }} />
@@ -719,6 +799,145 @@ function MonthTab() {
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); setSelectedDate(null); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); setSelectedDate(null); };
 
+  const handleMonthPrint = () => {
+    if (Platform.OS !== 'web') return;
+    const LEAVE_LABEL: Record<string, { label: string; bg: string; color: string }> = {
+      annual:      { label: '特休', bg: '#EFF6FF', color: '#2563EB' },
+      sick:        { label: '病假', bg: '#FEF2F2', color: '#DC2626' },
+      personal:    { label: '事假', bg: '#FFFBEB', color: '#D97706' },
+      marriage:    { label: '婚假', bg: '#F5F3FF', color: '#7C3AED' },
+      bereavement: { label: '喪假', bg: '#F8FAFC', color: '#475569' },
+      official:    { label: '公假', bg: '#ECFEFF', color: '#0891B2' },
+      other:       { label: '休假', bg: '#F1F5F9', color: '#64748B' },
+    };
+    const TAG_LABEL: Record<string, string> = { indoor: '內場', outdoor: '外場', supervisor: '幹部' };
+    const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+    const daysCount = getDaysInMonth(year, month);
+    const monthName = `${year} 年 ${month + 1} 月`;
+    const printDate = new Date().toLocaleDateString('zh-TW');
+    // 過濾掉管理員帳號（M 和系統管理員）
+    const printEmployees = activeEmployees.filter(e => e.fullName !== 'M' && e.fullName !== '系統管理員' && (e as any).tag !== 'admin');
+    const totalEmployees = printEmployees.length;
+
+    // Build column headers (day 1..daysCount)
+    const dayHeaders = Array.from({ length: daysCount }, (_, i) => {
+      const d = i + 1;
+      const dateStr = fmtDate(year, month, d);
+      const dow = new Date(year, month, d).getDay();
+      const isWeekend = dow === 0 || dow === 6;
+      const isToday = dateStr === new Date().toISOString().slice(0, 10);
+      const bgColor = isToday ? '#DBEAFE' : isWeekend ? '#F8FAFC' : '#1E40AF';
+      const textColor = isToday ? '#1D4ED8' : isWeekend ? '#64748B' : 'white';
+      return `<th style="background:${bgColor};color:${textColor};padding:2px 1px;font-size:8px;text-align:center;border:1px solid #CBD5E1;white-space:nowrap">
+        <div style="font-weight:700">${d}</div>
+        <div style="font-size:7px;margin-top:1px">${WEEKDAY_LABELS[dow]}</div>
+      </th>`;
+    }).join('');
+
+    // Build employee rows
+    const rows = printEmployees.map(emp => {
+      const tagLabel = TAG_LABEL[(emp as any).tag ?? ''] ?? '';
+      const cells = Array.from({ length: daysCount }, (_, i) => {
+        const d = i + 1;
+        const dateStr = fmtDate(year, month, d);
+        const dow = new Date(year, month, d).getDay();
+        const isWeekend = dow === 0 || dow === 6;
+        const dayData = scheduleMap[dateStr]?.[emp.id];
+        let cellBg = isWeekend ? '#F8FAFC' : 'white';
+        let cellContent = `<span style="color:#CBD5E1">—</span>`;
+        if (dayData?.leaveType) {
+          const lt = LEAVE_LABEL[dayData.leaveType];
+          if (lt) {
+            cellBg = lt.bg;
+            cellContent = `<span style="color:${lt.color};font-weight:700;font-size:8px">${lt.label}</span>`;
+          }
+        } else if (dayData?.shifts?.length) {
+          cellBg = '#EFF6FF';
+          cellContent = dayData.shifts.map((sh: ShiftEntry) =>
+            `<div style="font-size:7px;color:#1D4ED8;font-weight:600;line-height:1.2">${sh.startTime}<br/>${sh.endTime}</div>`
+          ).join('<div style="border-top:1px dashed #BFDBFE;margin:1px 0"></div>');
+        }
+        return `<td style="background:${cellBg};padding:2px 1px;text-align:center;border:1px solid #E2E8F0;vertical-align:middle">${cellContent}</td>`;
+      }).join('');
+      return `<tr>
+        <td style="padding:3px 5px;border:1px solid #E2E8F0;white-space:nowrap;background:#F8FAFC;font-size:9px;font-weight:600;color:#1E293B">${emp.fullName}<br/><span style="font-size:7px;color:#64748B;font-weight:400">${tagLabel}</span></td>
+        ${cells}
+      </tr>`;
+    }).join('');
+
+    // Build daily count rows
+    const countRow = (label: string, filterFn: (emp: typeof printEmployees[0]) => boolean, bg: string, color: string) => {
+      const cells = Array.from({ length: daysCount }, (_, i) => {
+        const d = i + 1;
+        const dateStr = fmtDate(year, month, d);
+        const dow = new Date(year, month, d).getDay();
+        const isWeekend = dow === 0 || dow === 6;
+        const count = activeEmployees.filter(emp => {
+          if (!filterFn(emp)) return false;
+          const dayData = scheduleMap[dateStr]?.[emp.id];
+          return dayData?.shifts?.length && !dayData?.leaveType;
+        }).length;
+        const cellBg = isWeekend ? '#F1F5F9' : bg;
+        return `<td style="background:${cellBg};padding:2px 1px;text-align:center;border:1px solid #E2E8F0;font-size:8px;font-weight:700;color:${count > 0 ? color : '#CBD5E1'}">${count > 0 ? count : '—'}</td>`;
+      }).join('');
+      return `<tr>
+        <td style="padding:3px 5px;border:1px solid #E2E8F0;background:${bg};font-size:9px;font-weight:700;color:${color};white-space:nowrap">${label}</td>
+        ${cells}
+      </tr>`;
+    };
+    const statsRows = [
+      countRow('上班人數', () => true, '#F0FDF4', '#15803D'),
+      countRow('內場', (e) => (e as any).tag === 'indoor', '#EFF6FF', '#1D4ED8'),
+      countRow('外場', (e) => (e as any).tag === 'outdoor', '#F0FDF4', '#15803D'),
+    ].join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>${monthName}排班表</title>
+<style>
+  body { font-family: -apple-system, "Microsoft JhengHei", sans-serif; margin: 0; padding: 8px; }
+  h1 { font-size: 14px; color: #1E293B; margin: 0 0 2px; }
+  .meta { font-size: 9px; color: #64748B; margin-bottom: 6px; }
+  .legend { display: flex; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; align-items: center; }
+  .legend-item { display: flex; align-items: center; gap: 3px; font-size: 9px; color: #475569; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  td, th { overflow: hidden; }
+  @media print {
+    html, body { width: 297mm; height: 210mm; }
+    body { padding: 3mm; margin: 0; }
+    button { display: none !important; }
+    @page { size: A4 landscape; margin: 5mm; }
+    table { font-size: 7px; }
+  }
+</style>
+</head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+  <div>
+    <h1>好好上班 —— ${monthName}排班表</h1>
+    <div class="meta">列印時間：${printDate} &nbsp; 共 ${totalEmployees} 位員工</div>
+  </div>
+  <div style="text-align:right;font-size:9px;color:#475569;line-height:1.6">
+    <div>內場 ● 外場 ● 幹部</div>
+    <div>橫向 A4 / 每格顯示班次時間</div>
+    <button onclick="window.print()" style="margin-top:4px;background:#1E40AF;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;font-weight:600">🖨 列印</button>
+  </div>
+</div>
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:#EFF6FF;border:1px solid #BFDBFE"></span> 正常上班</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#FEF2F2;border:1px solid #FECACA"></span> 請假</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#F8FAFC;border:1px solid #E2E8F0"></span> 休假日（六日）</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#DBEAFE;border:1px solid #93C5FD"></span> 今日</div>
+</div>
+<table>
+  <thead><tr><th style="background:#1E40AF;color:white;padding:3px 5px;font-size:9px;text-align:left;border:1px solid #CBD5E1;min-width:40px;max-width:50px">員工</th>${dayHeaders}</tr></thead>
+  <tbody>${rows}${statsRows}</tbody>
+</table>
+<div style="margin-top:8px;font-size:10px;color:#94A3B8;text-align:right">＊本表為示意預覽，實際列印將使用資料庫即時資料</div>
+</body></html>`;
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
   const daysInMonth = getDaysInMonth(year, month);
   const firstDow = getFirstDow(year, month);
   const todayStr = today.toISOString().slice(0, 10);
@@ -740,9 +959,16 @@ function MonthTab() {
             <Text style={{ fontSize: 20, color: "#2563EB" }}>‹</Text>
           </TouchableOpacity>
           <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>{year} 年 {month + 1} 月</Text>
-          <TouchableOpacity onPress={nextMonth} style={{ padding: 8 }}>
-            <Text style={{ fontSize: 20, color: "#2563EB" }}>›</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            {Platform.OS === "web" && (
+              <TouchableOpacity onPress={handleMonthPrint} style={{ backgroundColor: "#2563EB", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Text style={{ fontSize: 12, color: "white", fontWeight: "600" }}>🖨 列印</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={nextMonth} style={{ padding: 8 }}>
+              <Text style={{ fontSize: 20, color: "#2563EB" }}>›</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={{ flexDirection: "row", paddingHorizontal: 8, paddingTop: 10, paddingBottom: 4 }}>
           {WEEKDAYS.map((d, i) => (
