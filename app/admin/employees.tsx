@@ -1,5 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
-import { useDragSort } from "@/hooks/use-drag-sort";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -127,18 +126,6 @@ export default function AdminEmployeesScreen() {
   const [confirmDeleteEmp, setConfirmDeleteEmp] = useState<Employee | null>(null);
 
   const { data: employees, refetch, isLoading } = trpc.employees.list.useQuery();
-  const [localEmployees, setLocalEmployees] = useState<Employee[]>([]);
-  const reorderEmpMutation = trpc.employees.reorder.useMutation();
-
-  useEffect(() => { if (employees) setLocalEmployees(employees as Employee[]); }, [employees]);
-
-  const { getItemHandlers: getEmpHandlers, activeIndex: empActiveIndex, overActiveIndex: empOverIndex } = useDragSort({
-    items: localEmployees,
-    onReorder: (newList) => {
-      setLocalEmployees(newList);
-      reorderEmpMutation.mutate({ orderedIds: newList.map(e => e.id) });
-    },
-  });
 
   const createMutation = trpc.employees.create.useMutation({
     onSuccess: () => {
@@ -233,7 +220,7 @@ export default function AdminEmployeesScreen() {
     resetPasswordMutation.mutate({ id: selectedEmployee.id, newPassword });
   };
 
-  const filteredEmployees = (searchQuery ? localEmployees : localEmployees).filter(e =>
+  const filteredEmployees = (employees ?? []).filter(e =>
     !searchQuery ||
     e.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.username.toLowerCase().includes(searchQuery.toLowerCase())
@@ -297,37 +284,28 @@ export default function AdminEmployeesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={{ padding: 14, gap: 10 }}
         >
-          {!searchQuery && <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4, textAlign: "center" }}>長按左側 ☰ 拖拽可調整順序</Text>}
           {filteredEmployees.length === 0 ? (
             <View style={{ paddingVertical: 60, alignItems: "center" }}>
               <Text style={{ fontSize: 14, color: "#94A3B8" }}>
                 {searchQuery ? "找不到符合的員工" : "尚無員工資料"}
               </Text>
             </View>
-          ) : filteredEmployees.map((item, index) => (
+          ) : filteredEmployees.map((item) => (
             <View
               key={item.id}
-              {...(!searchQuery ? (getEmpHandlers(index, item.fullName) as object) : {})}
               style={{
               backgroundColor: "white",
               borderRadius: 12,
               padding: 14,
               borderWidth: 1,
-              borderColor: empOverIndex === index ? "#2563EB" : "#E2E8F0",
+              borderColor: "#E2E8F0",
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: empActiveIndex === index ? 0.15 : 0.04,
+              shadowOpacity: 0.04,
               shadowRadius: 3,
-              elevation: empActiveIndex === index ? 4 : 1,
-              opacity: empActiveIndex === index ? 0.5 : 1,
+              elevation: 1,
             }}>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                {/* Drag Handle */}
-                {!searchQuery && (
-                  <View style={{ justifyContent: "center", paddingRight: 8, cursor: "grab" } as unknown as object}>
-                    <Text style={{ fontSize: 18, color: "#CBD5E1" }}>☰</Text>
-                  </View>
-                )}
                 {/* Avatar */}
                 <View style={{
                   width: 42, height: 42,
