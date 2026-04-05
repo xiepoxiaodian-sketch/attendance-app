@@ -39,12 +39,37 @@ function getStatusStyle(status: string | null | undefined) {
   }
 }
 
+// ─── Thumbnail component (web only) ──────────────────────────────────────────
+function PhotoThumbnail({ url, label, onPress }: { url: string; label: string; onPress: () => void }) {
+  if (Platform.OS !== "web") return null;
+  return (
+    <TouchableOpacity onPress={onPress} style={{ alignItems: "center", gap: 2 }}>
+      <View style={{
+        width: 44, height: 44, borderRadius: 6, overflow: "hidden",
+        borderWidth: 1.5, borderColor: "#3B82F6",
+        backgroundColor: "#EFF6FF",
+      }}>
+        <img
+          src={url}
+          alt={label}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" } as any}
+        />
+      </View>
+      <Text style={{ fontSize: 9, color: "#3B82F6", fontWeight: "600" }}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 // ─── Photo Viewer Modal ───────────────────────────────────────────────────────
-function PhotoViewer({ visible, clockInPhoto, clockOutPhoto, employeeName, date, shiftLabel, onClose }: {
+function PhotoViewer({ visible, clockInPhoto, clockOutPhoto, employeeName, date, shiftLabel, initialTab, onClose }: {
   visible: boolean; clockInPhoto?: string | null; clockOutPhoto?: string | null;
-  employeeName: string; date: string; shiftLabel: string; onClose: () => void;
+  employeeName: string; date: string; shiftLabel: string;
+  initialTab?: "in" | "out";
+  onClose: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<"in" | "out">("in");
+  const [activeTab, setActiveTab] = useState<"in" | "out">(initialTab ?? "in");
+  // Sync initialTab when modal opens
+  useMemo(() => { if (visible) setActiveTab(initialTab ?? "in"); }, [visible, initialTab]);
   if (!visible) return null;
   const currentPhoto = activeTab === "in" ? clockInPhoto : clockOutPhoto;
   return (
@@ -138,6 +163,7 @@ export default function AdminAttendanceScreen() {
   const [photoViewer, setPhotoViewer] = useState<{
     clockInPhoto?: string | null; clockOutPhoto?: string | null;
     employeeName: string; date: string; shiftLabel: string;
+    initialTab?: "in" | "out";
   } | null>(null);
 
   const today = new Date().toISOString().split("T")[0];
@@ -228,6 +254,7 @@ export default function AdminAttendanceScreen() {
           employeeName={photoViewer.employeeName}
           date={photoViewer.date}
           shiftLabel={photoViewer.shiftLabel}
+          initialTab={photoViewer.initialTab}
           onClose={() => setPhotoViewer(null)}
         />
       )}
@@ -326,60 +353,118 @@ export default function AdminAttendanceScreen() {
                   const shiftStatus = getStatusStyle(shift.status);
                   const hasPhoto = !!shift.clockInPhoto || !!shift.clockOutPhoto;
                   return (
-                    <View key={shift.id} style={{
-                      flexDirection: "row", alignItems: "center",
-                      paddingHorizontal: 14, paddingVertical: 9,
-                      borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: "#F8FAFC",
-                      backgroundColor: idx % 2 === 0 ? "white" : "#FAFAFA",
-                    }}>
-                      {/* Shift label */}
-                      <Text style={{ fontSize: 11, color: "#64748B", width: 60, flexShrink: 0 }} numberOfLines={1}>{shift.shiftLabel}</Text>
+                    <View key={shift.id}>
+                      {/* Main shift row */}
+                      <View style={{
+                        flexDirection: "row", alignItems: "center",
+                        paddingHorizontal: 14, paddingVertical: 9,
+                        borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: "#F8FAFC",
+                        backgroundColor: idx % 2 === 0 ? "white" : "#FAFAFA",
+                      }}>
+                        {/* Shift label */}
+                        <Text style={{ fontSize: 11, color: "#64748B", width: 60, flexShrink: 0 }} numberOfLines={1}>{shift.shiftLabel}</Text>
 
-                      {/* Clock In */}
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
-                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#22C55E" }} />
-                        <Text style={{ fontSize: 13, color: "#1E293B", fontWeight: "600" }}>{formatTime(shift.clockInTime)}</Text>
-                      </View>
+                        {/* Clock In */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
+                          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#22C55E" }} />
+                          <Text style={{ fontSize: 13, color: "#1E293B", fontWeight: "600" }}>{formatTime(shift.clockInTime)}</Text>
+                        </View>
 
-                      {/* Arrow */}
-                      <Text style={{ fontSize: 12, color: "#CBD5E1", marginHorizontal: 4 }}>→</Text>
+                        {/* Arrow */}
+                        <Text style={{ fontSize: 12, color: "#CBD5E1", marginHorizontal: 4 }}>→</Text>
 
-                      {/* Clock Out */}
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
-                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#3B82F6" }} />
-                        <Text style={{ fontSize: 13, color: shift.clockOutTime ? "#1E293B" : "#94A3B8", fontWeight: shift.clockOutTime ? "600" : "400" }}>
-                          {formatTime(shift.clockOutTime)}
+                        {/* Clock Out */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
+                          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#3B82F6" }} />
+                          <Text style={{ fontSize: 13, color: shift.clockOutTime ? "#1E293B" : "#94A3B8", fontWeight: shift.clockOutTime ? "600" : "400" }}>
+                            {formatTime(shift.clockOutTime)}
+                          </Text>
+                        </View>
+
+                        {/* Hours */}
+                        <Text style={{ fontSize: 11, color: "#94A3B8", width: 44, textAlign: "right" }}>
+                          {calcHours(shift.clockInTime, shift.clockOutTime)}
                         </Text>
+
+                        {/* Status badge (per shift) */}
+                        {shift.status && shift.status !== "normal" && (
+                          <View style={{ backgroundColor: shiftStatus.bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginLeft: 6 }}>
+                            <Text style={{ fontSize: 10, color: shiftStatus.text, fontWeight: "600" }}>{shiftStatus.label}</Text>
+                          </View>
+                        )}
+
+                        {/* Delete */}
+                        <TouchableOpacity onPress={() => setConfirmDelete({ id: shift.id })} style={{ marginLeft: 8 }}>
+                          <Text style={{ color: "#EF4444", fontSize: 11 }}>刪除</Text>
+                        </TouchableOpacity>
                       </View>
 
-                      {/* Hours */}
-                      <Text style={{ fontSize: 11, color: "#94A3B8", width: 44, textAlign: "right" }}>
-                        {calcHours(shift.clockInTime, shift.clockOutTime)}
-                      </Text>
-
-                      {/* Status badge (per shift) */}
-                      {shift.status && shift.status !== "normal" && (
-                        <View style={{ backgroundColor: shiftStatus.bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginLeft: 6 }}>
-                          <Text style={{ fontSize: 10, color: shiftStatus.text, fontWeight: "600" }}>{shiftStatus.label}</Text>
+                      {/* Photo thumbnails row — shown below shift row if photos exist */}
+                      {hasPhoto && Platform.OS === "web" && (
+                        <View style={{
+                          flexDirection: "row", alignItems: "center", gap: 10,
+                          paddingHorizontal: 14, paddingVertical: 8,
+                          backgroundColor: "#F8FAFC",
+                          borderTopWidth: 1, borderTopColor: "#F1F5F9",
+                        }}>
+                          <Text style={{ fontSize: 10, color: "#94A3B8", marginRight: 4 }}>打卡照片：</Text>
+                          {shift.clockInPhoto ? (
+                            <PhotoThumbnail
+                              url={shift.clockInPhoto}
+                              label="上班"
+                              onPress={() => setPhotoViewer({
+                                clockInPhoto: shift.clockInPhoto,
+                                clockOutPhoto: shift.clockOutPhoto,
+                                employeeName: group.employeeName,
+                                date: group.date,
+                                shiftLabel: shift.shiftLabel,
+                                initialTab: "in",
+                              })}
+                            />
+                          ) : (
+                            <View style={{ alignItems: "center", gap: 2 }}>
+                              <View style={{ width: 44, height: 44, borderRadius: 6, backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#E2E8F0", alignItems: "center", justifyContent: "center" }}>
+                                <Text style={{ fontSize: 16 }}>📷</Text>
+                              </View>
+                              <Text style={{ fontSize: 9, color: "#CBD5E1" }}>上班</Text>
+                            </View>
+                          )}
+                          {shift.clockOutPhoto ? (
+                            <PhotoThumbnail
+                              url={shift.clockOutPhoto}
+                              label="下班"
+                              onPress={() => setPhotoViewer({
+                                clockInPhoto: shift.clockInPhoto,
+                                clockOutPhoto: shift.clockOutPhoto,
+                                employeeName: group.employeeName,
+                                date: group.date,
+                                shiftLabel: shift.shiftLabel,
+                                initialTab: "out",
+                              })}
+                            />
+                          ) : (
+                            <View style={{ alignItems: "center", gap: 2 }}>
+                              <View style={{ width: 44, height: 44, borderRadius: 6, backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#E2E8F0", alignItems: "center", justifyContent: "center" }}>
+                                <Text style={{ fontSize: 16 }}>📷</Text>
+                              </View>
+                              <Text style={{ fontSize: 9, color: "#CBD5E1" }}>下班</Text>
+                            </View>
+                          )}
+                          {/* Still show text button as fallback for non-web or if needed */}
+                          <TouchableOpacity
+                            onPress={() => setPhotoViewer({
+                              clockInPhoto: shift.clockInPhoto,
+                              clockOutPhoto: shift.clockOutPhoto,
+                              employeeName: group.employeeName,
+                              date: group.date,
+                              shiftLabel: shift.shiftLabel,
+                              initialTab: shift.clockInPhoto ? "in" : "out",
+                            })}
+                            style={{ marginLeft: 4, backgroundColor: "#EFF6FF", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+                            <Text style={{ fontSize: 10, color: "#2563EB", fontWeight: "600" }}>放大查看</Text>
+                          </TouchableOpacity>
                         </View>
                       )}
-
-                      {/* Photo button */}
-                      {hasPhoto && (
-                        <TouchableOpacity
-                          onPress={() => setPhotoViewer({
-                            clockInPhoto: shift.clockInPhoto, clockOutPhoto: shift.clockOutPhoto,
-                            employeeName: group.employeeName, date: group.date, shiftLabel: shift.shiftLabel,
-                          })}
-                          style={{ marginLeft: 8, backgroundColor: "#EFF6FF", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 }}>
-                          <Text style={{ fontSize: 10, color: "#2563EB", fontWeight: "600" }}>📷</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Delete */}
-                      <TouchableOpacity onPress={() => setConfirmDelete({ id: shift.id })} style={{ marginLeft: 8 }}>
-                        <Text style={{ color: "#EF4444", fontSize: 11 }}>刪除</Text>
-                      </TouchableOpacity>
                     </View>
                   );
                 })}
