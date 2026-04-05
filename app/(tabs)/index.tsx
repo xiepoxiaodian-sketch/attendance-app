@@ -124,15 +124,25 @@ export default function ClockScreen() {
 
   const registerDeviceMutation = trpc.devices.register.useMutation();
 
+  const parseTrpcError = (err: any): string => {
+    // tRPC wraps the actual message in shape.message or data.message
+    return (
+      err?.shape?.message ||
+      err?.data?.message ||
+      (err?.message && err.message !== "INTERNAL_SERVER_ERROR" ? err.message : null) ||
+      "打卡失敗，請稍後再試"
+    );
+  };
+
   const clockInMutation = trpc.attendance.clockIn.useMutation({
     onSuccess: () => {
       refetchAttendance();
       setVerifyStep("done");
-      Alert.alert("打卡成功 ✅", "上班打卡完成！", [{ text: "確定" }]);
+      setTimeout(() => Alert.alert("打卡成功 ✅", "上班打卡完成！", [{ text: "確定" }]), 100);
     },
     onError: (err) => {
       setVerifyStep("idle");
-      Alert.alert("打卡失敗", err.message, [{ text: "確定" }]);
+      setTimeout(() => Alert.alert("打卡失敗", parseTrpcError(err), [{ text: "確定" }]), 100);
     },
   });
 
@@ -140,11 +150,11 @@ export default function ClockScreen() {
     onSuccess: () => {
       refetchAttendance();
       setVerifyStep("done");
-      Alert.alert("打卡成功 ✅", "下班打卡完成！", [{ text: "確定" }]);
+      setTimeout(() => Alert.alert("打卡成功 ✅", "下班打卡完成！", [{ text: "確定" }]), 100);
     },
     onError: (err) => {
       setVerifyStep("idle");
-      Alert.alert("打卡失敗", err.message, [{ text: "確定" }]);
+      setTimeout(() => Alert.alert("打卡失敗", parseTrpcError(err), [{ text: "確定" }]), 100);
     },
   });
 
@@ -313,18 +323,16 @@ export default function ClockScreen() {
         });
       }
     } catch (err: any) {
-      setVerifyStep("idle");
-      // tRPC errors come in different shapes depending on the error type
-      const msg =
-        err?.data?.message ||
-        err?.shape?.message ||
-        err?.message ||
-        (typeof err === "string" ? err : null) ||
-        "打卡失敗，請稍後再試";
-      Alert.alert("打卡失敗", msg, [{ text: "確定" }]);
+      // Only handle non-mutation errors here (GPS, biometric, device)
+      // clockIn/clockOut errors are handled by onError above
+      const isMutationError = err?.name === "TRPCClientError" || err?.shape !== undefined;
+      if (!isMutationError) {
+        setVerifyStep("idle");
+        const msg = err?.message || "打卡失敗，請稍後再試";
+        setTimeout(() => Alert.alert("打卡失敗", msg, [{ text: "確定" }]), 100);
+      }
     } finally {
-      // Reset to idle after a short delay
-      setTimeout(() => setVerifyStep("idle"), 500);
+      setTimeout(() => setVerifyStep((prev) => prev === "clocking" ? "idle" : prev), 600);
     }
   };
 
