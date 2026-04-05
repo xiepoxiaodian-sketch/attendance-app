@@ -495,7 +495,7 @@ export default function ScheduleOverview() {
                   onPress={() => setShowPrintPreview(false)}
                   style={{ backgroundColor: "#475569", paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 }}
                 >
-                  <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>✕ 關閉</Text>
+                  <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>← 返回</Text>
                 </TouchableOpacity>
               </View>
             </View>

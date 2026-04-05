@@ -170,15 +170,34 @@ async function cronTick() {
 }
 
 // ============================================================
+// Photo cleanup (runs once daily at midnight)
+// ============================================================
+async function photoCleanupTick() {
+  try {
+    const cleared = await db.clearOldAttendancePhotos(7);
+    if (cleared > 0) {
+      console.log(`[cron] Photo cleanup: cleared photos from ${cleared} attendance records older than 7 days`);
+    }
+  } catch (err) {
+    console.error("[cron] Photo cleanup error:", err);
+  }
+}
+
+// ============================================================
 // Start cron (called once at server startup)
 // ============================================================
 export function startCronJobs() {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    console.log("[cron] VAPID keys not set, skipping cron jobs");
-    return;
-  }
   console.log("[cron] Starting attendance cron jobs (every 60s)");
-  // Run immediately, then every 60 seconds
-  cronTick();
-  setInterval(cronTick, 60 * 1000);
+  // Run notification tick every 60 seconds
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    cronTick();
+    setInterval(cronTick, 60 * 1000);
+  } else {
+    console.log("[cron] VAPID keys not set, skipping push notification jobs");
+  }
+
+  // Run photo cleanup once at startup, then every 24 hours
+  photoCleanupTick();
+  setInterval(photoCleanupTick, 24 * 60 * 60 * 1000);
+  console.log("[cron] Photo cleanup scheduled (every 24h, retains 7 days)");
 }

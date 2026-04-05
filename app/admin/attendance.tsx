@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -20,156 +20,76 @@ function formatTime(date: any): string {
   if (!date) return "--:--";
   return new Date(date).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
-
 function formatDate(date: any): string {
   if (!date) return "";
   const d = new Date(date);
   return d.toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit", weekday: "short" });
 }
-
 function calcHours(clockIn: any, clockOut: any): string {
   if (!clockIn || !clockOut) return "-";
   const diff = (new Date(clockOut).getTime() - new Date(clockIn).getTime()) / 1000 / 60;
   return `${Math.floor(diff / 60)}h${Math.round(diff % 60)}m`;
 }
-
 function getStatusStyle(status: string | null | undefined) {
   switch (status) {
-    case "late": return { bg: "#FEF3C7", text: "#D97706", label: "遲到" };
+    case "late":        return { bg: "#FEF3C7", text: "#D97706", label: "遲到" };
     case "early_leave": return { bg: "#FEF3C7", text: "#D97706", label: "早退" };
-    case "absent": return { bg: "#FEE2E2", text: "#DC2626", label: "缺勤" };
-    default: return { bg: "#DCFCE7", text: "#16A34A", label: "正常" };
+    case "absent":      return { bg: "#FEE2E2", text: "#DC2626", label: "缺勤" };
+    default:            return { bg: "#DCFCE7", text: "#16A34A", label: "正常" };
   }
 }
 
 // ─── Photo Viewer Modal ───────────────────────────────────────────────────────
-interface PhotoViewerProps {
-  visible: boolean;
-  clockInPhoto?: string | null;
-  clockOutPhoto?: string | null;
-  employeeName: string;
-  date: string;
-  shiftLabel: string;
-  onClose: () => void;
-}
-
-function PhotoViewer({ visible, clockInPhoto, clockOutPhoto, employeeName, date, shiftLabel, onClose }: PhotoViewerProps) {
+function PhotoViewer({ visible, clockInPhoto, clockOutPhoto, employeeName, date, shiftLabel, onClose }: {
+  visible: boolean; clockInPhoto?: string | null; clockOutPhoto?: string | null;
+  employeeName: string; date: string; shiftLabel: string; onClose: () => void;
+}) {
   const [activeTab, setActiveTab] = useState<"in" | "out">("in");
-
   if (!visible) return null;
-
   const currentPhoto = activeTab === "in" ? clockInPhoto : clockOutPhoto;
-
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={{
-        flex: 1,
-        backgroundColor: "rgba(0,0,0,0.85)",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-      }}>
-        <View style={{
-          backgroundColor: "#1E293B",
-          borderRadius: 20,
-          width: "100%",
-          maxWidth: 420,
-          overflow: "hidden",
-        }}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.85)", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <View style={{ backgroundColor: "#1E293B", borderRadius: 20, width: "100%", maxWidth: 480, overflow: "hidden" }}>
           {/* Header */}
-          <View style={{
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: "#334155",
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#334155" }}>
             <View>
-              <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>{employeeName}</Text>
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>{employeeName}</Text>
               <Text style={{ color: "#94A3B8", fontSize: 12, marginTop: 2 }}>{date} · {shiftLabel}</Text>
             </View>
-            <TouchableOpacity
-              onPress={onClose}
-              style={{ backgroundColor: "#334155", borderRadius: 20, width: 32, height: 32, alignItems: "center", justifyContent: "center" }}
-            >
-              <Text style={{ color: "#94A3B8", fontSize: 16 }}>✕</Text>
+            <TouchableOpacity onPress={onClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#334155", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: "#94A3B8", fontSize: 18 }}>×</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Tab Selector */}
-          <View style={{ flexDirection: "row", padding: 12, gap: 8 }}>
-            <TouchableOpacity
-              onPress={() => setActiveTab("in")}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 10,
-                alignItems: "center",
-                backgroundColor: activeTab === "in" ? "#22C55E" : "#334155",
-              }}
-            >
-              <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>
-                📷 上班照片 {clockInPhoto ? "" : "(無)"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setActiveTab("out")}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 10,
-                alignItems: "center",
-                backgroundColor: activeTab === "out" ? "#3B82F6" : "#334155",
-              }}
-            >
-              <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>
-                📷 下班照片 {clockOutPhoto ? "" : "(無)"}
-              </Text>
-            </TouchableOpacity>
+          {/* Tabs */}
+          <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#334155" }}>
+            {(["in", "out"] as const).map(tab => (
+              <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}
+                style={{ flex: 1, paddingVertical: 12, alignItems: "center", borderBottomWidth: 2, borderBottomColor: activeTab === tab ? "#3B82F6" : "transparent" }}>
+                <Text style={{ color: activeTab === tab ? "#3B82F6" : "#64748B", fontWeight: "600", fontSize: 13 }}>
+                  {tab === "in" ? "🟢 上班照片" : "🔵 下班照片"}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-
-          {/* Photo Display */}
-          <View style={{ paddingHorizontal: 12, paddingBottom: 16 }}>
+          {/* Photo */}
+          <View style={{ padding: 16 }}>
             {currentPhoto ? (
               <View style={{ borderRadius: 12, overflow: "hidden", backgroundColor: "#0F172A" }}>
                 {Platform.OS === "web" ? (
-                  <img
-                    src={currentPhoto}
-                    alt={activeTab === "in" ? "上班打卡照片" : "下班打卡照片"}
-                    style={{ width: "100%", height: "auto", display: "block", borderRadius: 12 } as any}
-                  />
+                  <img src={currentPhoto} alt={activeTab === "in" ? "上班打卡照片" : "下班打卡照片"}
+                    style={{ width: "100%", height: "auto", display: "block", borderRadius: 12 } as any} />
                 ) : (
-                  // For native, show a link since Image component needs special handling for S3 URLs
                   <View style={{ padding: 20, alignItems: "center" }}>
-                    <Text style={{ color: "#94A3B8", fontSize: 13, textAlign: "center", lineHeight: 20 }}>
-                      照片已儲存，請在瀏覽器中查看
-                    </Text>
-                    <Text style={{ color: "#3B82F6", fontSize: 11, marginTop: 8, textAlign: "center" }} numberOfLines={3}>
-                      {currentPhoto}
-                    </Text>
+                    <Text style={{ color: "#94A3B8", fontSize: 13, textAlign: "center" }}>照片已儲存，請在瀏覽器中查看</Text>
                   </View>
                 )}
               </View>
             ) : (
-              <View style={{
-                backgroundColor: "#0F172A",
-                borderRadius: 12,
-                paddingVertical: 48,
-                alignItems: "center",
-              }}>
+              <View style={{ backgroundColor: "#0F172A", borderRadius: 12, paddingVertical: 48, alignItems: "center" }}>
                 <Text style={{ fontSize: 32, marginBottom: 12 }}>📷</Text>
                 <Text style={{ color: "#475569", fontSize: 14, textAlign: "center" }}>
                   {activeTab === "in" ? "此次上班打卡無照片記錄" : "此次下班打卡無照片記錄"}
-                </Text>
-                <Text style={{ color: "#334155", fontSize: 12, marginTop: 6, textAlign: "center" }}>
-                  （舊記錄或員工未完成拍照）
                 </Text>
               </View>
             )}
@@ -180,18 +100,44 @@ function PhotoViewer({ visible, clockInPhoto, clockOutPhoto, employeeName, date,
   );
 }
 
+// ─── Status filter options ────────────────────────────────────────────────────
+type StatusFilter = "all" | "normal" | "late" | "early_leave" | "absent" | "no_clockout";
+const STATUS_FILTERS: { key: StatusFilter; label: string; color: string; bg: string }[] = [
+  { key: "all",         label: "全部",   color: "#64748B", bg: "#F1F5F9" },
+  { key: "normal",      label: "正常",   color: "#16A34A", bg: "#DCFCE7" },
+  { key: "late",        label: "遲到",   color: "#D97706", bg: "#FEF3C7" },
+  { key: "early_leave", label: "早退",   color: "#D97706", bg: "#FEF3C7" },
+  { key: "absent",      label: "缺勤",   color: "#DC2626", bg: "#FEE2E2" },
+  { key: "no_clockout", label: "未下班打卡", color: "#7C3AED", bg: "#F5F3FF" },
+];
+
+// ─── Grouped row: one employee + one date = one card ─────────────────────────
+type GroupedRecord = {
+  key: string;
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  dateRaw: any;
+  shifts: {
+    id: number;
+    shiftLabel: string;
+    clockInTime: any;
+    clockOutTime: any;
+    status: string | null | undefined;
+    clockInPhoto?: string | null;
+    clockOutPhoto?: string | null;
+  }[];
+};
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AdminAttendanceScreen() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [confirmDelete, setConfirmDelete] = useState<{ id?: number; batch?: boolean } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id?: number } | null>(null);
   const [photoViewer, setPhotoViewer] = useState<{
-    clockInPhoto?: string | null;
-    clockOutPhoto?: string | null;
-    employeeName: string;
-    date: string;
-    shiftLabel: string;
+    clockInPhoto?: string | null; clockOutPhoto?: string | null;
+    employeeName: string; date: string; shiftLabel: string;
   } | null>(null);
 
   const today = new Date().toISOString().split("T")[0];
@@ -203,60 +149,74 @@ export default function AdminAttendanceScreen() {
   const { data: employees } = trpc.employees.list.useQuery();
 
   const deleteMutation = trpc.attendance.delete.useMutation({ onSuccess: () => refetch() });
-  const deleteBatchMutation = trpc.attendance.deleteBatch.useMutation({
-    onSuccess: () => { setSelectedIds([]); refetch(); },
-  });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
-  }, []);
+  }, [refetch]);
 
-  const handleDelete = (id: number) => setConfirmDelete({ id });
-  const handleDeleteSelected = () => {
-    if (selectedIds.length === 0) return;
-    setConfirmDelete({ batch: true });
-  };
+  const getEmployeeName = useCallback((id: number) =>
+    employees?.find(e => e.id === id)?.fullName ?? `#${id}`, [employees]);
 
-  const handleConfirmDelete = () => {
-    if (confirmDelete?.id !== undefined) {
-      deleteMutation.mutate({ id: confirmDelete.id });
-    } else if (confirmDelete?.batch) {
-      deleteBatchMutation.mutate({ ids: selectedIds });
+  // Group records by employee + date
+  const groupedRecords = useMemo<GroupedRecord[]>(() => {
+    const map = new Map<string, GroupedRecord>();
+    for (const r of (records ?? [])) {
+      const dateKey = r.date ? (typeof r.date === "string" ? (r.date as string).split("T")[0] : new Date(r.date as unknown as string).toISOString().split("T")[0]) : "";
+      const key = `${r.employeeId}_${dateKey}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          employeeId: r.employeeId,
+          employeeName: getEmployeeName(r.employeeId),
+          date: formatDate(r.date),
+          dateRaw: r.date,
+          shifts: [],
+        });
+      }
+      map.get(key)!.shifts.push({
+        id: r.id,
+        shiftLabel: r.shiftLabel || "一般班",
+        clockInTime: r.clockInTime,
+        clockOutTime: r.clockOutTime,
+        status: r.status,
+        clockInPhoto: (r as any).clockInPhoto,
+        clockOutPhoto: (r as any).clockOutPhoto,
+      });
     }
-    setConfirmDelete(null);
-  };
+    // Sort by date desc
+    return Array.from(map.values()).sort((a, b) =>
+      new Date(b.dateRaw).getTime() - new Date(a.dateRaw).getTime()
+    );
+  }, [records, getEmployeeName]);
 
-  const toggleSelect = (id: number) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
-  const getEmployeeName = (id: number) => employees?.find(e => e.id === id)?.fullName ?? `#${id}`;
-
-  const filteredRecords = (records ?? [])
-    .filter(r => !searchQuery || getEmployeeName(r.employeeId).toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  const openPhotoViewer = (item: any) => {
-    setPhotoViewer({
-      clockInPhoto: (item as any).clockInPhoto,
-      clockOutPhoto: (item as any).clockOutPhoto,
-      employeeName: getEmployeeName(item.employeeId),
-      date: formatDate(item.date),
-      shiftLabel: item.shiftLabel || "一般班",
+  // Apply filters
+  const filteredGroups = useMemo(() => {
+    return groupedRecords.filter(group => {
+      // Name search
+      if (searchQuery && !group.employeeName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      // Status filter
+      if (statusFilter === "all") return true;
+      if (statusFilter === "no_clockout") return group.shifts.some(s => s.clockInTime && !s.clockOutTime);
+      return group.shifts.some(s => s.status === statusFilter);
     });
-  };
+  }, [groupedRecords, searchQuery, statusFilter]);
+
+  const totalRecords = (records ?? []).length;
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
       <ConfirmDialog
         visible={!!confirmDelete}
-        title={confirmDelete?.batch ? "批量刪除" : "刪除紀錄"}
-        message={confirmDelete?.batch ? `確定要刪除選取的 ${selectedIds.length} 筆紀錄嗎？` : "確定要刪除此打卡紀錄嗎？"}
+        title="刪除紀錄"
+        message="確定要刪除此打卡紀錄嗎？"
         confirmText="刪除"
         confirmStyle="destructive"
-        onConfirm={handleConfirmDelete}
+        onConfirm={() => {
+          if (confirmDelete?.id !== undefined) deleteMutation.mutate({ id: confirmDelete.id });
+          setConfirmDelete(null);
+        }}
         onCancel={() => setConfirmDelete(null)}
       />
 
@@ -272,70 +232,45 @@ export default function AdminAttendanceScreen() {
         />
       )}
 
-      <AdminHeader title="打卡紀錄" subtitle={`共 ${filteredRecords.length} 筆紀錄`} onRefresh={onRefresh} refreshing={refreshing} />
-
-      {selectedIds.length > 0 && (
-        <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>
-          <TouchableOpacity
-            onPress={handleDeleteSelected}
-            style={{ backgroundColor: "#EF4444", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 }}
-          >
-            <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>刪除 {selectedIds.length} 筆</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <AdminHeader title="打卡紀錄" subtitle={`${filteredGroups.length} 人次 · 共 ${totalRecords} 筆`} onRefresh={onRefresh} refreshing={refreshing} />
 
       {/* Filters */}
-      <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", gap: 8 }}>
+      <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", gap: 8 }}>
+        {/* Date range */}
         <View style={{ flexDirection: "row", gap: 8 }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", marginBottom: 4 }}>開始日期</Text>
-            <TextInput
-              value={startDate}
-              onChangeText={setStartDate}
-              placeholder="YYYY-MM-DD"
-              returnKeyType="done"
-              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
-            />
+            <TextInput value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" returnKeyType="done"
+              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", marginBottom: 4 }}>結束日期</Text>
-            <TextInput
-              value={endDate}
-              onChangeText={setEndDate}
-              placeholder="YYYY-MM-DD"
-              returnKeyType="done"
-              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
-            />
+            <TextInput value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" returnKeyType="done"
+              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }} />
           </View>
         </View>
-        <TextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="搜尋員工姓名..."
+        {/* Name search */}
+        <TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="搜尋員工姓名..."
           returnKeyType="search"
           style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
-          placeholderTextColor="#94A3B8"
-        />
+          placeholderTextColor="#94A3B8" />
+        {/* Status filter chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -14 }} contentContainerStyle={{ paddingHorizontal: 14, gap: 6, flexDirection: "row" }}>
+          {STATUS_FILTERS.map(f => (
+            <TouchableOpacity key={f.key} onPress={() => setStatusFilter(f.key)}
+              style={{
+                paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+                backgroundColor: statusFilter === f.key ? f.bg : "#F8FAFC",
+                borderWidth: 1,
+                borderColor: statusFilter === f.key ? f.color : "#E2E8F0",
+              }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: statusFilter === f.key ? f.color : "#94A3B8" }}>
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
-
-      {/* Select All Bar */}
-      {filteredRecords.length > 0 && (
-        <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ fontSize: 12, color: "#94A3B8" }}>長按選取 · 可批量刪除 · 點擊查看照片</Text>
-          <TouchableOpacity onPress={() => {
-            if (selectedIds.length === filteredRecords.length) {
-              setSelectedIds([]);
-            } else {
-              setSelectedIds(filteredRecords.map(r => r.id));
-            }
-          }}>
-            <Text style={{ color: "#2563EB", fontSize: 13, fontWeight: "500" }}>
-              {selectedIds.length === filteredRecords.length && filteredRecords.length > 0 ? "取消全選" : "全選"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -343,96 +278,112 @@ export default function AdminAttendanceScreen() {
         </View>
       ) : (
         <FlatList
-          data={filteredRecords}
-          keyExtractor={(item) => String(item.id)}
+          data={filteredGroups}
+          keyExtractor={(item) => item.key}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={{ padding: 14, gap: 8, paddingBottom: 24 }}
+          contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: 32 }}
           ListEmptyComponent={
             <View style={{ paddingVertical: 60, alignItems: "center" }}>
               <Text style={{ fontSize: 14, color: "#94A3B8" }}>此期間無打卡紀錄</Text>
             </View>
           }
-          renderItem={({ item }) => {
-            const isSelected = selectedIds.includes(item.id);
-            const statusStyle = getStatusStyle(item.status);
-            const hasPhoto = !!(item as any).clockInPhoto || !!(item as any).clockOutPhoto;
+          renderItem={({ item: group }) => {
+            // Determine overall group status badge
+            const hasLate = group.shifts.some(s => s.status === "late");
+            const hasEarlyLeave = group.shifts.some(s => s.status === "early_leave");
+            const hasAbsent = group.shifts.some(s => s.status === "absent");
+            const hasNoClockOut = group.shifts.some(s => s.clockInTime && !s.clockOutTime);
+            const overallStatus = hasAbsent ? "absent" : hasLate || hasEarlyLeave ? "late" : hasNoClockOut ? "no_clockout" : "normal";
+            const statusStyle = overallStatus === "absent" ? { bg: "#FEE2E2", text: "#DC2626", label: "缺勤" }
+              : overallStatus === "late" ? { bg: "#FEF3C7", text: "#D97706", label: hasLate && hasEarlyLeave ? "遲到/早退" : hasLate ? "遲到" : "早退" }
+              : overallStatus === "no_clockout" ? { bg: "#F5F3FF", text: "#7C3AED", label: "未下班打卡" }
+              : { bg: "#DCFCE7", text: "#16A34A", label: "正常" };
+
             return (
-              <TouchableOpacity
-                onLongPress={() => toggleSelect(item.id)}
-                onPress={() => {
-                  if (selectedIds.length > 0) {
-                    toggleSelect(item.id);
-                  } else {
-                    openPhotoViewer(item);
-                  }
-                }}
-                style={{
-                  backgroundColor: isSelected ? "#EFF6FF" : "white",
-                  borderRadius: 12,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: isSelected ? "#2563EB" : "#E2E8F0",
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.04,
-                  shadowRadius: 3,
-                  elevation: 1,
-                }}
-              >
-                {/* Top Row */}
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    {isSelected && (
-                      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#2563EB", alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>✓</Text>
-                      </View>
-                    )}
-                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563EB" }}>
-                        {getEmployeeName(item.employeeId)[0]}
-                      </Text>
+              <View style={{
+                backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0",
+                shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+                overflow: "hidden",
+              }}>
+                {/* Card Header: employee + date + overall status */}
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: group.shifts.length > 0 ? 1 : 0, borderBottomColor: "#F1F5F9" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#2563EB" }}>{group.employeeName[0]}</Text>
                     </View>
                     <View>
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#1E293B" }}>
-                        {getEmployeeName(item.employeeId)}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: "#94A3B8" }}>{item.shiftLabel || "一般班"}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>{group.employeeName}</Text>
+                      <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{group.date}</Text>
                     </View>
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    {/* Photo indicator */}
-                    {hasPhoto && (
-                      <View style={{ backgroundColor: "#EFF6FF", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20 }}>
-                        <Text style={{ fontSize: 11, color: "#2563EB", fontWeight: "600" }}>📷 有照片</Text>
-                      </View>
-                    )}
-                    <View style={{ backgroundColor: statusStyle.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
-                      <Text style={{ fontSize: 11, color: statusStyle.text, fontWeight: "600" }}>{statusStyle.label}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                      <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "500" }}>刪除</Text>
-                    </TouchableOpacity>
+                  <View style={{ backgroundColor: statusStyle.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+                    <Text style={{ fontSize: 11, color: statusStyle.text, fontWeight: "700" }}>{statusStyle.label}</Text>
                   </View>
                 </View>
 
-                {/* Bottom Row */}
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 40 }}>
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
-                    {formatDate(item.date)}
-                  </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#22C55E" }} />
-                    <Text style={{ fontSize: 12, color: "#64748B" }}>{formatTime(item.clockInTime)}</Text>
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#3B82F6" }} />
-                    <Text style={{ fontSize: 12, color: "#64748B" }}>{formatTime(item.clockOutTime)}</Text>
-                  </View>
-                  <Text style={{ fontSize: 12, color: "#94A3B8" }}>
-                    {calcHours(item.clockInTime, item.clockOutTime)}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                {/* Shift rows */}
+                {group.shifts.map((shift, idx) => {
+                  const shiftStatus = getStatusStyle(shift.status);
+                  const hasPhoto = !!shift.clockInPhoto || !!shift.clockOutPhoto;
+                  return (
+                    <View key={shift.id} style={{
+                      flexDirection: "row", alignItems: "center",
+                      paddingHorizontal: 14, paddingVertical: 9,
+                      borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: "#F8FAFC",
+                      backgroundColor: idx % 2 === 0 ? "white" : "#FAFAFA",
+                    }}>
+                      {/* Shift label */}
+                      <Text style={{ fontSize: 11, color: "#64748B", width: 60, flexShrink: 0 }} numberOfLines={1}>{shift.shiftLabel}</Text>
+
+                      {/* Clock In */}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#22C55E" }} />
+                        <Text style={{ fontSize: 13, color: "#1E293B", fontWeight: "600" }}>{formatTime(shift.clockInTime)}</Text>
+                      </View>
+
+                      {/* Arrow */}
+                      <Text style={{ fontSize: 12, color: "#CBD5E1", marginHorizontal: 4 }}>→</Text>
+
+                      {/* Clock Out */}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#3B82F6" }} />
+                        <Text style={{ fontSize: 13, color: shift.clockOutTime ? "#1E293B" : "#94A3B8", fontWeight: shift.clockOutTime ? "600" : "400" }}>
+                          {formatTime(shift.clockOutTime)}
+                        </Text>
+                      </View>
+
+                      {/* Hours */}
+                      <Text style={{ fontSize: 11, color: "#94A3B8", width: 44, textAlign: "right" }}>
+                        {calcHours(shift.clockInTime, shift.clockOutTime)}
+                      </Text>
+
+                      {/* Status badge (per shift) */}
+                      {shift.status && shift.status !== "normal" && (
+                        <View style={{ backgroundColor: shiftStatus.bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginLeft: 6 }}>
+                          <Text style={{ fontSize: 10, color: shiftStatus.text, fontWeight: "600" }}>{shiftStatus.label}</Text>
+                        </View>
+                      )}
+
+                      {/* Photo button */}
+                      {hasPhoto && (
+                        <TouchableOpacity
+                          onPress={() => setPhotoViewer({
+                            clockInPhoto: shift.clockInPhoto, clockOutPhoto: shift.clockOutPhoto,
+                            employeeName: group.employeeName, date: group.date, shiftLabel: shift.shiftLabel,
+                          })}
+                          style={{ marginLeft: 8, backgroundColor: "#EFF6FF", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 }}>
+                          <Text style={{ fontSize: 10, color: "#2563EB", fontWeight: "600" }}>📷</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Delete */}
+                      <TouchableOpacity onPress={() => setConfirmDelete({ id: shift.id })} style={{ marginLeft: 8 }}>
+                        <Text style={{ color: "#EF4444", fontSize: 11 }}>刪除</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
             );
           }}
         />

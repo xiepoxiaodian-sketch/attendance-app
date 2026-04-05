@@ -602,7 +602,7 @@ function MonthTab() {
                 <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>🖨 確認列印</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setShowPrintPreview(false)} style={{ backgroundColor: "#475569", borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 }}>
-                <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>✕ 關閉</Text>
+                <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>← 返回</Text>
               </TouchableOpacity>
             </View>
           </View>

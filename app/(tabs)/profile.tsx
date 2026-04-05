@@ -6,6 +6,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Platform,
   ActivityIndicator,
   Modal,
 } from "react-native";
@@ -74,6 +75,11 @@ export default function ProfileScreen() {
   });
 
   const handleLogout = () => {
+    if (Platform.OS === "web") {
+      if (!window.confirm("確定要登出嗎？")) return;
+      logout().then(() => router.replace("/login" as any));
+      return;
+    }
     Alert.alert("登出", "確定要登出嗎？", [
       { text: "取消" },
       {

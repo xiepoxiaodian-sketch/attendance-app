@@ -134,7 +134,10 @@ function WeekTab() {
     <h1>📅 週排班表</h1>
     <div class="meta">${year} 年 ${dateRange} &nbsp;·&nbsp; 共 ${activeEmployees.length} 位員工 &nbsp;·&nbsp; 列印時間：${new Date().toLocaleString("zh-TW")}</div>
   </div>
-  <button onclick="window.print()" style="background:#1E40AF;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;font-weight:600">🖨 列印</button>
+  <div style="display:flex;gap:8px">
+    <button onclick="window.close()" style="background:#475569;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;font-weight:600">← 關閉視窗</button>
+    <button onclick="window.print()" style="background:#1E40AF;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;font-weight:600">🖸 列印</button>
+  </div>
 </div>
 <table>
   <thead><tr><th style="background:#1E40AF;color:white;padding:8px 10px;font-size:12px;text-align:left;border:1px solid #CBD5E1;min-width:70px">員工</th>${colHeaders}</tr></thead>
@@ -403,10 +406,10 @@ function WeekTab() {
               if (schedule.leaveType && schedule.leaveMode === "allDay") return false;
               return true;
             });
-            const indoorCount = todayScheduled.filter(e => (e as any).category === "indoor").length;
-            const outdoorCount = todayScheduled.filter(e => (e as any).category === "outdoor").length;
-            const supervisorCount = todayScheduled.filter(e => (e as any).jobTitle === "M").length;
-            const ptCount = todayScheduled.filter(e => (e as any).category === "pt").length;
+            const indoorCount = todayScheduled.filter(e => (e as any).tag === "indoor").length;
+            const outdoorCount = todayScheduled.filter(e => (e as any).tag === "outdoor").length;
+            const supervisorCount = todayScheduled.filter(e => (e as any).tag === "supervisor").length;
+            const ptCount = todayScheduled.filter(e => !(e as any).tag).length;
             return (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                 <View style={{ backgroundColor: "#F1F5F9", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }}>
@@ -1086,7 +1089,10 @@ function MonthTab() {
   <div style="text-align:right;font-size:9px;color:#475569;line-height:1.6">
     <div>內場 ● 外場 ● 幹部</div>
     <div>橫向 A4 / 每格顯示班次時間</div>
-    <button onclick="window.print()" style="margin-top:4px;background:#1E40AF;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;font-weight:600">🖨 列印</button>
+    <div style="display:flex;gap:6px;margin-top:4px;justify-content:flex-end">
+      <button onclick="window.close()" style="background:#475569;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;font-weight:600">← 關閉視窗</button>
+      <button onclick="window.print()" style="background:#1E40AF;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;font-weight:600">🖸 列印</button>
+    </div>
   </div>
 </div>
 <div class="legend">

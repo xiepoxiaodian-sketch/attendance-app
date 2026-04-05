@@ -780,3 +780,27 @@ export async function verifyLineOtp(employeeId: number, code: string): Promise<b
     .where(eq(lineOtpCodes.id, result[0].id));
   return true;
 }
+
+// ============================================================
+// Photo Cleanup
+// ============================================================
+/** Clear clockInPhoto and clockOutPhoto for attendance records older than N days */
+export async function clearOldAttendancePhotos(retentionDays: number = 7): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - retentionDays);
+  const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
+  const result = await db.update(attendance)
+    .set({ clockInPhoto: null, clockOutPhoto: null })
+    .where(
+      and(
+        sql`DATE(${attendance.date}) <= ${cutoffStr}`,
+        or(
+          sql`${attendance.clockInPhoto} IS NOT NULL`,
+          sql`${attendance.clockOutPhoto} IS NOT NULL`
+        )
+      )
+    );
+  return (result as any)[0]?.affectedRows ?? 0;
+}

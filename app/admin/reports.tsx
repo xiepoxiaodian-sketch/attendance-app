@@ -31,44 +31,36 @@ function fmtDate(val: unknown): string {
   } catch { return String(val); }
 }
 
-function escapeCsv(val: unknown): string {
-  const s = val == null ? "" : String(val);
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
-
-function buildCsv(headers: string[], rows: string[][]): string {
-  const lines = [headers.map(escapeCsv).join(",")];
-  for (const row of rows) lines.push(row.map(escapeCsv).join(","));
-  return lines.join("\n");
-}
-
-// Download CSV on web, show share sheet on native
-async function exportCsv(filename: string, csv: string) {
-  if (Platform.OS === "web") {
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  } else {
-    try {
+// Export as Excel (.xlsx)
+async function exportExcel(filename: string, headers: string[], rows: string[][]) {
+  try {
+    const XLSX = await import("xlsx");
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    // Auto column widths
+    const colWidths = headers.map((h, i) => {
+      const maxLen = Math.max(h.length, ...rows.map(r => (r[i] ?? "").length));
+      return { wch: Math.min(Math.max(maxLen + 2, 10), 40) };
+    });
+    ws["!cols"] = colWidths;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "資料");
+    if (Platform.OS === "web") {
+      XLSX.writeFile(wb, filename);
+    } else {
       const FileSystem = await import("expo-file-system/legacy");
       const Sharing = await import("expo-sharing");
+      const wbout = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
       const path = `${FileSystem.cacheDirectory}${filename}`;
-      await FileSystem.writeAsStringAsync(path, "\uFEFF" + csv, { encoding: FileSystem.EncodingType.UTF8 });
+      await FileSystem.writeAsStringAsync(path, wbout, { encoding: FileSystem.EncodingType.Base64 });
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(path, { mimeType: "text/csv", UTI: "public.comma-separated-values-text" });
+        await Sharing.shareAsync(path, { mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", UTI: "com.microsoft.excel.xlsx" });
       } else {
         Alert.alert("無法分享", "此裝置不支援檔案分享功能");
       }
-    } catch (e) {
-      Alert.alert("匯出失敗", String(e));
     }
+  } catch (e) {
+    Alert.alert("匯出失敗", String(e));
   }
 }
 
@@ -119,13 +111,13 @@ function ExportModal({ visible, onClose, year, month, attendanceRecords, employe
           STATUS_LABELS[r.status ?? ""] ?? r.status ?? "",
           r.note ?? "",
         ]);
-        await exportCsv(`打卡明細_${label}.csv`, buildCsv(headers, rows));
+        await exportExcel(`打卡明細_${label}.xlsx`, headers, rows);
       } else if (selected === "attendance_summary") {
         const headers = ["員工姓名", "職稱", "出勤天數", "遲到次數", "請假天數"];
         const rows = employeeStats.map(e => [
           e.name, e.jobTitle, String(e.presentDays), String(e.lateDays), String(e.leaveDays),
         ]);
-        await exportCsv(`出勤統計_${label}.csv`, buildCsv(headers, rows));
+        await exportExcel(`出勤統計_${label}.xlsx`, headers, rows);
       } else if (selected === "leave_records") {
         const headers = ["員工姓名", "假別", "開始日期", "結束日期", "天數", "申請時間", "備註"];
         const rows = leaveRequests.map(l => [
@@ -137,7 +129,7 @@ function ExportModal({ visible, onClose, year, month, attendanceRecords, employe
           fmtDateTime(l.createdAt),
           l.reason ?? "",
         ]);
-        await exportCsv(`請假紀錄_${label}.csv`, buildCsv(headers, rows));
+        await exportExcel(`請假紀錄_${label}.xlsx`, headers, rows);
       }
       onClose();
     } finally {
@@ -191,7 +183,7 @@ function ExportModal({ visible, onClose, year, month, attendanceRecords, employe
               {selected === "attendance_detail" && `共 ${attendanceRecords.length} 筆打卡紀錄`}
               {selected === "attendance_summary" && `共 ${employeeStats.length} 位員工統計`}
               {selected === "leave_records" && `共 ${leaveRequests.length} 筆請假紀錄`}
-              ，將匯出為 CSV 格式（Excel 可直接開啟）
+              ，將匯出為 Excel 格式（.xlsx）
             </Text>
           </View>
 
@@ -207,7 +199,7 @@ function ExportModal({ visible, onClose, year, month, attendanceRecords, employe
               ) : (
                 <>
                   <Text style={{ fontSize: 20 }}>⬇️</Text>
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>匯出 CSV</Text>
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>匯出 Excel</Text>
                 </>
               )}
             </TouchableOpacity>
