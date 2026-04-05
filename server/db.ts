@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -443,8 +443,12 @@ export async function updateDeviceStatus(id: number, status: "approved" | "pendi
 export async function countApprovedDevicesByEmployee(employeeId: number) {
   const db = await getDb();
   if (!db) return 0;
+  // Count devices that are approved OR have NULL status (legacy devices before status field was added)
   const result = await db.select().from(devices)
-    .where(and(eq(devices.employeeId, employeeId), eq(devices.status, "approved")));
+    .where(and(
+      eq(devices.employeeId, employeeId),
+      or(eq(devices.status, "approved"), isNull(devices.status))
+    ));
   return result.length;
 }
 

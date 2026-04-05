@@ -559,7 +559,13 @@ const devicesRouter = router({
         if (existing.status === "rejected") {
           throw new Error("此裝置已被管理員拒絕，請聯絡管理員解除限制");
         }
-        return { success: true, id: existing.id, alreadyRegistered: true, status: existing.status };
+        // Treat NULL status (legacy devices before status field) as approved
+        const effectiveStatus = existing.status ?? "approved";
+        // Migrate legacy NULL status to approved in DB
+        if (!existing.status) {
+          await db.updateDeviceStatus(existing.id, "approved");
+        }
+        return { success: true, id: existing.id, alreadyRegistered: true, status: effectiveStatus };
       }
 
       // Check if employee is exempt from single-device restriction
