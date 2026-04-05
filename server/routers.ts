@@ -329,13 +329,15 @@ const attendanceRouter = router({
       clockInTime: z.string().nullable().optional(),
       clockOutTime: z.string().nullable().optional(),
       note: z.string().optional(),
+      status: z.enum(["normal", "late", "early_leave", "absent"]).optional(),
     }))
     .mutation(async ({ input }) => {
-      const { id, clockInTime, clockOutTime, note } = input;
+      const { id, clockInTime, clockOutTime, note, status } = input;
       const updateData: Record<string, any> = {};
       if (clockInTime !== undefined) updateData.clockInTime = clockInTime ? new Date(clockInTime) : null;
       if (clockOutTime !== undefined) updateData.clockOutTime = clockOutTime ? new Date(clockOutTime) : null;
       if (note !== undefined) updateData.note = note;
+      if (status !== undefined) updateData.status = status;
       await db.updateAttendance(id, updateData);
       return { success: true };
     }),
