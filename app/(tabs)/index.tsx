@@ -157,10 +157,21 @@ function VerifyStepBadge({ step, error, success, onDismiss }: { step: VerifyStep
 export default function ClockScreen() {
   const { employee } = useEmployeeAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [verifyStep, setVerifyStep] = useState<VerifyStep>("idle");
+  // Single state object to avoid race conditions between step/error/success updates
+  const [clock, setClock] = useState<{ step: VerifyStep; error: string | null; success: string | null }>({
+    step: "idle",
+    error: null,
+    success: null,
+  });
   const [refreshing, setRefreshing] = useState(false);
-  const [clockError, setClockError] = useState<string | null>(null);
-  const [clockSuccess, setClockSuccess] = useState<string | null>(null);
+
+  // Convenience aliases
+  const verifyStep = clock.step;
+  const clockError = clock.error;
+  const clockSuccess = clock.success;
+  const setVerifyStep = (step: VerifyStep) => setClock(prev => ({ ...prev, step }));
+  const setClockError = (error: string | null) => setClock(prev => ({ ...prev, error }));
+  const setClockSuccess = (success: string | null) => setClock(prev => ({ ...prev, success }));
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -191,20 +202,19 @@ export default function ClockScreen() {
   };
 
   const showError = (msg: string) => {
-    setVerifyStep("idle");
-    setClockError(msg);
+    // Atomic update: set step=idle AND error in one setState call to avoid race condition
+    setClock({ step: "idle", error: msg, success: null });
     // On native, also show Alert (on web, the overlay modal handles it)
     if (Platform.OS !== "web") {
-      Alert.alert("打卡失敗", msg, [{ text: "確定", onPress: () => setClockError(null) }]);
+      Alert.alert("打卡失敗", msg, [{ text: "確定", onPress: () => setClock(prev => ({ ...prev, error: null })) }]);
     }
   };
 
   const showSuccess = (msg: string) => {
-    setVerifyStep("idle");
-    setClockError(null);
-    setClockSuccess(msg);
+    // Atomic update: set step=idle AND success in one setState call to avoid race condition
+    setClock({ step: "idle", error: null, success: msg });
     if (Platform.OS !== "web") {
-      Alert.alert("打卡成功 ✅", msg, [{ text: "確定", onPress: () => setClockSuccess(null) }]);
+      Alert.alert("打卡成功 ✅", msg, [{ text: "確定", onPress: () => setClock(prev => ({ ...prev, success: null })) }]);
     }
   };
 
@@ -214,8 +224,11 @@ export default function ClockScreen() {
       const now = new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
       showSuccess(`上班打卡完成！\n打卡時間：${now}`);
     },
-    onError: (err) => {
-      showError(parseTrpcError(err));
+    onError: (err: any) => {
+      console.error("[clockIn onError]", JSON.stringify(err));
+      const msg = parseTrpcError(err);
+      console.error("[clockIn error msg]", msg);
+      showError(msg);
     },
   });
 
@@ -225,8 +238,11 @@ export default function ClockScreen() {
       const now = new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
       showSuccess(`下班打卡完成！\n打卡時間：${now}`);
     },
-    onError: (err) => {
-      showError(parseTrpcError(err));
+    onError: (err: any) => {
+      console.error("[clockOut onError]", JSON.stringify(err));
+      const msg = parseTrpcError(err);
+      console.error("[clockOut error msg]", msg);
+      showError(msg);
     },
   });
 
@@ -427,7 +443,7 @@ export default function ClockScreen() {
         step={verifyStep}
         error={clockError}
         success={clockSuccess}
-        onDismiss={() => { setClockError(null); setClockSuccess(null); }}
+        onDismiss={() => setClock(prev => ({ ...prev, error: null, success: null }))}
       />
 
       <ScrollView
