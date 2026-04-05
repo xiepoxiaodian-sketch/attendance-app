@@ -85,7 +85,14 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     Alert.alert("登出", "確定要登出嗎？", [
       { text: "取消" },
-      { text: "登出", style: "destructive", onPress: async () => { await logout(); router.replace("/login" as any); } },
+      {
+        text: "登出",
+        style: "destructive",
+        onPress: async () => {
+          await logout();
+          setTimeout(() => router.replace("/login" as any), 50);
+        },
+      },
     ]);
   };
 
