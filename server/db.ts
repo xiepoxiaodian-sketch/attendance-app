@@ -231,6 +231,8 @@ export async function getAllAttendance(startDate?: string, endDate?: string, emp
     clockOutTime: attendance.clockOutTime,
     clockInLocation: attendance.clockInLocation,
     clockOutLocation: attendance.clockOutLocation,
+    clockInPhoto: attendance.clockInPhoto,
+    clockOutPhoto: attendance.clockOutPhoto,
     shiftLabel: attendance.shiftLabel,
     status: attendance.status,
     note: attendance.note,

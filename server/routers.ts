@@ -381,6 +381,78 @@ const attendanceRouter = router({
       return db.getAllAttendance(input.startDate, input.endDate, input.employeeId);
     }),
 
+  getGrouped: publicProcedure
+    .input(z.object({
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      employeeId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const records = await db.getAllAttendance(input.startDate, input.endDate, input.employeeId);
+      // Group by employeeId + date (local date, not UTC)
+      const map = new Map<string, {
+        key: string;
+        employeeId: number;
+        employeeName: string;
+        dateKey: string;
+        dateRaw: any;
+        shifts: Array<{
+          id: number;
+          shiftLabel: string;
+          clockInTime: any;
+          clockOutTime: any;
+          status: string | null;
+          note: string | null;
+          clockInPhoto: string | null;
+          clockOutPhoto: string | null;
+          clockInLocation: string | null;
+          clockOutLocation: string | null;
+        }>;
+      }>();
+      for (const r of records) {
+        // Extract local date string (YYYY-MM-DD) safely
+        let dateKey = "";
+        if (r.date) {
+          const d = r.date instanceof Date ? r.date : new Date(r.date as unknown as string);
+          if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const mo = String(d.getMonth() + 1).padStart(2, "0");
+            const dy = String(d.getDate()).padStart(2, "0");
+            dateKey = `${y}-${mo}-${dy}`;
+          } else {
+            dateKey = String(r.date).split("T")[0].split(" ")[0];
+          }
+        }
+        const groupKey = `${r.employeeId}_${dateKey}`;
+        if (!map.has(groupKey)) {
+          map.set(groupKey, {
+            key: groupKey,
+            employeeId: r.employeeId,
+            employeeName: (r as any).employeeName ?? `#${r.employeeId}`,
+            dateKey,
+            dateRaw: r.date,
+            shifts: [],
+          });
+        }
+        map.get(groupKey)!.shifts.push({
+          id: r.id,
+          shiftLabel: r.shiftLabel || "一般班",
+          clockInTime: r.clockInTime,
+          clockOutTime: r.clockOutTime,
+          status: r.status ?? null,
+          note: r.note ?? null,
+          clockInPhoto: (r as any).clockInPhoto ?? null,
+          clockOutPhoto: (r as any).clockOutPhoto ?? null,
+          clockInLocation: r.clockInLocation ?? null,
+          clockOutLocation: r.clockOutLocation ?? null,
+        });
+      }
+      // Sort by date desc
+      return Array.from(map.values()).sort((a, b) =>
+        new Date(b.dateRaw).getTime() - new Date(a.dateRaw).getTime()
+      );
+    }),
+
   adminUpdate: publicProcedure
     .input(z.object({
       id: z.number(),

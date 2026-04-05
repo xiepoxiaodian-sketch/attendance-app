@@ -171,8 +171,7 @@ export default function AdminAttendanceScreen() {
   const [startDate, setStartDate] = useState(weekAgo);
   const [endDate, setEndDate] = useState(today);
 
-  const { data: records, refetch, isLoading } = trpc.attendance.getAll.useQuery({ startDate, endDate });
-  const { data: employees } = trpc.employees.list.useQuery();
+  const { data: groupedData, refetch, isLoading } = trpc.attendance.getGrouped.useQuery({ startDate, endDate });
 
   const deleteMutation = trpc.attendance.delete.useMutation({ onSuccess: () => refetch() });
 
@@ -182,54 +181,37 @@ export default function AdminAttendanceScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const getEmployeeName = useCallback((id: number) =>
-    employees?.find(e => e.id === id)?.fullName ?? `#${id}`, [employees]);
-
-  // Group records by employee + date
+  // Map server grouped data to GroupedRecord type
   const groupedRecords = useMemo<GroupedRecord[]>(() => {
-    const map = new Map<string, GroupedRecord>();
-    for (const r of (records ?? [])) {
-      const dateKey = r.date ? (typeof r.date === "string" ? (r.date as string).split("T")[0] : new Date(r.date as unknown as string).toISOString().split("T")[0]) : "";
-      const key = `${r.employeeId}_${dateKey}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          key,
-          employeeId: r.employeeId,
-          employeeName: getEmployeeName(r.employeeId),
-          date: formatDate(r.date),
-          dateRaw: r.date,
-          shifts: [],
-        });
-      }
-      map.get(key)!.shifts.push({
-        id: r.id,
-        shiftLabel: r.shiftLabel || "一般班",
-        clockInTime: r.clockInTime,
-        clockOutTime: r.clockOutTime,
-        status: r.status,
-        clockInPhoto: (r as any).clockInPhoto,
-        clockOutPhoto: (r as any).clockOutPhoto,
-      });
-    }
-    // Sort by date desc
-    return Array.from(map.values()).sort((a, b) =>
-      new Date(b.dateRaw).getTime() - new Date(a.dateRaw).getTime()
-    );
-  }, [records, getEmployeeName]);
+    return (groupedData ?? []).map(g => ({
+      key: g.key,
+      employeeId: g.employeeId,
+      employeeName: g.employeeName,
+      date: formatDate(g.dateRaw),
+      dateRaw: g.dateRaw,
+      shifts: g.shifts.map(s => ({
+        id: s.id,
+        shiftLabel: s.shiftLabel,
+        clockInTime: s.clockInTime,
+        clockOutTime: s.clockOutTime,
+        status: s.status,
+        clockInPhoto: s.clockInPhoto,
+        clockOutPhoto: s.clockOutPhoto,
+      })),
+    }));
+  }, [groupedData]);
 
   // Apply filters
   const filteredGroups = useMemo(() => {
     return groupedRecords.filter(group => {
-      // Name search
       if (searchQuery && !group.employeeName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      // Status filter
       if (statusFilter === "all") return true;
       if (statusFilter === "no_clockout") return group.shifts.some(s => s.clockInTime && !s.clockOutTime);
       return group.shifts.some(s => s.status === statusFilter);
     });
   }, [groupedRecords, searchQuery, statusFilter]);
 
-  const totalRecords = (records ?? []).length;
+  const totalRecords = groupedRecords.reduce((sum, g) => sum + g.shifts.length, 0);
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
