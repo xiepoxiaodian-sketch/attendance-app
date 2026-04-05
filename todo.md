@@ -228,3 +228,6 @@
 
 ## GPS timeout 二次修復
 - [x] 修復裝置綁定一直轉圈：Railway MySQL devices 表缺少 status 欄位，執行 ALTER TABLE 修復
+
+## 打卡錯誤提示修復
+- [ ] 修復 handleClock catch 區塊靜默吃掉錯誤，打卡失敗時正確顯示錯誤訊息

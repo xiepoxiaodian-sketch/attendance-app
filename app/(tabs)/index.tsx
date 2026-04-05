@@ -295,8 +295,11 @@ export default function ClockScreen() {
           shiftLabel,
         });
       }
-    } catch {
+    } catch (err: any) {
       setVerifyStep("idle");
+      // Show error to user (may be GPS out of range, server error, etc.)
+      const msg = err?.message || err?.data?.message || "打卡失敗，請稍後再試";
+      Alert.alert("打卡失敗", msg, [{ text: "確定" }]);
     } finally {
       // Reset to idle after a short delay
       setTimeout(() => setVerifyStep("idle"), 500);
