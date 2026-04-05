@@ -2,6 +2,14 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import webpush from "web-push";
 
+// Helper: get today's date in Taiwan timezone (UTC+8)
+function getTodayTW(): string {
+  const now = new Date();
+  const twOffset = 8 * 60 * 60 * 1000; // UTC+8 in ms
+  const twDate = new Date(now.getTime() + twOffset);
+  return twDate.toISOString().split("T")[0];
+}
+
 // VAPID keys
 const VAPID_PUBLIC_KEY = "BPs2MLc_pyu9-Nq3uO7tdqKisCip0hd7eAobAfDchzafO-nTBnNxqSsDILb5H75NlLaEk54Uz-KKTKkSIT1VKmQ";
 const VAPID_PRIVATE_KEY = "nj757QiuhOc-r7YvA9qxwyfUwgfsOHgMIMZtm5s620g";
@@ -103,7 +111,7 @@ const attendanceRouter = router({
       shiftLabel: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = getTodayTW();
       const existing = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
       const shiftLabel = input.shiftLabel || "班次1";
       const alreadyClockedIn = existing.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
@@ -205,7 +213,7 @@ const attendanceRouter = router({
       shiftLabel: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = getTodayTW();
       const now = new Date();
       const records = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
       let record;
@@ -298,7 +306,7 @@ const attendanceRouter = router({
   getToday: publicProcedure
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input }) => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = getTodayTW();
       const result = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
       return result ?? [];
     }),
@@ -505,7 +513,7 @@ const schedulesRouter = router({
   getToday: publicProcedure
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input }) => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = getTodayTW();
       const result = await db.getScheduleByEmployeeAndDate(input.employeeId, today);
       return result ?? null;
     }),
