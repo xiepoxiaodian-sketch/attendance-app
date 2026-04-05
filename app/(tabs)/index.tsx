@@ -220,6 +220,15 @@ export default function ClockScreen() {
 
       const requireGPS = settings?.work_location_lat && settings?.work_location_lng;
 
+      // Helper: wrap Location.getCurrentPositionAsync with a timeout
+      const getLocationWithTimeout = (options: Parameters<typeof Location.getCurrentPositionAsync>[0], timeoutMs: number) =>
+        Promise.race([
+          Location.getCurrentPositionAsync(options),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("TIMEOUT")), timeoutMs)
+          ),
+        ]);
+
       if (requireGPS) {
         // GPS required — must succeed
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -233,21 +242,25 @@ export default function ClockScreen() {
           return;
         }
         try {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          const loc = await getLocationWithTimeout({ accuracy: Location.Accuracy.High }, 10000);
           lat = loc.coords.latitude;
           lng = loc.coords.longitude;
           locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-        } catch {
+        } catch (e: any) {
           setVerifyStep("idle");
-          Alert.alert("定位失敗", "無法取得您的位置，請確認 GPS 已開啟後再試。", [{ text: "確定" }]);
+          if (e?.message === "TIMEOUT") {
+            Alert.alert("定位超時", "無法在限定時間內取得位置，請確認 GPS 已開啟且信號良好後再試。", [{ text: "確定" }]);
+          } else {
+            Alert.alert("定位失敗", "無法取得您的位置，請確認 GPS 已開啟後再試。", [{ text: "確定" }]);
+          }
           return;
         }
       } else {
-        // GPS not required — try to get location silently
+        // GPS not required — try to get location silently (5s timeout)
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === "granted") {
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            const loc = await getLocationWithTimeout({ accuracy: Location.Accuracy.Balanced }, 5000);
             lat = loc.coords.latitude;
             lng = loc.coords.longitude;
             locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
