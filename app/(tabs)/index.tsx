@@ -220,51 +220,68 @@ export default function ClockScreen() {
 
       const requireGPS = settings?.work_location_lat && settings?.work_location_lng;
 
-      // Helper: wrap Location.getCurrentPositionAsync with a timeout
-      const getLocationWithTimeout = (options: Parameters<typeof Location.getCurrentPositionAsync>[0], timeoutMs: number) =>
-        Promise.race([
-          Location.getCurrentPositionAsync(options),
+      // Helper: get location with timeout — uses native geolocation on Web (Expo Location hangs on Web)
+      const getLocationWithTimeout = (timeoutMs: number): Promise<{ latitude: number; longitude: number }> => {
+        if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.geolocation) {
+          return new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+              (err) => reject(new Error(err.code === 1 ? "PERMISSION_DENIED" : "TIMEOUT")),
+              { timeout: timeoutMs, enableHighAccuracy: true, maximumAge: 0 }
+            );
+          });
+        }
+        // Native: use Expo Location with Promise.race timeout
+        return Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).then((loc) => ({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          })),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error("TIMEOUT")), timeoutMs)
           ),
         ]);
+      };
 
       if (requireGPS) {
         // GPS required — must succeed
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
-          setVerifyStep("idle");
-          Alert.alert(
-            "需要定位權限",
-            "打卡需要取得您的位置，請允許定位權限後再試。",
-            [{ text: "確定" }]
-          );
-          return;
+        if (Platform.OS !== "web") {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") {
+            setVerifyStep("idle");
+            Alert.alert(
+              "需要定位權限",
+              "打卡需要取得您的位置，請允許定位權限後再試。",
+              [{ text: "確定" }]
+            );
+            return;
+          }
         }
         try {
-          const loc = await getLocationWithTimeout({ accuracy: Location.Accuracy.High }, 10000);
-          lat = loc.coords.latitude;
-          lng = loc.coords.longitude;
+          const coords = await getLocationWithTimeout(10000);
+          lat = coords.latitude;
+          lng = coords.longitude;
           locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
         } catch (e: any) {
           setVerifyStep("idle");
-          if (e?.message === "TIMEOUT") {
-            Alert.alert("定位超時", "無法在限定時間內取得位置，請確認 GPS 已開啟且信號良好後再試。", [{ text: "確定" }]);
+          if (e?.message === "PERMISSION_DENIED") {
+            Alert.alert("需要定位權限", "打卡需要取得您的位置，請允許定位權限後再試。", [{ text: "確定" }]);
           } else {
-            Alert.alert("定位失敗", "無法取得您的位置，請確認 GPS 已開啟後再試。", [{ text: "確定" }]);
+            Alert.alert("定位超時", "無法在限定時間內取得位置，請確認 GPS 已開啟且信號良好後再試。", [{ text: "確定" }]);
           }
           return;
         }
       } else {
         // GPS not required — try to get location silently (5s timeout)
         try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === "granted") {
-            const loc = await getLocationWithTimeout({ accuracy: Location.Accuracy.Balanced }, 5000);
-            lat = loc.coords.latitude;
-            lng = loc.coords.longitude;
-            locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+          if (Platform.OS !== "web") {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== "granted") throw new Error("no permission");
           }
+          const coords = await getLocationWithTimeout(5000);
+          lat = coords.latitude;
+          lng = coords.longitude;
+          locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
         } catch {
           // Silent fail — location not required
         }

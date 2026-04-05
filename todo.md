@@ -231,3 +231,6 @@
 
 ## 打卡錯誤提示修復
 - [ ] 修復 handleClock catch 區塊靜默吃掉錯誤，打卡失敗時正確顯示錯誤訊息
+
+## GPS Web 定位修復
+- [ ] 改用 Web 原生 navigator.geolocation（有 timeout 參數），解決 Expo Location 在 Web 上永遠卡住的問題
