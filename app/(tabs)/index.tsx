@@ -193,12 +193,19 @@ export default function ClockScreen() {
   const registerDeviceMutation = trpc.devices.register.useMutation();
 
   const parseTrpcError = (err: any): string => {
-    return (
+    // tRPC v11 error structure: err.message contains the actual error text
+    // err.shape.message is also available in some versions
+    // Try all known paths to extract a meaningful message
+    const msg =
       err?.shape?.message ||
       err?.data?.message ||
-      (err?.message && err.message !== "INTERNAL_SERVER_ERROR" ? err.message : null) ||
-      "打卡失敗，請稍再試"
-    );
+      err?.message ||
+      "";
+    // Filter out generic tRPC internal error codes that aren't user-friendly
+    if (!msg || msg === "INTERNAL_SERVER_ERROR" || msg === "BAD_REQUEST" || msg === "UNAUTHORIZED") {
+      return "打卡失敗，請稍後再試（如問題持續請聯絡管理員）";
+    }
+    return msg;
   };
 
   const showError = (msg: string) => {
@@ -316,7 +323,11 @@ export default function ClockScreen() {
       let lng: number | undefined;
       let locationName: string | undefined;
 
-      const requireGPS = settings?.work_location_lat && settings?.work_location_lng;
+      // requireGPS: 同時檢查 require_gps 開關和工作地點座標
+      // 注意：settings 可能尚未載入（undefined），此時保守地視為需要 GPS
+      const requireGPS = settings === undefined
+        ? true  // settings 未載入時，保守地嘗試取得 GPS
+        : (settings?.require_gps === "true" && !!(settings?.work_location_lat && settings?.work_location_lng));
 
       // Helper: get location with timeout — uses native geolocation on Web (Expo Location hangs on Web)
       const getLocationWithTimeout = (timeoutMs: number): Promise<{ latitude: number; longitude: number }> => {
@@ -324,7 +335,12 @@ export default function ClockScreen() {
           return new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
               (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-              (err) => reject(new Error(err.code === 1 ? "PERMISSION_DENIED" : "TIMEOUT")),
+              (err) => {
+                // err.code: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
+                if (err.code === 1) reject(new Error("PERMISSION_DENIED"));
+                else if (err.code === 2) reject(new Error("POSITION_UNAVAILABLE"));
+                else reject(new Error("TIMEOUT"));
+              },
               { timeout: timeoutMs, enableHighAccuracy: true, maximumAge: 0 }
             );
           });
@@ -341,48 +357,40 @@ export default function ClockScreen() {
         ]);
       };
 
-      if (requireGPS) {
-        // GPS required — must succeed
+      // 嘗試取得 GPS（無論是否必要，都嘗試取得以便後端驗證）
+      try {
         if (Platform.OS !== "web") {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status !== "granted") {
-            setVerifyStep("idle");
-            Alert.alert(
-              "需要定位權限",
-              "打卡需要取得您的位置，請允許定位權限後再試。",
-              [{ text: "確定" }]
-            );
-            return;
+            if (requireGPS) {
+              showError("打卡需要取得您的位置，請允許定位權限後再試。");
+              return;
+            }
+            // 不需要 GPS 時，無權限就跳過
+            throw new Error("no permission");
           }
         }
-        try {
-          const coords = await getLocationWithTimeout(10000);
-          lat = coords.latitude;
-          lng = coords.longitude;
-          locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-        } catch (e: any) {
-          setVerifyStep("idle");
+        const coords = await getLocationWithTimeout(10000);
+        lat = coords.latitude;
+        lng = coords.longitude;
+        locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      } catch (e: any) {
+        if (requireGPS) {
+          // GPS 必要但失敗 → 顯示明確錯誤，停止打卡
           if (e?.message === "PERMISSION_DENIED") {
-            Alert.alert("需要定位權限", "打卡需要取得您的位置，請允許定位權限後再試。", [{ text: "確定" }]);
+            showError("打卡需要取得您的位置，請允許定位權限後再試。");
+          } else if (e?.message === "POSITION_UNAVAILABLE") {
+            showError("無法取得您的位置，請確認 GPS 已開啟後再試。");
+          } else if (e?.message === "TIMEOUT") {
+            showError("定位超時，無法在限定時間內取得位置，請確認 GPS 已開啟且信號良好後再試。");
+          } else if (e?.message !== "no permission") {
+            showError(`定位失敗：${e?.message || "未知錯誤"}，請稍後再試。`);
           } else {
-            Alert.alert("定位超時", "無法在限定時間內取得位置，請確認 GPS 已開啟且信號良好後再試。", [{ text: "確定" }]);
+            showError("打卡需要取得您的位置，請允許定位權限後再試。");
           }
           return;
         }
-      } else {
-        // GPS not required — try to get location silently (5s timeout)
-        try {
-          if (Platform.OS !== "web") {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== "granted") throw new Error("no permission");
-          }
-          const coords = await getLocationWithTimeout(5000);
-          lat = coords.latitude;
-          lng = coords.longitude;
-          locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-        } catch {
-          // Silent fail — location not required
-        }
+        // GPS 非必要時，靜默忽略定位錯誤，繼續打卡
       }
 
       // ── Step 4: Clock in / out ─────────────────────────────────────────────

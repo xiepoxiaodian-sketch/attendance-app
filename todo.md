@@ -248,3 +248,10 @@
 ## 早退判斷修復
 - [ ] 修復早退判斷邏輯：班次 11:00-14:00，下班打卡 14:05 不應顯示早退（時區或判斷邏輯問題）
 - [ ] 員工當天多個班次時，分別對應各班次判斷遲到/早退/正常
+
+## 打卡靜默失敗修復（陳宇心案例）
+- [x] 修復 GPS 錯誤碼處理：Web geolocation err.code 2（POSITION_UNAVAILABLE）未被處理，導致靜默失敗
+- [x] 修復 requireGPS 判斷：同時讀取 require_gps 設定開關，不再只看座標是否存在
+- [x] 修復 requireGPS 保守策略：settings 未載入時視為需要 GPS，避免跳過驗證
+- [x] 改善 parseTrpcError：過濾 INTERNAL_SERVER_ERROR 等非使用者友善訊息，顯示更明確的提示
+- [x] 統一 GPS 取得邏輯：合併 requireGPS/非 requireGPS 路徑，避免靜默吞掉錯誤
