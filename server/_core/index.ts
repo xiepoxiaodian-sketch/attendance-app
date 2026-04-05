@@ -63,25 +63,68 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
-  // One-time migration endpoint: add status column to devices table if missing
+  // Migration endpoint: run all pending schema migrations
   app.post("/api/migrate", async (_req, res) => {
     try {
       const mysql = await import("mysql2/promise");
       const conn = await mysql.createConnection(process.env.DATABASE_URL!);
-      // Check if status column exists
-      const [cols] = await conn.execute(
-        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'status'`
-      ) as any[];
-      if (cols.length === 0) {
-        await conn.execute(
-          `ALTER TABLE devices ADD COLUMN status ENUM('approved','pending','rejected') NOT NULL DEFAULT 'approved'`
-        );
-        await conn.end();
-        res.json({ ok: true, message: "status column added" });
-      } else {
-        await conn.end();
-        res.json({ ok: true, message: "status column already exists" });
+      const results: string[] = [];
+
+      // Helper: check if column exists
+      async function hasColumn(table: string, column: string): Promise<boolean> {
+        const [rows] = await conn.execute(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+          [table, column]
+        ) as any[];
+        return rows.length > 0;
       }
+      // Helper: check if table exists
+      async function hasTable(table: string): Promise<boolean> {
+        const [rows] = await conn.execute(
+          `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+          [table]
+        ) as any[];
+        return rows.length > 0;
+      }
+
+      // 0009: devices.status column
+      if (!(await hasColumn('devices', 'status'))) {
+        await conn.execute(`ALTER TABLE devices ADD COLUMN status ENUM('approved','pending','rejected') NOT NULL DEFAULT 'approved'`);
+        results.push('Added devices.status');
+      }
+
+      // 0011: employees.lineUserId column
+      if (!(await hasColumn('employees', 'lineUserId'))) {
+        await conn.execute(`ALTER TABLE employees ADD COLUMN lineUserId varchar(64)`);
+        results.push('Added employees.lineUserId');
+      }
+
+      // 0012: lineOtpCodes table
+      if (!(await hasTable('lineOtpCodes'))) {
+        await conn.execute(`CREATE TABLE lineOtpCodes (
+          id int AUTO_INCREMENT NOT NULL,
+          employeeId int NOT NULL,
+          code varchar(6) NOT NULL,
+          expiresAt timestamp NOT NULL,
+          used boolean NOT NULL DEFAULT false,
+          createdAt timestamp NOT NULL DEFAULT (now()),
+          CONSTRAINT lineOtpCodes_id PRIMARY KEY(id)
+        )`);
+        results.push('Created lineOtpCodes table');
+      }
+
+      // 0013: attendance.clockInPhoto and clockOutPhoto columns
+      if (!(await hasColumn('attendance', 'clockInPhoto'))) {
+        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockInPhoto text`);
+        results.push('Added attendance.clockInPhoto');
+      }
+      if (!(await hasColumn('attendance', 'clockOutPhoto'))) {
+        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockOutPhoto text`);
+        results.push('Added attendance.clockOutPhoto');
+      }
+
+      await conn.end();
+      res.json({ ok: true, applied: results, message: results.length > 0 ? results.join(', ') : 'All up to date' });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: err.message });
     }
