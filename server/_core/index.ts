@@ -63,6 +63,30 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  // One-time migration endpoint: add status column to devices table if missing
+  app.post("/api/migrate", async (_req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+      // Check if status column exists
+      const [cols] = await conn.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'status'`
+      ) as any[];
+      if (cols.length === 0) {
+        await conn.execute(
+          `ALTER TABLE devices ADD COLUMN status ENUM('approved','pending','rejected') NOT NULL DEFAULT 'approved'`
+        );
+        await conn.end();
+        res.json({ ok: true, message: "status column added" });
+      } else {
+        await conn.end();
+        res.json({ ok: true, message: "status column already exists" });
+      }
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // Serve static frontend files in production
   const distWebPath = path.join(process.cwd(), "dist-web");
   if (process.env.NODE_ENV === "production") {

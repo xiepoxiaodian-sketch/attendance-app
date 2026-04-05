@@ -225,3 +225,6 @@
 
 ## GPS 定位修復
 - [x] GPS 定位加入 10 秒 timeout，超時後顯示錯誤訊息，不讓使用者無限轉圈
+
+## GPS timeout 二次修復
+- [ ] GPS timeout 在手機上仍無效，改用 expo-location 的 timeout 參數 + Promise.race 雙重保護
