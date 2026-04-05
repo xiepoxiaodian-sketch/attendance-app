@@ -130,6 +130,51 @@ async function startServer() {
     }
   });
 
+  // Excel export endpoint - server-side xlsx generation
+  app.get("/api/export/excel", async (req, res) => {
+    try {
+      const XLSX = await import("xlsx");
+      const { type, startDate, endDate } = req.query as Record<string, string>;
+      const dbModule = await import("../db");
+
+      let headers: string[] = [];
+      let rows: string[][] = [];
+      let filename = "report.xlsx";
+
+      if (type === "attendance_detail") {
+        const records = await dbModule.getAllAttendance(startDate, endDate);
+        headers = ["日期", "員工姓名", "帳號", "上班時間", "下班時間", "班次", "狀態", "備註"];
+        const STATUS_LABELS: Record<string, string> = { normal: "正常", late: "遲到", early_leave: "早退", absent: "缺勤" };
+        const fmt = (v: unknown) => { if (!v) return ""; const d = new Date(v as string); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
+        const fmtD = (v: unknown) => { if (!v) return ""; const d = new Date(v as string); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+        rows = records.map((r: any) => [fmtD(r.date), r.employeeName ?? "", r.employeeUsername ?? "", fmt(r.clockInTime), fmt(r.clockOutTime), r.shiftLabel ?? "", STATUS_LABELS[r.status ?? ""] ?? r.status ?? "", r.note ?? ""]);
+        filename = `打卡明細_${startDate ?? ""}_${endDate ?? ""}.xlsx`;
+      } else if (type === "leave_records") {
+        const records = await dbModule.getAllLeaveRequests("approved");
+        headers = ["員工姓名", "假別", "開始日期", "結束日期", "天數", "申請時間", "備註"];
+        const LEAVE_LABELS: Record<string, string> = { annual: "特休", sick: "病假", personal: "事假", marriage: "婚假", bereavement: "喪假", official: "公假", other: "休假" };
+        const fmtD = (v: unknown) => { if (!v) return ""; const d = new Date(v as string); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+        const fmt = (v: unknown) => { if (!v) return ""; const d = new Date(v as string); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
+        rows = (records as any[]).map(l => [l.employeeName ?? "", LEAVE_LABELS[l.leaveType ?? ""] ?? l.leaveType ?? "", fmtD(l.startDate), fmtD(l.endDate), String(l.totalDays ?? ""), fmt(l.createdAt), l.reason ?? ""]);
+        filename = `請假紀錄_${startDate ?? ""}_${endDate ?? ""}.xlsx`;
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws["!cols"] = headers.map((h, i) => ({ wch: Math.min(Math.max(Math.max(h.length, ...rows.map(r => (r[i] ?? "").length)) + 2, 10), 40) }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "資料");
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      res.setHeader("Cache-Control", "no-cache");
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[Excel Export]", err);
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // LINE Bot Webhook endpoint
   app.post("/api/line/webhook", async (req, res) => {
     try {
@@ -144,7 +189,21 @@ async function startServer() {
   // Serve static frontend files in production
   const distWebPath = path.join(process.cwd(), "dist-web");
   if (process.env.NODE_ENV === "production") {
-    app.use(express.static(distWebPath));
+    // JS/CSS assets have content-hash in filename → long cache
+    app.use("/_expo", express.static(path.join(distWebPath, "_expo"), {
+      maxAge: "1y",
+      immutable: true,
+    }));
+    // HTML pages must NOT be cached so new deploys take effect immediately
+    app.use(express.static(distWebPath, {
+      setHeaders(res, filePath) {
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        }
+      },
+    }));
   }
 
   app.use(
@@ -157,19 +216,27 @@ async function startServer() {
 
   // SPA fallback: serve route-specific .html first, then index.html for all non-API routes in production
   if (process.env.NODE_ENV === "production") {
+    const noCache = (res: any) => {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+    };
     app.get("*", (req, res) => {
       if (req.path.startsWith("/api")) return;
       // Try exact path + .html (e.g. /admin/employees -> dist-web/admin/employees.html)
       const htmlPath = path.join(distWebPath, req.path.replace(/\/$/, "") + ".html");
       if (fs.existsSync(htmlPath)) {
+        noCache(res);
         return res.sendFile(htmlPath);
       }
       // Try path/index.html (e.g. /admin -> dist-web/admin/index.html)
       const indexPath = path.join(distWebPath, req.path.replace(/\/$/, ""), "index.html");
       if (fs.existsSync(indexPath)) {
+        noCache(res);
         return res.sendFile(indexPath);
       }
       // Fallback to root index.html
+      noCache(res);
       res.sendFile(path.join(distWebPath, "index.html"));
     });
   }
