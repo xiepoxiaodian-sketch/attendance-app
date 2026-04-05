@@ -104,6 +104,7 @@ export default function ClockScreen() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [verifyStep, setVerifyStep] = useState<VerifyStep>("idle");
   const [refreshing, setRefreshing] = useState(false);
+  const [clockError, setClockError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -125,24 +126,36 @@ export default function ClockScreen() {
   const registerDeviceMutation = trpc.devices.register.useMutation();
 
   const parseTrpcError = (err: any): string => {
-    // tRPC wraps the actual message in shape.message or data.message
     return (
       err?.shape?.message ||
       err?.data?.message ||
       (err?.message && err.message !== "INTERNAL_SERVER_ERROR" ? err.message : null) ||
-      "打卡失敗，請稍後再試"
+      "打卡失敗，請稍再試"
     );
+  };
+
+  const showError = (msg: string) => {
+    setVerifyStep("idle");
+    setClockError(msg);
+    // Also try Alert for native
+    if (Platform.OS !== "web") {
+      Alert.alert("打卡失敗", msg, [{ text: "確定" }]);
+    }
+    // Auto-clear error after 6 seconds
+    setTimeout(() => setClockError(null), 6000);
   };
 
   const clockInMutation = trpc.attendance.clockIn.useMutation({
     onSuccess: () => {
       refetchAttendance();
       setVerifyStep("done");
-      setTimeout(() => Alert.alert("打卡成功 ✅", "上班打卡完成！", [{ text: "確定" }]), 100);
+      setClockError(null);
+      if (Platform.OS !== "web") {
+        Alert.alert("打卡成功 ✅", "上班打卡完成！", [{ text: "確定" }]);
+      }
     },
     onError: (err) => {
-      setVerifyStep("idle");
-      setTimeout(() => Alert.alert("打卡失敗", parseTrpcError(err), [{ text: "確定" }]), 100);
+      showError(parseTrpcError(err));
     },
   });
 
@@ -150,11 +163,13 @@ export default function ClockScreen() {
     onSuccess: () => {
       refetchAttendance();
       setVerifyStep("done");
-      setTimeout(() => Alert.alert("打卡成功 ✅", "下班打卡完成！", [{ text: "確定" }]), 100);
+      setClockError(null);
+      if (Platform.OS !== "web") {
+        Alert.alert("打卡成功 ✅", "下班打卡完成！", [{ text: "確定" }]);
+      }
     },
     onError: (err) => {
-      setVerifyStep("idle");
-      setTimeout(() => Alert.alert("打卡失敗", parseTrpcError(err), [{ text: "確定" }]), 100);
+      showError(parseTrpcError(err));
     },
   });
 
@@ -299,8 +314,9 @@ export default function ClockScreen() {
 
       // ── Step 4: Clock in / out ─────────────────────────────────────────────
       setVerifyStep("clocking");
+      // Use mutate (not mutateAsync) so errors go ONLY to onError, not to catch
       if (isClockIn) {
-        await clockInMutation.mutateAsync({
+        clockInMutation.mutate({
           employeeId: employee.id,
           deviceId,
           lat,
@@ -312,7 +328,7 @@ export default function ClockScreen() {
         const record = todayAttendance?.find(
           (r) => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime
         );
-        await clockOutMutation.mutateAsync({
+        clockOutMutation.mutate({
           employeeId: employee.id,
           attendanceId: record?.id,
           deviceId,
@@ -323,16 +339,8 @@ export default function ClockScreen() {
         });
       }
     } catch (err: any) {
-      // Only handle non-mutation errors here (GPS, biometric, device)
-      // clockIn/clockOut errors are handled by onError above
-      const isMutationError = err?.name === "TRPCClientError" || err?.shape !== undefined;
-      if (!isMutationError) {
-        setVerifyStep("idle");
-        const msg = err?.message || "打卡失敗，請稍後再試";
-        setTimeout(() => Alert.alert("打卡失敗", msg, [{ text: "確定" }]), 100);
-      }
-    } finally {
-      setTimeout(() => setVerifyStep((prev) => prev === "clocking" ? "idle" : prev), 600);
+      // Only GPS / biometric / device errors reach here (mutation errors go to onError)
+      showError(err?.message || "打卡失敗，請稍後再試");
     }
   };
 
@@ -532,6 +540,27 @@ export default function ClockScreen() {
                 {isCompleted && (
                   <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, paddingVertical: 10, alignItems: "center" }}>
                     <Text style={{ color: "#16A34A", fontSize: 14, fontWeight: "600" }}>今日已完成打卡 ✅</Text>
+                  </View>
+                )}
+
+                {/* Error message — shown on Web where Alert may not work */}
+                {clockError && !isCompleted && (
+                  <View style={{
+                    backgroundColor: "#FEF2F2",
+                    borderRadius: 10,
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    marginTop: 8,
+                    borderWidth: 1,
+                    borderColor: "#FECACA",
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 6,
+                  }}>
+                    <Text style={{ fontSize: 14 }}>⚠️</Text>
+                    <Text style={{ color: "#DC2626", fontSize: 13, fontWeight: "600", flex: 1, lineHeight: 20 }}>
+                      {clockError}
+                    </Text>
                   </View>
                 )}
               </View>
