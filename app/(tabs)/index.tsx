@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -11,30 +11,9 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import * as LocalAuthentication from "expo-local-authentication";
-import * as Device from "expo-device";
 import { ScreenContainer } from "@/components/screen-container";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
-
-// ─── Device ID helper ────────────────────────────────────────────────────────
-function getDeviceId(): string {
-  if (Platform.OS === "web") {
-    let id = localStorage.getItem("device_id");
-    if (!id) {
-      id = `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      localStorage.setItem("device_id", id);
-    }
-    return id;
-  }
-  return `${Device.brand}-${Device.modelName}-${Device.osVersion}`
-    .replace(/\s+/g, "-")
-    .toLowerCase();
-}
-
-function getDevicePlatform(): string {
-  if (Platform.OS === "web") return "web";
-  return Platform.OS;
-}
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
 function formatTime(date: Date | string | null | undefined): string {
@@ -52,21 +31,239 @@ function formatDate(date: Date): string {
   });
 }
 
-// ─── Verification step indicator ─────────────────────────────────────────────
-type VerifyStep = "idle" | "biometric" | "device" | "location" | "clocking" | "done";
+// ─── Camera Modal (Web only, uses getUserMedia) ───────────────────────────────
+interface CameraModalProps {
+  visible: boolean;
+  actionLabel: string; // e.g. "上班打卡" or "下班打卡"
+  onCapture: (base64: string, timestamp: number) => void;
+  onCancel: () => void;
+}
 
-function VerifyStepBadge({ step, error, success, onDismiss }: { step: VerifyStep; error: string | null; success: string | null; onDismiss: () => void }) {
-  // Show overlay when processing OR when there's an error/success to display
+function CameraModal({ visible, actionLabel, onCapture, onCancel }: CameraModalProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+
+  // Start camera when modal opens
+  useEffect(() => {
+    if (!visible) return;
+    setCameraReady(false);
+    setCameraError(null);
+    setCountdown(null);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+          setCameraReady(true);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          if (e.name === "NotAllowedError") {
+            setCameraError("請允許瀏覽器使用相機權限後再試");
+          } else if (e.name === "NotFoundError") {
+            setCameraError("找不到相機裝置，請確認設備有相機");
+          } else {
+            setCameraError(`無法開啟相機：${e.message}`);
+          }
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      setCameraReady(false);
+    };
+  }, [visible]);
+
+  const handleCapture = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const w = video.videoWidth || 640;
+    const h = video.videoHeight || 480;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d")!;
+
+    // Mirror the image (front camera is mirrored in preview, un-mirror for capture)
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -w, 0, w, h);
+    ctx.restore();
+
+    // Draw timestamp watermark
+    const now = new Date();
+    const twTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const timeStr = twTime.toISOString().replace("T", " ").slice(0, 19) + " (UTC+8)";
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, h - 36, w, 36);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "bold 14px monospace";
+    ctx.fillText(timeStr, 10, h - 12);
+
+    const timestamp = now.getTime();
+    const base64 = canvas.toDataURL("image/jpeg", 0.85);
+
+    // Stop camera
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+
+    onCapture(base64, timestamp);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <View style={{
+      position: "absolute",
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.85)",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }}>
+      <View style={{
+        backgroundColor: "#1E293B",
+        borderRadius: 20,
+        padding: 20,
+        width: "90%",
+        maxWidth: 400,
+        alignItems: "center",
+      }}>
+        <Text style={{ color: "white", fontSize: 18, fontWeight: "700", marginBottom: 4 }}>
+          📷 {actionLabel} — 拍照驗證
+        </Text>
+        <Text style={{ color: "#94A3B8", fontSize: 12, marginBottom: 16, textAlign: "center" }}>
+          請確認臉部清晰可見，然後按下快門
+        </Text>
+
+        {/* Camera preview */}
+        <View style={{
+          width: "100%",
+          aspectRatio: 4 / 3,
+          backgroundColor: "#0F172A",
+          borderRadius: 12,
+          overflow: "hidden",
+          marginBottom: 16,
+          alignItems: "center",
+          justifyContent: "center",
+        }}>
+          {cameraError ? (
+            <View style={{ padding: 20, alignItems: "center" }}>
+              <Text style={{ fontSize: 32, marginBottom: 12 }}>📷</Text>
+              <Text style={{ color: "#F87171", fontSize: 14, textAlign: "center", lineHeight: 22 }}>
+                {cameraError}
+              </Text>
+            </View>
+          ) : !cameraReady ? (
+            <View style={{ alignItems: "center" }}>
+              <ActivityIndicator color="white" size="large" />
+              <Text style={{ color: "#94A3B8", marginTop: 12, fontSize: 13 }}>相機啟動中...</Text>
+            </View>
+          ) : null}
+
+          {/* Native video element via dangerouslySetInnerHTML approach — use web-specific ref */}
+          {Platform.OS === "web" && (
+            <video
+              ref={videoRef as any}
+              autoPlay
+              playsInline
+              muted
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                transform: "scaleX(-1)", // mirror for natural selfie feel
+                display: cameraReady ? "block" : "none",
+                borderRadius: 12,
+              } as any}
+            />
+          )}
+        </View>
+
+        {/* Hidden canvas for capture */}
+        {Platform.OS === "web" && (
+          <canvas ref={canvasRef as any} style={{ display: "none" } as any} />
+        )}
+
+        {/* Buttons */}
+        <View style={{ flexDirection: "row", gap: 12, width: "100%" }}>
+          <TouchableOpacity
+            onPress={onCancel}
+            style={{
+              flex: 1,
+              backgroundColor: "#334155",
+              borderRadius: 12,
+              paddingVertical: 14,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#CBD5E1", fontSize: 15, fontWeight: "600" }}>取消</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleCapture}
+            disabled={!cameraReady || !!cameraError}
+            style={{
+              flex: 2,
+              backgroundColor: cameraReady && !cameraError ? "#2563EB" : "#475569",
+              borderRadius: 12,
+              paddingVertical: 14,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>
+              {cameraReady ? "📸 拍照確認" : "等待相機..."}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={{ color: "#475569", fontSize: 11, marginTop: 12, textAlign: "center" }}>
+          照片將加入時間戳記並存入打卡記錄，僅管理員可查看
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Verification step overlay ────────────────────────────────────────────────
+type VerifyStep = "idle" | "biometric" | "location" | "clocking" | "done";
+
+function VerifyStepBadge({ step, error, success, onDismiss }: {
+  step: VerifyStep;
+  error: string | null;
+  success: string | null;
+  onDismiss: () => void;
+}) {
   const isProcessing = step !== "idle" && step !== "done";
   const hasError = !!error;
   const hasSuccess = !!success;
-
   if (!isProcessing && !hasError && !hasSuccess) return null;
 
   const labels: Record<VerifyStep, string> = {
     idle: "",
     biometric: "🔐 生物識別驗證中...",
-    device: "📱 裝置綁定確認中...",
     location: "📍 定位取得中...",
     clocking: "⏳ 打卡記錄中...",
     done: "",
@@ -95,7 +292,6 @@ function VerifyStepBadge({ step, error, success, onDismiss }: { step: VerifyStep
         elevation: 12,
       }}>
         {hasError ? (
-          // Error state
           <>
             <Text style={{ fontSize: 36, marginBottom: 12 }}>⚠️</Text>
             <Text style={{ fontSize: 16, fontWeight: "700", color: "#DC2626", textAlign: "center", marginBottom: 8 }}>
@@ -106,18 +302,12 @@ function VerifyStepBadge({ step, error, success, onDismiss }: { step: VerifyStep
             </Text>
             <TouchableOpacity
               onPress={onDismiss}
-              style={{
-                backgroundColor: "#2563EB",
-                borderRadius: 10,
-                paddingVertical: 12,
-                paddingHorizontal: 32,
-              }}
+              style={{ backgroundColor: "#2563EB", borderRadius: 10, paddingVertical: 12, paddingHorizontal: 32 }}
             >
               <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>確定</Text>
             </TouchableOpacity>
           </>
         ) : hasSuccess ? (
-          // Success state
           <>
             <Text style={{ fontSize: 36, marginBottom: 12 }}>✅</Text>
             <Text style={{ fontSize: 16, fontWeight: "700", color: "#16A34A", textAlign: "center", marginBottom: 8 }}>
@@ -128,18 +318,12 @@ function VerifyStepBadge({ step, error, success, onDismiss }: { step: VerifyStep
             </Text>
             <TouchableOpacity
               onPress={onDismiss}
-              style={{
-                backgroundColor: "#16A34A",
-                borderRadius: 10,
-                paddingVertical: 12,
-                paddingHorizontal: 32,
-              }}
+              style={{ backgroundColor: "#16A34A", borderRadius: 10, paddingVertical: 12, paddingHorizontal: 32 }}
             >
               <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>確定</Text>
             </TouchableOpacity>
           </>
         ) : (
-          // Loading state
           <>
             <ActivityIndicator size="large" color="#2563EB" style={{ marginBottom: 14 }} />
             <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B", textAlign: "center" }}>
@@ -157,7 +341,6 @@ function VerifyStepBadge({ step, error, success, onDismiss }: { step: VerifyStep
 export default function ClockScreen() {
   const { employee } = useEmployeeAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  // Single state object to avoid race conditions between step/error/success updates
   const [clock, setClock] = useState<{ step: VerifyStep; error: string | null; success: string | null }>({
     step: "idle",
     error: null,
@@ -165,13 +348,17 @@ export default function ClockScreen() {
   });
   const [refreshing, setRefreshing] = useState(false);
 
-  // Convenience aliases
+  // Camera modal state
+  const [cameraVisible, setCameraVisible] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    shiftLabel: string;
+    isClockIn: boolean;
+  } | null>(null);
+
   const verifyStep = clock.step;
   const clockError = clock.error;
   const clockSuccess = clock.success;
   const setVerifyStep = (step: VerifyStep) => setClock(prev => ({ ...prev, step }));
-  const setClockError = (error: string | null) => setClock(prev => ({ ...prev, error }));
-  const setClockSuccess = (success: string | null) => setClock(prev => ({ ...prev, success }));
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -190,18 +377,8 @@ export default function ClockScreen() {
 
   const { data: settings } = trpc.settings.getAll.useQuery();
 
-  const registerDeviceMutation = trpc.devices.register.useMutation();
-
   const parseTrpcError = (err: any): string => {
-    // tRPC v11 error structure: err.message contains the actual error text
-    // err.shape.message is also available in some versions
-    // Try all known paths to extract a meaningful message
-    const msg =
-      err?.shape?.message ||
-      err?.data?.message ||
-      err?.message ||
-      "";
-    // Filter out generic tRPC internal error codes that aren't user-friendly
+    const msg = err?.shape?.message || err?.data?.message || err?.message || "";
     if (!msg || msg === "INTERNAL_SERVER_ERROR" || msg === "BAD_REQUEST" || msg === "UNAUTHORIZED") {
       return "打卡失敗，請稍後再試（如問題持續請聯絡管理員）";
     }
@@ -209,16 +386,13 @@ export default function ClockScreen() {
   };
 
   const showError = (msg: string) => {
-    // Atomic update: set step=idle AND error in one setState call to avoid race condition
     setClock({ step: "idle", error: msg, success: null });
-    // On native, also show Alert (on web, the overlay modal handles it)
     if (Platform.OS !== "web") {
       Alert.alert("打卡失敗", msg, [{ text: "確定", onPress: () => setClock(prev => ({ ...prev, error: null })) }]);
     }
   };
 
   const showSuccess = (msg: string) => {
-    // Atomic update: set step=idle AND success in one setState call to avoid race condition
     setClock({ step: "idle", error: null, success: msg });
     if (Platform.OS !== "web") {
       Alert.alert("打卡成功 ✅", msg, [{ text: "確定", onPress: () => setClock(prev => ({ ...prev, success: null })) }]);
@@ -232,10 +406,7 @@ export default function ClockScreen() {
       showSuccess(`上班打卡完成！\n打卡時間：${now}`);
     },
     onError: (err: any) => {
-      console.error("[clockIn onError]", JSON.stringify(err));
-      const msg = parseTrpcError(err);
-      console.error("[clockIn error msg]", msg);
-      showError(msg);
+      showError(parseTrpcError(err));
     },
   });
 
@@ -246,10 +417,7 @@ export default function ClockScreen() {
       showSuccess(`下班打卡完成！\n打卡時間：${now}`);
     },
     onError: (err: any) => {
-      console.error("[clockOut onError]", JSON.stringify(err));
-      const msg = parseTrpcError(err);
-      console.error("[clockOut error msg]", msg);
-      showError(msg);
+      showError(parseTrpcError(err));
     },
   });
 
@@ -259,22 +427,19 @@ export default function ClockScreen() {
     setRefreshing(false);
   }, []);
 
-  // ─── Three-step verification + clock ───────────────────────────────────────
+  // ─── Step 1: User taps clock button → biometric (native) or camera (web) ───
   const handleClock = async (shiftLabel: string, isClockIn: boolean) => {
     if (!employee || verifyStep !== "idle") return;
 
     try {
-      // ── Step 1: Biometric ──────────────────────────────────────────────────
+      // ── Biometric (native only) ────────────────────────────────────────────
       if (Platform.OS !== "web") {
         setVerifyStep("biometric");
         const hasHardware = await LocalAuthentication.hasHardwareAsync();
         const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-
         if (hasHardware && isEnrolled) {
           const result = await LocalAuthentication.authenticateAsync({
-            promptMessage: isClockIn
-              ? `${shiftLabel} - 上班打卡驗證`
-              : `${shiftLabel} - 下班打卡驗證`,
+            promptMessage: isClockIn ? `${shiftLabel} - 上班打卡驗證` : `${shiftLabel} - 下班打卡驗證`,
             cancelLabel: "取消",
             disableDeviceFallback: false,
           });
@@ -285,58 +450,60 @@ export default function ClockScreen() {
             }
             return;
           }
-        } else {
-          // No biometric hardware — warn but allow (web or unenrolled device)
-          setVerifyStep("idle");
-          Alert.alert(
-            "無法驗證",
-            "此裝置未設定生物識別（Face ID / 指紋），請先在系統設定中啟用後再打卡。",
-            [{ text: "確定" }]
-          );
-          return;
         }
+        setVerifyStep("idle");
+        // Native: proceed without camera (camera UX is complex on native)
+        await doClockWithLocation(shiftLabel, isClockIn, undefined, undefined);
+        return;
       }
 
-      // ── Step 2: Device binding ─────────────────────────────────────────────
-      setVerifyStep("device");
-      const deviceId = getDeviceId();
-      const platform = getDevicePlatform();
+      // ── Web: open camera modal ─────────────────────────────────────────────
+      setPendingAction({ shiftLabel, isClockIn });
+      setCameraVisible(true);
+    } catch (err: any) {
+      showError(err?.message || "打卡失敗，請稍後再試");
+    }
+  };
 
-      // Auto-register device on first use (will be a no-op if already registered)
-      try {
-        await registerDeviceMutation.mutateAsync({
-          employeeId: employee.id,
-          deviceId,
-          deviceName: Platform.OS !== "web"
-            ? `${Device.brand ?? ""} ${Device.modelName ?? ""}`.trim()
-            : "Web Browser",
-          platform,
-        });
-      } catch (err: any) {
-        // Registration error — log but don't block clock-in
-        console.warn("Device registration error:", err?.message);
-      }
+  // ─── Called after camera capture (web) ────────────────────────────────────
+  const handleCameraCapture = async (photoBase64: string, photoTimestamp: number) => {
+    setCameraVisible(false);
+    if (!pendingAction || !employee) return;
+    const { shiftLabel, isClockIn } = pendingAction;
+    setPendingAction(null);
+    await doClockWithLocation(shiftLabel, isClockIn, photoBase64, photoTimestamp);
+  };
 
-      // ── Step 3: GPS location ───────────────────────────────────────────────
+  const handleCameraCancel = () => {
+    setCameraVisible(false);
+    setPendingAction(null);
+  };
+
+  // ─── Core clock logic (GPS + API call) ────────────────────────────────────
+  const doClockWithLocation = async (
+    shiftLabel: string,
+    isClockIn: boolean,
+    photoBase64: string | undefined,
+    photoTimestamp: number | undefined,
+  ) => {
+    if (!employee) return;
+
+    try {
       setVerifyStep("location");
       let lat: number | undefined;
       let lng: number | undefined;
       let locationName: string | undefined;
 
-      // requireGPS: 同時檢查 require_gps 開關和工作地點座標
-      // 注意：settings 可能尚未載入（undefined），此時保守地視為需要 GPS
       const requireGPS = settings === undefined
-        ? true  // settings 未載入時，保守地嘗試取得 GPS
+        ? true
         : (settings?.require_gps === "true" && !!(settings?.work_location_lat && settings?.work_location_lng));
 
-      // Helper: get location with timeout — uses native geolocation on Web (Expo Location hangs on Web)
       const getLocationWithTimeout = (timeoutMs: number): Promise<{ latitude: number; longitude: number }> => {
         if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.geolocation) {
           return new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
               (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
               (err) => {
-                // err.code: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
                 if (err.code === 1) reject(new Error("PERMISSION_DENIED"));
                 else if (err.code === 2) reject(new Error("POSITION_UNAVAILABLE"));
                 else reject(new Error("TIMEOUT"));
@@ -345,7 +512,6 @@ export default function ClockScreen() {
             );
           });
         }
-        // Native: use Expo Location with Promise.race timeout
         return Promise.race([
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).then((loc) => ({
             latitude: loc.coords.latitude,
@@ -357,7 +523,6 @@ export default function ClockScreen() {
         ]);
       };
 
-      // 嘗試取得 GPS（無論是否必要，都嘗試取得以便後端驗證）
       try {
         if (Platform.OS !== "web") {
           const { status } = await Location.requestForegroundPermissionsAsync();
@@ -366,7 +531,6 @@ export default function ClockScreen() {
               showError("打卡需要取得您的位置，請允許定位權限後再試。");
               return;
             }
-            // 不需要 GPS 時，無權限就跳過
             throw new Error("no permission");
           }
         }
@@ -376,34 +540,31 @@ export default function ClockScreen() {
         locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
       } catch (e: any) {
         if (requireGPS) {
-          // GPS 必要但失敗 → 顯示明確錯誤，停止打卡
           if (e?.message === "PERMISSION_DENIED") {
             showError("打卡需要取得您的位置，請允許定位權限後再試。");
           } else if (e?.message === "POSITION_UNAVAILABLE") {
             showError("無法取得您的位置，請確認 GPS 已開啟後再試。");
           } else if (e?.message === "TIMEOUT") {
-            showError("定位超時，無法在限定時間內取得位置，請確認 GPS 已開啟且信號良好後再試。");
+            showError("定位超時，請確認 GPS 已開啟且信號良好後再試。");
           } else if (e?.message !== "no permission") {
-            showError(`定位失敗：${e?.message || "未知錯誤"}，請稍後再試。`);
+            showError(`定位失敗：${e?.message || "未知錯誤"}`);
           } else {
             showError("打卡需要取得您的位置，請允許定位權限後再試。");
           }
           return;
         }
-        // GPS 非必要時，靜默忽略定位錯誤，繼續打卡
       }
 
-      // ── Step 4: Clock in / out ─────────────────────────────────────────────
       setVerifyStep("clocking");
-      // Use mutate (not mutateAsync) so errors go ONLY to onError, not to catch
       if (isClockIn) {
         clockInMutation.mutate({
           employeeId: employee.id,
-          deviceId,
           lat,
           lng,
           locationName,
           shiftLabel,
+          photoBase64,
+          photoTimestamp,
         });
       } else {
         const record = todayAttendance?.find(
@@ -412,15 +573,15 @@ export default function ClockScreen() {
         clockOutMutation.mutate({
           employeeId: employee.id,
           attendanceId: record?.id,
-          deviceId,
           lat,
           lng,
           locationName,
           shiftLabel,
+          photoBase64,
+          photoTimestamp,
         });
       }
     } catch (err: any) {
-      // Only GPS / biometric / device errors reach here (mutation errors go to onError)
       showError(err?.message || "打卡失敗，請稍後再試");
     }
   };
@@ -446,6 +607,16 @@ export default function ClockScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
+      {/* Camera modal (web only) */}
+      {Platform.OS === "web" && (
+        <CameraModal
+          visible={cameraVisible}
+          actionLabel={pendingAction ? (pendingAction.isClockIn ? "上班打卡" : "下班打卡") : ""}
+          onCapture={handleCameraCapture}
+          onCancel={handleCameraCancel}
+        />
+      )}
+
       {/* Overlay during verification / error / success */}
       <VerifyStepBadge
         step={verifyStep}
@@ -503,7 +674,7 @@ export default function ClockScreen() {
               </View>
             )}
             <View style={{ backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-              <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 11, fontWeight: "600" }}>📱 裝置綁定</Text>
+              <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 11, fontWeight: "600" }}>📷 即時拍照驗證</Text>
             </View>
             {settings?.work_location_lat && (
               <View style={{ backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -616,7 +787,7 @@ export default function ClockScreen() {
                           {isClockedIn ? "下班打卡" : "上班打卡"}
                         </Text>
                         <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, textAlign: "center", marginTop: 2 }}>
-                          {Platform.OS !== "web" ? "生物識別 + 裝置 + 定位" : "裝置綁定 + 定位"}
+                          {Platform.OS !== "web" ? "生物識別 + 定位" : "📷 即時拍照 + 定位"}
                         </Text>
                       </View>
                     )}
@@ -629,7 +800,7 @@ export default function ClockScreen() {
                   </View>
                 )}
 
-                {/* Error message — shown on Web where Alert may not work */}
+                {/* Error message */}
                 {clockError && !isCompleted && (
                   <View style={{
                     backgroundColor: "#FEF2F2",
@@ -653,7 +824,7 @@ export default function ClockScreen() {
             );
           })}
 
-          {/* Notices */}
+          {/* No schedule notice */}
           {shifts.length === 0 && (
             <View style={{ backgroundColor: "#FFFBEB", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#FDE68A" }}>
               <Text style={{ color: "#92400E", fontSize: 13, textAlign: "center" }}>
@@ -668,7 +839,7 @@ export default function ClockScreen() {
             {Platform.OS !== "web" && (
               <Text style={{ fontSize: 12, color: "#1E40AF" }}>🔐 生物識別（Face ID / 指紋）</Text>
             )}
-            <Text style={{ fontSize: 12, color: "#1E40AF" }}>📱 裝置綁定驗證</Text>
+            <Text style={{ fontSize: 12, color: "#1E40AF" }}>📷 即時相機拍照（含時間戳記，30 秒有效）</Text>
             {settings?.work_location_lat ? (
               <Text style={{ fontSize: 12, color: "#1E40AF" }}>
                 📍 GPS 定位（需在 {settings?.allowed_radius || 200} 公尺範圍內）
@@ -677,7 +848,8 @@ export default function ClockScreen() {
               <Text style={{ fontSize: 12, color: "#1E40AF" }}>📍 GPS 定位記錄</Text>
             )}
           </View>
-          {/* Push notification subscription for employee */}
+
+          {/* Push notification subscription */}
           {Platform.OS === "web" && <EmployeePushSubscription employeeId={employee?.id ?? 0} />}
         </View>
       </ScrollView>
@@ -694,7 +866,6 @@ function EmployeePushSubscription({ employeeId }: { employeeId: number }) {
   const unsubscribeMutation = trpc.push.unsubscribe.useMutation();
   const { data: settings } = trpc.settings.getAll.useQuery();
 
-  // Only show if reminder feature is enabled
   const reminderEnabled = settings?.push_notify_reminder === "true";
 
   useEffect(() => {

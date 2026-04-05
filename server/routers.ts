@@ -109,8 +109,17 @@ const attendanceRouter = router({
       lng: z.number().optional(),
       locationName: z.string().optional(),
       shiftLabel: z.string().optional(),
+      photoBase64: z.string().optional(), // base64 JPEG from selfie camera
+      photoTimestamp: z.number().optional(), // Unix ms when photo was taken
     }))
     .mutation(async ({ input, ctx }) => {
+      // Validate photo timestamp (must be within 30 seconds of server time)
+      if (input.photoBase64 && input.photoTimestamp) {
+        const age = Date.now() - input.photoTimestamp;
+        if (age > 30000 || age < -5000) {
+          throw new Error("照片已過期，請重新拍照後再打卡（需在 30 秒內完成）");
+        }
+      }
       const today = getTodayTW();
       const existing = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
       const shiftLabel = input.shiftLabel || "班次1";
@@ -173,6 +182,21 @@ const attendanceRouter = router({
         }
       }
 
+      // Upload selfie photo if provided
+      let clockInPhotoUrl: string | undefined;
+      if (input.photoBase64) {
+        try {
+          const { storagePut } = await import("./storage");
+          const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64Data, "base64");
+          const key = `clock-photos/${input.employeeId}/${today}-in-${Date.now()}.jpg`;
+          const result = await storagePut(key, buffer, "image/jpeg");
+          clockInPhotoUrl = result.url;
+        } catch (e) {
+          console.warn("[clockIn] Photo upload failed:", e);
+        }
+      }
+
       const id = await db.createAttendance({
         employeeId: input.employeeId,
         date: today as unknown as Date,
@@ -182,7 +206,8 @@ const attendanceRouter = router({
         clockInLng: input.lng?.toString() as unknown as any,
         shiftLabel,
         status,
-      });
+        clockInPhoto: clockInPhotoUrl,
+      } as any);
 
       // Push notification for late clock-in
       if (status === "late") {
@@ -211,8 +236,17 @@ const attendanceRouter = router({
       lng: z.number().optional(),
       locationName: z.string().optional(),
       shiftLabel: z.string().optional(),
+      photoBase64: z.string().optional(), // base64 JPEG from selfie camera
+      photoTimestamp: z.number().optional(), // Unix ms when photo was taken
     }))
     .mutation(async ({ input, ctx }) => {
+      // Validate photo timestamp (must be within 30 seconds of server time)
+      if (input.photoBase64 && input.photoTimestamp) {
+        const age = Date.now() - input.photoTimestamp;
+        if (age > 30000 || age < -5000) {
+          throw new Error("照片已過期，請重新拍照後再打卡（需在 30 秒內完成）");
+        }
+      }
       const today = getTodayTW();
       const now = new Date();
       const records = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
@@ -277,13 +311,29 @@ const attendanceRouter = router({
         }
       }
 
+      // Upload selfie photo if provided
+      let clockOutPhotoUrl: string | undefined;
+      if (input.photoBase64) {
+        try {
+          const { storagePut } = await import("./storage");
+          const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64Data, "base64");
+          const key = `clock-photos/${input.employeeId}/${today}-out-${Date.now()}.jpg`;
+          const result = await storagePut(key, buffer, "image/jpeg");
+          clockOutPhotoUrl = result.url;
+        } catch (e) {
+          console.warn("[clockOut] Photo upload failed:", e);
+        }
+      }
+
       await db.updateAttendance(record.id, {
         clockOutTime: now,
         clockOutLocation: input.locationName,
         clockOutLat: input.lat?.toString() as unknown as any,
         clockOutLng: input.lng?.toString() as unknown as any,
         status: status || "normal",
-      });
+        clockOutPhoto: clockOutPhotoUrl,
+      } as any);
 
       // Push notification for early leave
       if (status === "early_leave") {
@@ -438,6 +488,14 @@ const employeesRouter = router({
     .input(z.object({ orderedIds: z.array(z.number()) }))
     .mutation(async ({ input }) => {
       await db.reorderEmployees(input.orderedIds);
+      return { success: true };
+    }),
+
+  // Admin: unbind LINE account for an employee
+  unbindLine: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await db.updateEmployeeLineUserId(input.id, null);
       return { success: true };
     }),
 });
@@ -764,6 +822,44 @@ const pushRouter = router({
         body: "推播通知設定成功！您將收到打卡異常的即時通知。",
         icon: "/favicon.png",
       });
+      return { success: true };
+    }),
+});
+
+// ============================================================
+// LINE OTP Router
+// ============================================================
+const lineRouter = router({
+  // Check if employee has LINE bound
+  status: publicProcedure
+    .input(z.object({ employeeId: z.number() }))
+    .query(async ({ input }) => {
+      const employee = await db.getEmployeeById(input.employeeId);
+      return { bound: !!employee?.lineUserId };
+    }),
+
+  // Send OTP to employee's LINE
+  sendOtp: publicProcedure
+    .input(z.object({ employeeId: z.number() }))
+    .mutation(async ({ input }) => {
+      const employee = await db.getEmployeeById(input.employeeId);
+      if (!employee) throw new Error("找不到員工資料");
+      if (!employee.lineUserId) throw new Error("尚未綁定 LINE 帳號，請先在 LINE 官方帳號輸入「綁定 帳號」完成綁定");
+      const code = await db.createLineOtp(input.employeeId);
+      const { sendLineMessage } = await import("./line-bot");
+      await sendLineMessage(
+        employee.lineUserId,
+        `🔐 好好上班打卡驗證碼\n\n驗證碼：${code}\n\n此驗證碼將於 5 分鐘後失效，請勿分享給他人。`
+      );
+      return { success: true };
+    }),
+
+  // Verify OTP
+  verifyOtp: publicProcedure
+    .input(z.object({ employeeId: z.number(), code: z.string().length(6) }))
+    .mutation(async ({ input }) => {
+      const valid = await db.verifyLineOtp(input.employeeId, input.code);
+      if (!valid) throw new Error("驗證碼錯誤或已過期，請重新發送");
       return { success: true };
     }),
 });

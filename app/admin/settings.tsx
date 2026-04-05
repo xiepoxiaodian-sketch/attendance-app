@@ -16,7 +16,7 @@ import { ConfirmDialog, AlertDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 
-type TabKey = "system" | "shifts" | "devices" | "leave";
+type TabKey = "system" | "shifts" | "leave";
 
 export default function AdminSettingsScreen() {
   const { employee } = useEmployeeAuth();
@@ -26,7 +26,6 @@ export default function AdminSettingsScreen() {
   const TABS: { key: TabKey; label: string; icon: string }[] = [
     { key: "system", label: "系統設定", icon: "⚙️" },
     { key: "shifts", label: "工作時段", icon: "🕐" },
-    { key: "devices", label: "裝置管理", icon: "📱" },
     { key: "leave", label: "請假審核", icon: "📋" },
   ];
 
@@ -59,7 +58,6 @@ export default function AdminSettingsScreen() {
 
       {activeTab === "system" && <SystemSettings />}
       {activeTab === "shifts" && <ShiftsSettings />}
-      {activeTab === "devices" && <DevicesSettings />}
       {activeTab === "leave" && <LeaveReview adminId={employee?.id ?? 0} />}
     </ScreenContainer>
   );
@@ -106,20 +104,6 @@ function SystemSettings() {
       />
       <View style={{ backgroundColor: "white", borderRadius: 14, padding: 16, marginBottom: 16 }}>
         <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginBottom: 12 }}>打卡設定</Text>
-
-        {/* Require Device Binding */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
-          <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={{ fontSize: 14, color: "#1E293B" }}>要求裝置綁定</Text>
-            <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>員工只能使用已綁定的裝置打卡</Text>
-          </View>
-          <Switch
-            value={form.require_device_binding === "true"}
-            onValueChange={(v) => setForm(f => ({ ...f, require_device_binding: v ? "true" : "false" }))}
-            trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
-            thumbColor={form.require_device_binding === "true" ? "#1E40AF" : "#94A3B8"}
-          />
-        </View>
 
         {/* Require GPS */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
@@ -510,68 +494,6 @@ function ShiftsSettings() {
           </ScrollView>
         </View>
       </Modal>
-    </ScrollView>
-  );
-}
-
-// ============================================================
-// Devices Tab
-// ============================================================
-function DevicesSettings() {
-  const { data: devices, refetch } = trpc.devices.getAll.useQuery();
-  const { data: employees } = trpc.employees.list.useQuery();
-  const [confirmRevoke, setConfirmRevoke] = useState<{ id: number; name: string } | null>(null);
-
-  const deleteMutation = trpc.devices.delete.useMutation({
-    onSuccess: () => refetch(),
-  });
-
-  const getEmployeeName = (id: number) => employees?.find(e => e.id === id)?.fullName ?? `#${id}`;
-
-  return (
-    <ScrollView contentContainerStyle={{ padding: 16 }}>
-      <ConfirmDialog
-        visible={!!confirmRevoke}
-        title="解除綁定"
-        message={`確定要解除 ${confirmRevoke?.name ?? ""} 的綁定嗎？`}
-        confirmText="解除"
-        confirmStyle="destructive"
-        onConfirm={() => { if (confirmRevoke) deleteMutation.mutate({ id: confirmRevoke.id }); setConfirmRevoke(null); }}
-        onCancel={() => setConfirmRevoke(null)}
-      />
-      <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>共 {devices?.length ?? 0} 台已綁定裝置</Text>
-      {(devices ?? []).map((device) => (
-        <View key={device.id} style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={{ fontSize: 24, marginRight: 10 }}>
-              {device.platform === "ios" ? "📱" : device.platform === "android" ? "📱" : "💻"}
-            </Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "500", color: "#1E293B" }}>
-                {device.deviceName || "未知裝置"}
-              </Text>
-              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>
-                {getEmployeeName(device.employeeId)} · {device.platform?.toUpperCase()}
-              </Text>
-              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
-                {new Date(device.registeredAt).toLocaleDateString("zh-TW")}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setConfirmRevoke({ id: device.id, name: device.deviceName || "此裝置" })}
-              style={{ backgroundColor: "#FEE2E2", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
-            >
-              <Text style={{ color: "#DC2626", fontSize: 13 }}>解除</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ))}
-      {(!devices || devices.length === 0) && (
-        <View style={{ alignItems: "center", padding: 32 }}>
-          <Text style={{ fontSize: 40, marginBottom: 12 }}>📱</Text>
-          <Text style={{ color: "#94A3B8", fontSize: 14 }}>尚無已綁定裝置</Text>
-        </View>
-      )}
     </ScrollView>
   );
 }

@@ -12,6 +12,7 @@ import {
   leaveRequests,
   punchCorrections,
   pushSubscriptions,
+  lineOtpCodes,
   InsertEmployee,
   InsertAttendance,
   InsertWorkShift,
@@ -179,6 +180,19 @@ export async function deleteEmployee(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(employees).where(eq(employees.id, id));
+}
+
+export async function getEmployeeByLineUserId(lineUserId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(employees).where(eq(employees.lineUserId, lineUserId)).limit(1);
+  return result[0];
+}
+
+export async function updateEmployeeLineUserId(id: number, lineUserId: string | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(employees).set({ lineUserId } as any).where(eq(employees.id, id));
 }
 
 // ============================================================
@@ -725,4 +739,44 @@ export async function getAdminPushSubscriptions() {
   if (!db) return [];
   return db.select().from(pushSubscriptions)
     .where(isNull(pushSubscriptions.employeeId));
+}
+
+// ============================================================
+// LINE OTP Codes
+// ============================================================
+
+/** Generate a 6-digit OTP code and store it in the database (expires in 5 minutes) */
+export async function createLineOtp(employeeId: number): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Invalidate any existing unused OTPs for this employee
+  await db.update(lineOtpCodes)
+    .set({ used: true })
+    .where(and(eq(lineOtpCodes.employeeId, employeeId), eq(lineOtpCodes.used, false)));
+  // Generate 6-digit code
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+  await db.insert(lineOtpCodes).values({ employeeId, code, expiresAt, used: false });
+  return code;
+}
+
+/** Verify an OTP code for an employee. Returns true if valid and marks it as used. */
+export async function verifyLineOtp(employeeId: number, code: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const now = new Date();
+  const result = await db.select().from(lineOtpCodes)
+    .where(and(
+      eq(lineOtpCodes.employeeId, employeeId),
+      eq(lineOtpCodes.code, code),
+      eq(lineOtpCodes.used, false),
+      gte(lineOtpCodes.expiresAt, now)
+    ))
+    .limit(1);
+  if (result.length === 0) return false;
+  // Mark as used
+  await db.update(lineOtpCodes)
+    .set({ used: true })
+    .where(eq(lineOtpCodes.id, result[0].id));
+  return true;
 }

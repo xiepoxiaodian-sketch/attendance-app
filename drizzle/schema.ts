@@ -45,6 +45,7 @@ export const employees = mysqlTable("employees", {
   isActive: boolean("isActive").default(true).notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
   tag: mysqlEnum("tag", ["indoor", "outdoor", "supervisor"]),
+  lineUserId: varchar("lineUserId", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -69,6 +70,8 @@ export const attendance = mysqlTable("attendance", {
   clockOutLng: decimal("clockOutLng", { precision: 11, scale: 8 }),
   shiftLabel: varchar("shiftLabel", { length: 64 }),
   status: mysqlEnum("status", ["normal", "late", "early_leave", "absent"]).default("normal"),
+  clockInPhoto: text("clockInPhoto"),
+  clockOutPhoto: text("clockOutPhoto"),
   note: text("note"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -205,3 +208,18 @@ export const pushSubscriptions = mysqlTable("pushSubscriptions", {
 
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
+
+/**
+ * LINE OTP codes - temporary one-time passwords sent via LINE Bot
+ */
+export const lineOtpCodes = mysqlTable("lineOtpCodes", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  code: varchar("code", { length: 6 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  used: boolean("used").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LineOtpCode = typeof lineOtpCodes.$inferSelect;
+export type InsertLineOtpCode = typeof lineOtpCodes.$inferInsert;

@@ -1,0 +1,1 @@
+ALTER TABLE `employees` ADD `lineUserId` varchar(64);

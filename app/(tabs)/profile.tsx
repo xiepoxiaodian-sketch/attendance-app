@@ -64,11 +64,6 @@ export default function ProfileScreen() {
     { enabled: !!employee }
   );
 
-  const { data: devices, refetch: refetchDevices } = trpc.devices.getByEmployee.useQuery(
-    { employeeId: employee?.id ?? 0 },
-    { enabled: !!employee }
-  );
-
   const changePasswordMutation = trpc.employee.changePassword.useMutation({
     onSuccess: () => {
       setShowPasswordModal(false);
@@ -76,10 +71,6 @@ export default function ProfileScreen() {
       Alert.alert("成功", "密碼已更新");
     },
     onError: (err) => setPasswordError(err.message || "修改失敗"),
-  });
-
-  const deleteDeviceMutation = trpc.devices.delete.useMutation({
-    onSuccess: () => refetchDevices(),
   });
 
   const handleLogout = () => {
@@ -103,13 +94,6 @@ export default function ProfileScreen() {
     if (newPassword !== confirmPassword) { setPasswordError("新密碼與確認密碼不一致"); return; }
     if (!employee) return;
     changePasswordMutation.mutate({ employeeId: employee.id, currentPassword, newPassword });
-  };
-
-  const handleDeleteDevice = (id: number) => {
-    Alert.alert("解除裝置綁定", "確定要解除此裝置的綁定嗎？", [
-      { text: "取消" },
-      { text: "解除", style: "destructive", onPress: () => deleteDeviceMutation.mutate({ id }) },
-    ]);
   };
 
   const employeeTypeLabel = profile?.employeeType === "part_time" ? "兼職" : "全職";
@@ -175,47 +159,6 @@ export default function ProfileScreen() {
           <InfoRow label="職稱" value={profile?.jobTitle || "-"} />
           <InfoRow label="員工類型" value={employeeTypeLabel} />
           <InfoRow label="電話" value={profile?.phone || "-"} last />
-        </SectionCard>
-
-        {/* Devices */}
-        <SectionCard title="已綁定裝置">
-          {!devices || devices.length === 0 ? (
-            <View style={{ padding: 16, alignItems: "center" }}>
-              <Text style={{ color: "#94A3B8", fontSize: 14 }}>尚未綁定任何裝置</Text>
-            </View>
-          ) : (
-            devices.map((device, i) => (
-              <View key={device.id} style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                borderBottomWidth: i < devices.length - 1 ? 1 : 0,
-                borderBottomColor: "#F1F5F9",
-                gap: 10,
-              }}>
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 18 }}>
-                    {device.platform === "ios" ? "📱" : device.platform === "android" ? "📱" : "💻"}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "500", color: "#1E293B" }}>
-                    {device.deviceName || "未知裝置"}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
-                    {device.platform?.toUpperCase()} · {new Date(device.registeredAt ?? "").toLocaleDateString("zh-TW")}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleDeleteDevice(device.id)}
-                  style={{ backgroundColor: "#FEF2F2", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}
-                >
-                  <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "600" }}>解除</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
         </SectionCard>
 
         {/* Actions */}

@@ -87,6 +87,17 @@ async function startServer() {
     }
   });
 
+  // LINE Bot Webhook endpoint
+  app.post("/api/line/webhook", async (req, res) => {
+    try {
+      const { lineWebhookHandler } = await import("../line-bot");
+      await lineWebhookHandler(req, res);
+    } catch (err: any) {
+      console.error("[LINE Webhook] Error:", err);
+      res.status(500).json({ ok: false });
+    }
+  });
+
   // Serve static frontend files in production
   const distWebPath = path.join(process.cwd(), "dist-web");
   if (process.env.NODE_ENV === "production") {

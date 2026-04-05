@@ -128,20 +128,6 @@ function SystemSettings() {
       <View style={{ backgroundColor: "white", borderRadius: 14, padding: 16, marginBottom: 16 }}>
         <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginBottom: 12 }}>打卡設定</Text>
 
-        {/* Require Device Binding */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
-          <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={{ fontSize: 14, color: "#1E293B" }}>要求裝置綁定</Text>
-            <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>員工只能使用已綁定的裝置打卡</Text>
-          </View>
-          <Switch
-            value={form.require_device_binding === "true"}
-            onValueChange={(v) => setForm(f => ({ ...f, require_device_binding: v ? "true" : "false" }))}
-            trackColor={{ false: "#E2E8F0", true: "#BFDBFE" }}
-            thumbColor={form.require_device_binding === "true" ? "#1E40AF" : "#94A3B8"}
-          />
-        </View>
-
         {/* Require GPS */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
           <View style={{ flex: 1, marginRight: 12 }}>

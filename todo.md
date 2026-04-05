@@ -255,3 +255,33 @@
 - [x] 修復 requireGPS 保守策略：settings 未載入時視為需要 GPS，避免跳過驗證
 - [x] 改善 parseTrpcError：過濾 INTERNAL_SERVER_ERROR 等非使用者友善訊息，顯示更明確的提示
 - [x] 統一 GPS 取得邏輯：合併 requireGPS/非 requireGPS 路徑，避免靜默吞掉錯誤
+
+## 驗證方式改版：移除裝置綁定，改為 GPS + 生物識別 + WiFi
+- [ ] 前端：移除打卡流程中的裝置綁定步驟（Step 2 device）
+- [ ] 前端：更新打卡安全驗證說明卡片（移除裝置綁定說明，改為 WiFi 說明）
+- [ ] 前端：更新 VerifyStep 類型，移除 device 步驟
+- [ ] 後端 clockIn：移除裝置綁定驗證邏輯
+- [ ] 後端 clockOut：移除裝置綁定驗證邏輯
+- [ ] 管理員設定頁：移除「裝置綁定」開關，確保 WiFi IP 白名單設定明顯易用
+
+## LINE OTP 驗證打卡（取代裝置綁定）
+- [ ] 設定 LINE_CHANNEL_SECRET 和 LINE_CHANNEL_ACCESS_TOKEN 環境變數
+- [ ] 後端：資料庫新增 line_user_id 欄位到 employees 表
+- [ ] 後端：新增 sendLineOtp API（發送 6 位數驗證碼到員工 LINE）
+- [ ] 後端：新增 verifyLineOtp API（驗證 OTP，回傳 clockToken）
+- [ ] 後端：新增 bindLine Webhook（員工加入 Bot 後自動記錄 userId）
+- [ ] 後端：修改 clockIn/clockOut 改用 clockToken 驗證，移除裝置綁定驗證
+- [ ] 前端：打卡流程移除裝置綁定步驟，加入 LINE OTP 輸入步驟
+- [ ] 前端：員工個人資料頁新增「綁定 LINE 帳號」入口（顯示 Bot QR Code）
+
+## 打卡強制自拍功能（防代打卡）
+
+- [x] 資料庫 attendance 表新增 clockInPhoto / clockOutPhoto 欄位
+- [x] 後端 clockIn / clockOut API 支援 photoBase64 + photoTimestamp
+- [x] 後端驗證照片時間戳（30 秒有效期，防止上傳舊照片）
+- [x] 後端照片上傳至 S3 並儲存 URL
+- [x] 前端打卡頁面強制開啟即時相機串流（getUserMedia，不允許上傳檔案）
+- [x] 照片加入時間戳記浮水印（UTC+8 時間）
+- [x] 管理員打卡記錄頁面加入照片查看功能（點擊記錄查看上班/下班照片）
+- [x] 移除裝置綁定相關 UI（profile 頁面、管理員設定頁面）
+- [x] 移除 LINE OTP 相關 API 掛載
