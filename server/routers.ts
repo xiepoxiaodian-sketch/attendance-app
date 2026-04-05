@@ -137,17 +137,31 @@ const attendanceRouter = router({
       }
 
       const now = new Date();
+      // Use Taiwan timezone (UTC+8) for shift time comparison
+      const TZ_OFFSET = 8 * 60; // minutes
+      const nowTW = new Date(now.getTime() + TZ_OFFSET * 60 * 1000);
+      const nowTWMinutes = nowTW.getUTCHours() * 60 + nowTW.getUTCMinutes();
       let status: "normal" | "late" | "early_leave" | "absent" = "normal";
       const schedule = await db.getScheduleByEmployeeAndDate(input.employeeId, today);
       if (schedule && schedule.shifts) {
         const shifts = schedule.shifts as Array<{ startTime: string; endTime: string; label: string }>;
-        const currentShift = shifts.find(s => s.label === shiftLabel) || shifts[0];
+        // Find the shift matching shiftLabel; if not found, find the shift whose time range covers now
+        let currentShift = shifts.find(s => s.label === shiftLabel);
+        if (!currentShift) {
+          // Fallback: find shift closest to current time
+          currentShift = shifts.reduce((best, s) => {
+            const [bh, bm] = best.startTime.split(":").map(Number);
+            const [sh, sm] = s.startTime.split(":").map(Number);
+            const bDiff = Math.abs(bh * 60 + bm - nowTWMinutes);
+            const sDiff = Math.abs(sh * 60 + sm - nowTWMinutes);
+            return sDiff < bDiff ? s : best;
+          }, shifts[0]);
+        }
         if (currentShift) {
           const [h, m] = currentShift.startTime.split(":").map(Number);
-          const shiftStart = new Date(now);
-          shiftStart.setHours(h, m, 0, 0);
+          const shiftStartMinutes = h * 60 + m;
           const lateThreshold = parseInt(await db.getSetting("late_threshold_minutes") || "10");
-          if (now.getTime() - shiftStart.getTime() > lateThreshold * 60 * 1000) status = "late";
+          if (nowTWMinutes - shiftStartMinutes > lateThreshold) status = "late";
         }
       }
 
@@ -230,16 +244,28 @@ const attendanceRouter = router({
         }
       }
 
+      // Use Taiwan timezone (UTC+8) for shift time comparison
+      const TZ_OFFSET_OUT = 8 * 60; // minutes
+      const nowTW_out = new Date(now.getTime() + TZ_OFFSET_OUT * 60 * 1000);
+      const nowTWMinutes_out = nowTW_out.getUTCHours() * 60 + nowTW_out.getUTCMinutes();
       let status = record.status;
       const schedule = await db.getScheduleByEmployeeAndDate(input.employeeId, today);
       if (schedule && schedule.shifts) {
         const shifts = schedule.shifts as Array<{ startTime: string; endTime: string; label: string }>;
-        const currentShift = shifts.find(s => s.label === record.shiftLabel) || shifts[0];
+        // Match by shiftLabel from the attendance record for accurate multi-shift handling
+        const currentShift = shifts.find(s => s.label === record.shiftLabel) ||
+          shifts.find(s => {
+            // Fallback: find shift whose end time is closest to now
+            const [eh, em] = s.endTime.split(":").map(Number);
+            return Math.abs(eh * 60 + em - nowTWMinutes_out) < 120; // within 2 hours
+          }) || shifts[0];
         if (currentShift) {
           const [h, m] = currentShift.endTime.split(":").map(Number);
-          const shiftEnd = new Date(now);
-          shiftEnd.setHours(h, m, 0, 0);
-          if (now < shiftEnd) status = "early_leave";
+          const shiftEndMinutes = h * 60 + m;
+          // Early leave: clocked out more than 1 minute before shift end
+          if (nowTWMinutes_out < shiftEndMinutes - 1) status = "early_leave";
+          // If was previously late but clocked out on time, keep late status
+          else if (record.status !== "late") status = "normal";
         }
       }
 
