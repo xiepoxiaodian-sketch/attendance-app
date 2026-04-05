@@ -122,12 +122,7 @@ const attendanceRouter = router({
         }
       }
 
-      const requireDevice = await db.getSetting("require_device_binding");
-      if (requireDevice === "true") {
-        if (!input.deviceId) throw new Error("打卡需要裝置識別碼，請使用已綁定的裝置");
-        const device = await db.findDevice(input.employeeId, input.deviceId);
-        if (!device) throw new Error("此裝置未綁定您的帳號，請聯絡管理員授權後再打卡");
-      }
+      // Device binding check removed - devices are auto-registered on clock-in
 
       if (input.lat && input.lng) {
         const lat = await db.getSetting("work_location_lat");
@@ -221,13 +216,7 @@ const attendanceRouter = router({
         }
       }
 
-      // Enforce device binding on clock-out too
-      const requireDeviceOut = await db.getSetting("require_device_binding");
-      if (requireDeviceOut === "true") {
-        if (!input.deviceId) throw new Error("打卡需要裝置識別碼，請使用已綁定的裝置");
-        const device = await db.findDevice(input.employeeId, input.deviceId);
-        if (!device) throw new Error("此裝置未綁定您的帳號，請聯絡管理員授權後再打卡");
-      }
+      // Device binding check removed - devices are auto-registered on clock-in
 
       if (input.lat && input.lng) {
         const lat = await db.getSetting("work_location_lat");
