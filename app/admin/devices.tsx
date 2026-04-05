@@ -40,12 +40,12 @@ export default function DevicesScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
-      <AdminHeader title="裝置管理" subtitle={`共 ${devices?.length ?? 0} 台已綁定裝置`} onRefresh={onRefresh} refreshing={refreshing} />
+      <AdminHeader title="裝置管理" subtitle={`共 ${devices?.length ?? 0} 台已登錄裝置`} onRefresh={onRefresh} refreshing={refreshing} />
 
       <ConfirmDialog
         visible={confirmVisible}
         title="解除裝置綁定"
-        message={`確定要解除「${pendingDelete?.name ?? ""}」的裝置綁定嗎？員工下次登入時需要重新綁定裝置。`}
+        message={`確定要移除「${pendingDelete?.name ?? ""}」的裝置登錄嗎？移除後該裝置記錄將被刪除。`}
         confirmText="解除"
         confirmStyle="destructive"
         onConfirm={handleConfirmDelete}
@@ -65,7 +65,7 @@ export default function DevicesScreen() {
           ListEmptyComponent={
             <View style={{ alignItems: "center", paddingTop: 60 }}>
               <Text style={{ fontSize: 40, marginBottom: 12 }}>📱</Text>
-              <Text style={{ fontSize: 15, color: "#94A3B8" }}>尚無已綁定裝置</Text>
+              <Text style={{ fontSize: 15, color: "#94A3B8" }}>尚無已登錄裝置</Text>
             </View>
           }
           renderItem={({ item }) => (

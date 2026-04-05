@@ -556,40 +556,14 @@ const devicesRouter = router({
       // Check if this exact device is already registered
       const existing = await db.findDevice(input.employeeId, input.deviceId);
       if (existing) {
-        if (existing.status === "rejected") {
-          throw new Error("此裝置已被管理員拒絕，請聯絡管理員解除限制");
-        }
-        // Treat NULL status (legacy devices before status field) as approved
-        const effectiveStatus = existing.status ?? "approved";
         // Migrate legacy NULL status to approved in DB
         if (!existing.status) {
           await db.updateDeviceStatus(existing.id, "approved");
         }
-        return { success: true, id: existing.id, alreadyRegistered: true, status: effectiveStatus };
+        return { success: true, id: existing.id, alreadyRegistered: true, status: "approved" };
       }
 
-      // Check if employee is exempt from single-device restriction
-      const employee = await db.getEmployeeById(input.employeeId);
-      const isExempt = employee?.role === "admin" || employee?.jobTitle === "M";
-
-      if (!isExempt) {
-        // Check if employee already has an approved device
-        const approvedCount = await db.countApprovedDevicesByEmployee(input.employeeId);
-        if (approvedCount >= 1) {
-          // Register as pending - requires admin approval
-          const id = await db.registerDevice({ ...input, status: "pending" });
-          // Push notification to admins
-          const name = employee?.fullName || `員工 #${input.employeeId}`;
-          sendPushToAll({
-            title: "📱 新裝置申請",
-            body: `${name} 申請從新裝置登入，請至裝置管理頁面審核`,
-            icon: "/favicon.png",
-          }).catch(() => {});
-          return { success: true, id, alreadyRegistered: false, status: "pending" };
-        }
-      }
-
-      // First device or exempt employee → auto-approve
+      // No single-device restriction: all new devices auto-approved
       const id = await db.registerDevice({ ...input, status: "approved" });
       return { success: true, id, alreadyRegistered: false, status: "approved" };
     }),
