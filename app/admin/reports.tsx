@@ -46,7 +46,19 @@ async function exportExcel(filename: string, headers: string[], rows: string[][]
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "資料");
     if (Platform.OS === "web") {
-      XLSX.writeFile(wb, filename);
+      // Use Blob + anchor download to force correct MIME type and .xlsx extension
+      const wbout: ArrayBuffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+      const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
     } else {
       const FileSystem = await import("expo-file-system/legacy");
       const Sharing = await import("expo-sharing");
