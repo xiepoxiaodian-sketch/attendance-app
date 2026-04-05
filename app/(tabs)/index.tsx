@@ -314,8 +314,13 @@ export default function ClockScreen() {
       }
     } catch (err: any) {
       setVerifyStep("idle");
-      // Show error to user (may be GPS out of range, server error, etc.)
-      const msg = err?.message || err?.data?.message || "打卡失敗，請稍後再試";
+      // tRPC errors come in different shapes depending on the error type
+      const msg =
+        err?.data?.message ||
+        err?.shape?.message ||
+        err?.message ||
+        (typeof err === "string" ? err : null) ||
+        "打卡失敗，請稍後再試";
       Alert.alert("打卡失敗", msg, [{ text: "確定" }]);
     } finally {
       // Reset to idle after a short delay

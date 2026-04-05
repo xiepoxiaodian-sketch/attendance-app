@@ -234,3 +234,6 @@
 
 ## GPS Web 定位修復
 - [ ] 改用 Web 原生 navigator.geolocation（有 timeout 參數），解決 Expo Location 在 Web 上永遠卡住的問題
+
+## GPS 範圍錯誤提示修復
+- [ ] GPS 超出範圍時顯示明確錯誤訊息並停止轉圈
