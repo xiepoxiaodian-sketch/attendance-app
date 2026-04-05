@@ -55,8 +55,13 @@ function formatDate(date: Date): string {
 // ─── Verification step indicator ─────────────────────────────────────────────
 type VerifyStep = "idle" | "biometric" | "device" | "location" | "clocking" | "done";
 
-function VerifyStepBadge({ step }: { step: VerifyStep }) {
-  if (step === "idle" || step === "done") return null;
+function VerifyStepBadge({ step, error, success, onDismiss }: { step: VerifyStep; error: string | null; success: string | null; onDismiss: () => void }) {
+  // Show overlay when processing OR when there's an error/success to display
+  const isProcessing = step !== "idle" && step !== "done";
+  const hasError = !!error;
+  const hasSuccess = !!success;
+
+  if (!isProcessing && !hasError && !hasSuccess) return null;
 
   const labels: Record<VerifyStep, string> = {
     idle: "",
@@ -81,18 +86,68 @@ function VerifyStepBadge({ step }: { step: VerifyStep }) {
         borderRadius: 16,
         padding: 28,
         alignItems: "center",
-        minWidth: 240,
+        minWidth: 260,
+        maxWidth: 320,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.2,
         shadowRadius: 20,
         elevation: 12,
       }}>
-        <ActivityIndicator size="large" color="#2563EB" style={{ marginBottom: 14 }} />
-        <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B", textAlign: "center" }}>
-          {labels[step]}
-        </Text>
-        <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 6 }}>請稍候...</Text>
+        {hasError ? (
+          // Error state
+          <>
+            <Text style={{ fontSize: 36, marginBottom: 12 }}>⚠️</Text>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#DC2626", textAlign: "center", marginBottom: 8 }}>
+              打卡失敗
+            </Text>
+            <Text style={{ fontSize: 14, color: "#374151", textAlign: "center", lineHeight: 22, marginBottom: 20 }}>
+              {error}
+            </Text>
+            <TouchableOpacity
+              onPress={onDismiss}
+              style={{
+                backgroundColor: "#2563EB",
+                borderRadius: 10,
+                paddingVertical: 12,
+                paddingHorizontal: 32,
+              }}
+            >
+              <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>確定</Text>
+            </TouchableOpacity>
+          </>
+        ) : hasSuccess ? (
+          // Success state
+          <>
+            <Text style={{ fontSize: 36, marginBottom: 12 }}>✅</Text>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#16A34A", textAlign: "center", marginBottom: 8 }}>
+              打卡成功
+            </Text>
+            <Text style={{ fontSize: 14, color: "#374151", textAlign: "center", lineHeight: 22, marginBottom: 20 }}>
+              {success}
+            </Text>
+            <TouchableOpacity
+              onPress={onDismiss}
+              style={{
+                backgroundColor: "#16A34A",
+                borderRadius: 10,
+                paddingVertical: 12,
+                paddingHorizontal: 32,
+              }}
+            >
+              <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>確定</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          // Loading state
+          <>
+            <ActivityIndicator size="large" color="#2563EB" style={{ marginBottom: 14 }} />
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B", textAlign: "center" }}>
+              {labels[step]}
+            </Text>
+            <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 6 }}>請稍候...</Text>
+          </>
+        )}
       </View>
     </View>
   );
@@ -105,6 +160,7 @@ export default function ClockScreen() {
   const [verifyStep, setVerifyStep] = useState<VerifyStep>("idle");
   const [refreshing, setRefreshing] = useState(false);
   const [clockError, setClockError] = useState<string | null>(null);
+  const [clockSuccess, setClockSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -137,22 +193,26 @@ export default function ClockScreen() {
   const showError = (msg: string) => {
     setVerifyStep("idle");
     setClockError(msg);
-    // Also try Alert for native
+    // On native, also show Alert (on web, the overlay modal handles it)
     if (Platform.OS !== "web") {
-      Alert.alert("打卡失敗", msg, [{ text: "確定" }]);
+      Alert.alert("打卡失敗", msg, [{ text: "確定", onPress: () => setClockError(null) }]);
     }
-    // Auto-clear error after 6 seconds
-    setTimeout(() => setClockError(null), 6000);
+  };
+
+  const showSuccess = (msg: string) => {
+    setVerifyStep("idle");
+    setClockError(null);
+    setClockSuccess(msg);
+    if (Platform.OS !== "web") {
+      Alert.alert("打卡成功 ✅", msg, [{ text: "確定", onPress: () => setClockSuccess(null) }]);
+    }
   };
 
   const clockInMutation = trpc.attendance.clockIn.useMutation({
     onSuccess: () => {
       refetchAttendance();
-      setVerifyStep("done");
-      setClockError(null);
-      if (Platform.OS !== "web") {
-        Alert.alert("打卡成功 ✅", "上班打卡完成！", [{ text: "確定" }]);
-      }
+      const now = new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
+      showSuccess(`上班打卡完成！\n打卡時間：${now}`);
     },
     onError: (err) => {
       showError(parseTrpcError(err));
@@ -162,11 +222,8 @@ export default function ClockScreen() {
   const clockOutMutation = trpc.attendance.clockOut.useMutation({
     onSuccess: () => {
       refetchAttendance();
-      setVerifyStep("done");
-      setClockError(null);
-      if (Platform.OS !== "web") {
-        Alert.alert("打卡成功 ✅", "下班打卡完成！", [{ text: "確定" }]);
-      }
+      const now = new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
+      showSuccess(`下班打卡完成！\n打卡時間：${now}`);
     },
     onError: (err) => {
       showError(parseTrpcError(err));
@@ -365,8 +422,13 @@ export default function ClockScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
-      {/* Overlay during verification */}
-      <VerifyStepBadge step={verifyStep} />
+      {/* Overlay during verification / error / success */}
+      <VerifyStepBadge
+        step={verifyStep}
+        error={clockError}
+        success={clockSuccess}
+        onDismiss={() => { setClockError(null); setClockSuccess(null); }}
+      />
 
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
