@@ -16,7 +16,6 @@ const NAV_ITEMS: { label: string; icon: string; page: AdminPage }[] = [
   { label: "請假審核", icon: "doc.text.fill", page: "leave-review" },
   { label: "補打卡審核", icon: "clock.badge.checkmark.fill", page: "punch-correction" },
   { label: "報表統計", icon: "chart.line.uptrend.xyaxis", page: "reports" },
-  { label: "裝置管理", icon: "iphone", page: "devices" },
   { label: "系統設定", icon: "gear", page: "settings" },
   { label: "意見反饋", icon: "exclamationmark.bubble.fill", page: "feedback" },
 ];
