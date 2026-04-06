@@ -421,6 +421,10 @@ export default function ClockScreen() {
     }
   };
 
+  // Ref to track last clock params for fallback retry (without photo)
+  const lastClockInParams = useRef<any>(null);
+  const lastClockOutParams = useRef<any>(null);
+
   const clockInMutation = trpc.attendance.clockIn.useMutation({
     onSuccess: () => {
       refetchAttendance();
@@ -428,6 +432,25 @@ export default function ClockScreen() {
       showSuccess(`上班打卡完成！\n打卡時間：${now}`);
     },
     onError: (err: any) => {
+      // Extract full error text from all possible tRPC error locations
+      const raw = [
+        err?.message,
+        err?.shape?.message,
+        err?.data?.message,
+        JSON.stringify(err?.shape),
+        JSON.stringify(err?.data),
+      ].filter(Boolean).join(' ');
+      const isSqlOrPhotoError = /`[a-zA-Z]+`/.test(raw) || /INSERT|UPDATE|SELECT|Unknown column/i.test(raw) ||
+        /data:image\/|base64,/.test(raw) || raw.length > 500 ||
+        raw.includes('clockInLocation') || raw.includes('clockOutLocation');
+      // If error is SQL/photo related and we have a last params with photo, retry without photo
+      if (isSqlOrPhotoError && lastClockInParams.current?.photoBase64) {
+        console.warn('[clockIn] Retrying without photo due to SQL/photo error');
+        const retryParams = { ...lastClockInParams.current, photoBase64: undefined, photoTimestamp: undefined };
+        lastClockInParams.current = null;
+        clockInMutation.mutate(retryParams);
+        return;
+      }
       showError(parseTrpcError(err));
     },
   });
@@ -439,6 +462,25 @@ export default function ClockScreen() {
       showSuccess(`下班打卡完成！\n打卡時間：${now}`);
     },
     onError: (err: any) => {
+      // Extract full error text from all possible tRPC error locations
+      const raw = [
+        err?.message,
+        err?.shape?.message,
+        err?.data?.message,
+        JSON.stringify(err?.shape),
+        JSON.stringify(err?.data),
+      ].filter(Boolean).join(' ');
+      const isSqlOrPhotoError = /`[a-zA-Z]+`/.test(raw) || /INSERT|UPDATE|SELECT|Unknown column/i.test(raw) ||
+        /data:image\/|base64,/.test(raw) || raw.length > 500 ||
+        raw.includes('clockOutLocation') || raw.includes('clockInLocation');
+      // If error is SQL/photo related and we have a last params with photo, retry without photo
+      if (isSqlOrPhotoError && lastClockOutParams.current?.photoBase64) {
+        console.warn('[clockOut] Retrying without photo due to SQL/photo error');
+        const retryParams = { ...lastClockOutParams.current, photoBase64: undefined, photoTimestamp: undefined };
+        lastClockOutParams.current = null;
+        clockOutMutation.mutate(retryParams);
+        return;
+      }
       showError(parseTrpcError(err));
     },
   });
@@ -579,7 +621,7 @@ export default function ClockScreen() {
 
       setVerifyStep("clocking");
       if (isClockIn) {
-        clockInMutation.mutate({
+        const clockInParams = {
           employeeId: employee.id,
           lat,
           lng,
@@ -587,12 +629,14 @@ export default function ClockScreen() {
           shiftLabel,
           photoBase64,
           photoTimestamp,
-        });
+        };
+        lastClockInParams.current = clockInParams;
+        clockInMutation.mutate(clockInParams);
       } else {
         const record = todayAttendance?.find(
           (r) => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime
         );
-        clockOutMutation.mutate({
+        const clockOutParams = {
           employeeId: employee.id,
           attendanceId: record?.id,
           lat,
@@ -601,7 +645,9 @@ export default function ClockScreen() {
           shiftLabel,
           photoBase64,
           photoTimestamp,
-        });
+        };
+        lastClockOutParams.current = clockOutParams;
+        clockOutMutation.mutate(clockOutParams);
       }
     } catch (err: any) {
       showError(err?.message || "打卡失敗，請稍後再試");
