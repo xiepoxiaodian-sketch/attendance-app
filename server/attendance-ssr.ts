@@ -94,9 +94,8 @@ const STATUS_COLOR: Record<string, string> = {
   absent: "#ef4444",
 };
 
-// Handle both the original admin route and the v2 route
-// Use wildcard to match /admin/attendance with any suffix (e.g. %60?locale=zh-TW added by Expo Router)
-router.get(["/admin/attendance", "/admin/attendance(*)", "/attendance-v2", "/attendance-v2(*)"], async (req: Request, res: Response) => {
+// SSR attendance page - only for /attendance-v2 (backup route)
+router.get(["/attendance-v2", "/attendance-v2(*)"], async (req: Request, res: Response) => {
   try {
     // Parse query params
     const today = (() => {

@@ -330,3 +330,11 @@
 
 - [x] 將 SSR 路由改為同時攔截 /admin/attendance（原本路由）和 /attendance-v2
 - [x] SPA fallback 加入 /admin/attendance 例外，讓後端 SSR 優先回應
+
+## 管理後台打卡記錄修復（在後台內顯示）
+
+- [x] 移除 SSR 對 /admin/attendance 的攔截（讓前端頁面正常顯示）
+- [x] 改用 getGrouped API，同員工同天合併顯示
+- [x] 加入篩選按鈕（全部/正常/遲到/早退/缺勤/未下班打卡）
+- [x] 狀態動態計算（不依賴資料庫舊值）
+- [x] 重新 build 前端靜態檔案

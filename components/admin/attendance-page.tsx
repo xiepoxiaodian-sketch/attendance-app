@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
+  Image,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
@@ -20,9 +21,9 @@ function formatTime(date: any): string {
   return new Date(date).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-function formatDate(date: any): string {
-  if (!date) return "";
-  const d = new Date(date);
+function formatDate(dateKey: string): string {
+  if (!dateKey) return "";
+  const d = new Date(dateKey + "T00:00:00");
   return d.toLocaleDateString("zh-TW", { month: "2-digit", day: "2-digit", weekday: "short" });
 }
 
@@ -35,10 +36,25 @@ function calcHours(clockIn: any, clockOut: any): string {
 function getStatusStyle(status: string | null | undefined) {
   switch (status) {
     case "late": return { bg: "#FEF3C7", text: "#D97706", label: "遲到" };
-    case "early_leave": return { bg: "#FEF3C7", text: "#D97706", label: "早退" };
+    case "early_leave": return { bg: "#FFF7ED", text: "#EA580C", label: "早退" };
     case "absent": return { bg: "#FEE2E2", text: "#DC2626", label: "缺勤" };
+    case "no_clock_out": return { bg: "#F0F9FF", text: "#0284C7", label: "未下班打卡" };
     default: return { bg: "#DCFCE7", text: "#16A34A", label: "正常" };
   }
+}
+
+// Determine the "worst" status for a group of shifts
+function groupStatus(shifts: Array<{ status: string | null; clockInTime: any; clockOutTime: any }>): string {
+  const statuses = shifts.map(s => {
+    if (!s.clockInTime) return "absent";
+    if (s.clockInTime && !s.clockOutTime) return "no_clock_out";
+    return s.status || "normal";
+  });
+  if (statuses.includes("absent")) return "absent";
+  if (statuses.includes("late")) return "late";
+  if (statuses.includes("early_leave")) return "early_leave";
+  if (statuses.includes("no_clock_out")) return "no_clock_out";
+  return "normal";
 }
 
 // Parse "HH:MM" from a Date/ISO string
@@ -51,7 +67,7 @@ function toTimeStr(date: any): string {
 function buildDateTime(dateStr: string, timeStr: string): string | null {
   if (!timeStr || !timeStr.match(/^\d{2}:\d{2}$/)) return null;
   const [h, m] = timeStr.split(":").map(Number);
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + "T00:00:00");
   d.setHours(h, m, 0, 0);
   return d.toISOString();
 }
@@ -70,31 +86,25 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving }: E
   const [clockOut, setClockOut] = useState("");
   const [note, setNote] = useState("");
 
-  // Reset when record changes
   const initValues = useCallback(() => {
     setClockIn(record ? toTimeStr(record.clockInTime) : "");
     setClockOut(record ? toTimeStr(record.clockOutTime) : "");
     setNote(record?.note ?? "");
   }, [record]);
 
-  // Call init when modal opens
-  const handleOpen = () => { initValues(); };
-
   const handleSave = () => {
     if (!record) return;
-    const dateStr = typeof record.date === "string" ? record.date.slice(0, 10) : new Date(record.date).toISOString().slice(0, 10);
+    const dateStr = record.dateKey;
     const newClockIn = clockIn ? buildDateTime(dateStr, clockIn) : null;
     const newClockOut = clockOut ? buildDateTime(dateStr, clockOut) : null;
     onSave({ clockInTime: newClockIn, clockOutTime: newClockOut, note });
   };
 
   if (!record) return null;
-  const dateStr = typeof record.date === "string" ? record.date.slice(0, 10) : new Date(record.date).toISOString().slice(0, 10);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onShow={handleOpen}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onShow={initValues}>
       <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
-        {/* Header */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
           <TouchableOpacity onPress={onClose}><Text style={{ color: "#64748B", fontSize: 15 }}>取消</Text></TouchableOpacity>
           <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>修改打卡記錄</Text>
@@ -104,18 +114,16 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving }: E
         </View>
 
         <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-          {/* Employee Info */}
           <View style={{ backgroundColor: "#EFF6FF", borderRadius: 12, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center" }}>
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#2563EB" }}>{employeeName[0] ?? "?"}</Text>
             </View>
             <View>
               <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{employeeName}</Text>
-              <Text style={{ fontSize: 12, color: "#64748B" }}>{dateStr} · {record.shiftLabel || "一般班"}</Text>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>{record.dateKey} · {record.shiftLabel || "一般班"}</Text>
             </View>
           </View>
 
-          {/* Clock In/Out Times */}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 14 }}>打卡時間（格式：HH:MM）</Text>
             <View style={{ flexDirection: "row", gap: 12 }}>
@@ -128,12 +136,7 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving }: E
                   keyboardType="numbers-and-punctuation"
                   returnKeyType="done"
                   maxLength={5}
-                  style={{
-                    borderWidth: 1.5, borderColor: "#BBF7D0", borderRadius: 10,
-                    paddingHorizontal: 12, paddingVertical: 12,
-                    fontSize: 22, fontWeight: "700", color: "#16A34A", textAlign: "center",
-                    backgroundColor: "#F0FDF4",
-                  }}
+                  style={{ borderWidth: 1.5, borderColor: "#BBF7D0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, fontSize: 22, fontWeight: "700", color: "#16A34A", textAlign: "center", backgroundColor: "#F0FDF4" }}
                 />
               </View>
               <View style={{ alignItems: "center", justifyContent: "flex-end", paddingBottom: 12 }}>
@@ -148,19 +151,13 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving }: E
                   keyboardType="numbers-and-punctuation"
                   returnKeyType="done"
                   maxLength={5}
-                  style={{
-                    borderWidth: 1.5, borderColor: "#BFDBFE", borderRadius: 10,
-                    paddingHorizontal: 12, paddingVertical: 12,
-                    fontSize: 22, fontWeight: "700", color: "#2563EB", textAlign: "center",
-                    backgroundColor: "#EFF6FF",
-                  }}
+                  style={{ borderWidth: 1.5, borderColor: "#BFDBFE", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, fontSize: 22, fontWeight: "700", color: "#2563EB", textAlign: "center", backgroundColor: "#EFF6FF" }}
                 />
               </View>
             </View>
             <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 10, textAlign: "center" }}>留空表示清除該欄位的打卡記錄</Text>
           </View>
 
-          {/* Note */}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 8 }}>備注（選填）</Text>
             <TextInput
@@ -170,11 +167,7 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving }: E
               multiline
               numberOfLines={3}
               returnKeyType="done"
-              style={{
-                borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8,
-                padding: 10, minHeight: 70, textAlignVertical: "top",
-                fontSize: 14, color: "#1E293B",
-              }}
+              style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 10, minHeight: 70, textAlignVertical: "top", fontSize: 14, color: "#1E293B" }}
             />
           </View>
         </ScrollView>
@@ -183,26 +176,47 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving }: E
   );
 }
 
+// Photo viewer modal
+function PhotoModal({ uri, onClose }: { uri: string | null; onClose: () => void }) {
+  if (!uri) return null;
+  return (
+    <Modal visible={!!uri} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.9)", alignItems: "center", justifyContent: "center" }} onPress={onClose} activeOpacity={1}>
+        <Image source={{ uri }} style={{ width: "90%", height: "70%", resizeMode: "contain" }} />
+        <Text style={{ color: "rgba(255,255,255,0.6)", marginTop: 16, fontSize: 13 }}>點擊任意處關閉</Text>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+type StatusFilter = "all" | "normal" | "late" | "early_leave" | "absent" | "no_clock_out";
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: "all", label: "全部" },
+  { key: "normal", label: "正常" },
+  { key: "late", label: "遲到" },
+  { key: "early_leave", label: "早退" },
+  { key: "absent", label: "缺勤" },
+  { key: "no_clock_out", label: "未下班打卡" },
+];
+
 export default function AdminAttendanceScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [confirmDelete, setConfirmDelete] = useState<{ id?: number; batch?: boolean } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [editRecord, setEditRecord] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: number } | null>(null);
 
   const today = new Date().toISOString().split("T")[0];
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(weekAgo);
   const [endDate, setEndDate] = useState(today);
 
-  const { data: records, refetch, isLoading } = trpc.attendance.getAll.useQuery({ startDate, endDate });
-  const { data: employees } = trpc.employees.list.useQuery();
+  const { data: groups, refetch, isLoading } = trpc.attendance.getGrouped.useQuery({ startDate, endDate });
 
   const deleteMutation = trpc.attendance.delete.useMutation({ onSuccess: () => refetch() });
-  const deleteBatchMutation = trpc.attendance.deleteBatch.useMutation({
-    onSuccess: () => { setSelectedIds([]); refetch(); },
-  });
   const adminUpdateMutation = trpc.attendance.adminUpdate.useMutation({ onSuccess: () => refetch() });
 
   const onRefresh = useCallback(async () => {
@@ -210,18 +224,6 @@ export default function AdminAttendanceScreen() {
     await refetch();
     setRefreshing(false);
   }, []);
-
-  const handleDelete = (id: number) => setConfirmDelete({ id });
-  const handleDeleteSelected = () => { if (selectedIds.length > 0) setConfirmDelete({ batch: true }); };
-
-  const handleConfirmDelete = () => {
-    if (confirmDelete?.id !== undefined) {
-      deleteMutation.mutate({ id: confirmDelete.id });
-    } else if (confirmDelete?.batch) {
-      deleteBatchMutation.mutate({ ids: selectedIds });
-    }
-    setConfirmDelete(null);
-  };
 
   const handleSaveEdit = async (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string }) => {
     if (!editRecord) return;
@@ -234,51 +236,59 @@ export default function AdminAttendanceScreen() {
     }
   };
 
-  const toggleSelect = (id: number) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  // Filter and count
+  const allGroups = groups ?? [];
+
+  const getGroupStatusKey = (g: typeof allGroups[0]): StatusFilter => {
+    const s = groupStatus(g.shifts);
+    return s as StatusFilter;
   };
 
-  const getEmployeeName = (id: number) => employees?.find(e => e.id === id)?.fullName ?? `#${id}`;
+  const filteredGroups = allGroups
+    .filter(g => {
+      if (searchQuery && !g.employeeName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (statusFilter === "all") return true;
+      return getGroupStatusKey(g) === statusFilter;
+    });
 
-  const filteredRecords = (records ?? [])
-    .filter(r => !searchQuery || getEmployeeName(r.employeeId).toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  // Count per status
+  const counts: Record<StatusFilter, number> = { all: allGroups.length, normal: 0, late: 0, early_leave: 0, absent: 0, no_clock_out: 0 };
+  for (const g of allGroups) {
+    const s = getGroupStatusKey(g);
+    counts[s] = (counts[s] ?? 0) + 1;
+  }
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
       <ConfirmDialog
         visible={!!confirmDelete}
-        title={confirmDelete?.batch ? "批量刪除" : "刪除紀錄"}
-        message={confirmDelete?.batch ? `確定要刪除選取的 ${selectedIds.length} 筆紀錄嗎？` : "確定要刪除此打卡紀錄嗎？"}
+        title="刪除紀錄"
+        message="確定要刪除此打卡紀錄嗎？"
         confirmText="刪除"
         confirmStyle="destructive"
-        onConfirm={handleConfirmDelete}
+        onConfirm={() => {
+          if (confirmDelete?.id !== undefined) deleteMutation.mutate({ id: confirmDelete.id });
+          setConfirmDelete(null);
+        }}
         onCancel={() => setConfirmDelete(null)}
       />
 
       <EditModal
         visible={!!editRecord}
         record={editRecord}
-        employeeName={editRecord ? getEmployeeName(editRecord.employeeId) : ""}
+        employeeName={editRecord?.employeeName ?? ""}
         onClose={() => setEditRecord(null)}
         onSave={handleSaveEdit}
         saving={saving}
       />
 
-      <AdminHeader title="打卡紀錄" subtitle={`共 ${filteredRecords.length} 筆紀錄`} onRefresh={onRefresh} refreshing={refreshing} />
-      {selectedIds.length > 0 && (
-        <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>
-          <TouchableOpacity
-            onPress={handleDeleteSelected}
-            style={{ backgroundColor: "#EF4444", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 }}
-          >
-            <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>刪除 {selectedIds.length} 筆</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <PhotoModal uri={photoUri} onClose={() => setPhotoUri(null)} />
+
+      <AdminHeader title="打卡紀錄" subtitle={`共 ${filteredGroups.length} 筆紀錄`} onRefresh={onRefresh} refreshing={refreshing} />
 
       {/* Filters */}
       <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", gap: 8 }}>
+        {/* Date Range */}
         <View style={{ flexDirection: "row", gap: 8 }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", marginBottom: 4 }}>開始日期</Text>
@@ -301,6 +311,8 @@ export default function AdminAttendanceScreen() {
             />
           </View>
         </View>
+
+        {/* Search */}
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -309,22 +321,34 @@ export default function AdminAttendanceScreen() {
           style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
           placeholderTextColor="#94A3B8"
         />
-      </View>
 
-      {/* Select All Bar */}
-      {filteredRecords.length > 0 && (
-        <View style={{ backgroundColor: "white", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ fontSize: 12, color: "#94A3B8" }}>長按選取 · 可批量刪除 · 點擊可編輯</Text>
-          <TouchableOpacity onPress={() => {
-            if (selectedIds.length === filteredRecords.length) setSelectedIds([]);
-            else setSelectedIds(filteredRecords.map(r => r.id));
-          }}>
-            <Text style={{ color: "#2563EB", fontSize: 13, fontWeight: "500" }}>
-              {selectedIds.length === filteredRecords.length && filteredRecords.length > 0 ? "取消全選" : "全選"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        {/* Status Filter Buttons */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 2 }}>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {STATUS_FILTERS.map(f => {
+              const active = statusFilter === f.key;
+              return (
+                <TouchableOpacity
+                  key={f.key}
+                  onPress={() => setStatusFilter(f.key)}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                    backgroundColor: active ? "#1E3A8A" : "#F1F5F9",
+                    borderWidth: 1,
+                    borderColor: active ? "#1E3A8A" : "#E2E8F0",
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: active ? "700" : "400", color: active ? "white" : "#64748B" }}>
+                    {f.label} {counts[f.key]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -332,89 +356,96 @@ export default function AdminAttendanceScreen() {
         </View>
       ) : (
         <FlatList
-          data={filteredRecords}
-          keyExtractor={(item) => String(item.id)}
+          data={filteredGroups}
+          keyExtractor={(item) => item.key}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={{ padding: 14, gap: 8, paddingBottom: 24 }}
+          contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: 40 }}
           ListEmptyComponent={
             <View style={{ paddingVertical: 60, alignItems: "center" }}>
               <Text style={{ fontSize: 14, color: "#94A3B8" }}>此期間無打卡紀錄</Text>
             </View>
           }
-          renderItem={({ item }) => {
-            const isSelected = selectedIds.includes(item.id);
-            const statusStyle = getStatusStyle(item.status);
+          renderItem={({ item: group }) => {
+            const overallStatus = getGroupStatusKey(group);
+            const overallStyle = getStatusStyle(overallStatus);
             return (
-              <TouchableOpacity
-                onLongPress={() => toggleSelect(item.id)}
-                onPress={() => selectedIds.length > 0 ? toggleSelect(item.id) : setEditRecord(item)}
-                style={{
-                  backgroundColor: isSelected ? "#EFF6FF" : "white",
-                  borderRadius: 12,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: isSelected ? "#2563EB" : "#E2E8F0",
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.04,
-                  shadowRadius: 3,
-                  elevation: 1,
-                }}
-              >
-                {/* Top Row */}
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    {isSelected && (
-                      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#2563EB", alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>✓</Text>
-                      </View>
-                    )}
-                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563EB" }}>
-                        {getEmployeeName(item.employeeId)[0]}
-                      </Text>
-                    </View>
-                    <View>
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#1E293B" }}>
-                        {getEmployeeName(item.employeeId)}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: "#94A3B8" }}>{item.shiftLabel || "一般班"}</Text>
-                    </View>
+              <View style={{ backgroundColor: "white", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 }}>
+                {/* Group Header */}
+                <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: group.shifts.length > 0 ? 1 : 0, borderBottomColor: "#F1F5F9" }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#2563EB" }}>{group.employeeName[0]}</Text>
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View style={{ backgroundColor: statusStyle.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
-                      <Text style={{ fontSize: 11, color: statusStyle.text, fontWeight: "600" }}>{statusStyle.label}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => setEditRecord(item)} style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-                      <Text style={{ color: "#2563EB", fontSize: 12, fontWeight: "600" }}>編輯</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                      <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "500" }}>刪除</Text>
-                    </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{group.employeeName}</Text>
+                    <Text style={{ fontSize: 12, color: "#94A3B8" }}>{formatDate(group.dateKey)}</Text>
+                  </View>
+                  <View style={{ backgroundColor: overallStyle.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+                    <Text style={{ fontSize: 12, color: overallStyle.text, fontWeight: "700" }}>{overallStyle.label}</Text>
                   </View>
                 </View>
 
-                {/* Bottom Row */}
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 40 }}>
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
-                    {formatDate(item.date)}
-                  </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#22C55E" }} />
-                    <Text style={{ fontSize: 12, color: "#64748B" }}>{formatTime(item.clockInTime)}</Text>
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#3B82F6" }} />
-                    <Text style={{ fontSize: 12, color: "#64748B" }}>{formatTime(item.clockOutTime)}</Text>
-                  </View>
-                  <Text style={{ fontSize: 12, color: "#94A3B8" }}>
-                    {calcHours(item.clockInTime, item.clockOutTime)}
-                  </Text>
-                  {item.note && (
-                    <Text style={{ fontSize: 11, color: "#94A3B8", flex: 1 }} numberOfLines={1}>📝 {item.note}</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
+                {/* Shifts */}
+                {group.shifts.map((shift, idx) => {
+                  const shiftStyle = getStatusStyle(shift.clockInTime ? (shift.clockOutTime ? shift.status : "no_clock_out") : "absent");
+                  return (
+                    <View key={shift.id} style={{ paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: "#F8FAFC" }}>
+                      {/* Shift label + status */}
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>{shift.shiftLabel || "一般班"}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <View style={{ backgroundColor: shiftStyle.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                            <Text style={{ fontSize: 11, color: shiftStyle.text, fontWeight: "600" }}>{shiftStyle.label}</Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => setEditRecord({ ...shift, dateKey: group.dateKey, employeeName: group.employeeName })}
+                            style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}
+                          >
+                            <Text style={{ color: "#2563EB", fontSize: 11, fontWeight: "600" }}>編輯</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setConfirmDelete({ id: shift.id })}>
+                            <Text style={{ color: "#EF4444", fontSize: 11, fontWeight: "500" }}>刪除</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Times + photos */}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                        {/* Clock in */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#22C55E" }} />
+                          <Text style={{ fontSize: 13, color: "#1E293B", fontWeight: "600" }}>{formatTime(shift.clockInTime)}</Text>
+                        </View>
+                        <Text style={{ color: "#CBD5E1", fontSize: 14 }}>→</Text>
+                        {/* Clock out */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#3B82F6" }} />
+                          <Text style={{ fontSize: 13, color: "#1E293B", fontWeight: "600" }}>{formatTime(shift.clockOutTime)}</Text>
+                        </View>
+                        {/* Duration */}
+                        <Text style={{ fontSize: 12, color: "#94A3B8" }}>{calcHours(shift.clockInTime, shift.clockOutTime)}</Text>
+
+                        {/* Photos */}
+                        <View style={{ flexDirection: "row", gap: 4, marginLeft: "auto" }}>
+                          {shift.clockInPhoto && (
+                            <TouchableOpacity onPress={() => setPhotoUri(shift.clockInPhoto!)}>
+                              <Image source={{ uri: shift.clockInPhoto }} style={{ width: 32, height: 32, borderRadius: 6, borderWidth: 1, borderColor: "#BBF7D0" }} />
+                            </TouchableOpacity>
+                          )}
+                          {shift.clockOutPhoto && (
+                            <TouchableOpacity onPress={() => setPhotoUri(shift.clockOutPhoto!)}>
+                              <Image source={{ uri: shift.clockOutPhoto }} style={{ width: 32, height: 32, borderRadius: 6, borderWidth: 1, borderColor: "#BFDBFE" }} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+
+                      {shift.note && (
+                        <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }} numberOfLines={1}>📝 {shift.note}</Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
             );
           }}
         />
