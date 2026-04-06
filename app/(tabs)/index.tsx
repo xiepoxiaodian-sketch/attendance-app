@@ -98,8 +98,13 @@ function CameraModal({ visible, actionLabel, onCapture, onCancel }: CameraModalP
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const w = video.videoWidth || 640;
-    const h = video.videoHeight || 480;
+    // Limit photo to max 480px wide to keep base64 well under 500KB
+    const MAX_W = 480;
+    const origW = video.videoWidth || 640;
+    const origH = video.videoHeight || 480;
+    const scale = origW > MAX_W ? MAX_W / origW : 1;
+    const w = Math.round(origW * scale);
+    const h = Math.round(origH * scale);
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d")!;
@@ -115,13 +120,14 @@ function CameraModal({ visible, actionLabel, onCapture, onCancel }: CameraModalP
     const twTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
     const timeStr = twTime.toISOString().replace("T", " ").slice(0, 19) + " (UTC+8)";
     ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.fillRect(0, h - 36, w, 36);
+    ctx.fillRect(0, h - 32, w, 32);
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 14px monospace";
-    ctx.fillText(timeStr, 10, h - 12);
+    ctx.font = `bold ${Math.round(12 * scale)}px monospace`;
+    ctx.fillText(timeStr, 8, h - 10);
 
     const timestamp = now.getTime();
-    const base64 = canvas.toDataURL("image/jpeg", 0.85);
+    // Use quality 0.65 to keep base64 well under 300KB
+    const base64 = canvas.toDataURL("image/jpeg", 0.65);
 
     // Stop camera
     if (streamRef.current) {

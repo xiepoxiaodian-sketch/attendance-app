@@ -185,19 +185,30 @@ const attendanceRouter = router({
       }
 
       // Store selfie photo as base64 directly in DB (no S3 dependency)
-      const clockInPhotoUrl: string | undefined = input.photoBase64 || undefined;
+      // Limit photo size to prevent DB errors (max ~500KB base64 ≈ 375KB binary)
+      let clockInPhotoUrl: string | undefined = input.photoBase64 || undefined;
+      if (clockInPhotoUrl && clockInPhotoUrl.length > 600000) {
+        clockInPhotoUrl = undefined; // Drop oversized photo rather than fail
+      }
 
-      const id = await db.createAttendance({
-        employeeId: input.employeeId,
-        date: today as unknown as Date,
-        clockInTime: now,
-        clockInLocation: input.locationName,
-        clockInLat: input.lat?.toString() as unknown as any,
-        clockInLng: input.lng?.toString() as unknown as any,
-        shiftLabel,
-        status,
-        clockInPhoto: clockInPhotoUrl ?? null,
-      } as any);
+      let id: number;
+      try {
+        id = await db.createAttendance({
+          employeeId: input.employeeId,
+          date: today as unknown as Date,
+          clockInTime: now,
+          clockInLocation: input.locationName,
+          clockInLat: input.lat ?? null,
+          clockInLng: input.lng ?? null,
+          shiftLabel,
+          status,
+          clockInPhoto: clockInPhotoUrl ?? null,
+        } as any);
+      } catch (dbErr: any) {
+        // Mask raw SQL errors to avoid leaking sensitive data to client
+        console.error('[clockIn] DB error:', dbErr?.message);
+        throw new Error('打卡記錄儲存失敗，請稍後再試');
+      }
 
       // Push notification for late clock-in
       if (status === "late") {
@@ -304,16 +315,26 @@ const attendanceRouter = router({
       }
 
       // Store selfie photo as base64 directly in DB (no S3 dependency)
-      const clockOutPhotoUrl: string | undefined = input.photoBase64 || undefined;
+      // Limit photo size to prevent DB errors (max ~500KB base64 ≈ 375KB binary)
+      let clockOutPhotoUrl: string | undefined = input.photoBase64 || undefined;
+      if (clockOutPhotoUrl && clockOutPhotoUrl.length > 600000) {
+        clockOutPhotoUrl = undefined; // Drop oversized photo rather than fail
+      }
 
-      await db.updateAttendance(record.id, {
-        clockOutTime: now,
-        clockOutLocation: input.locationName,
-        clockOutLat: input.lat?.toString() as unknown as any,
-        clockOutLng: input.lng?.toString() as unknown as any,
-        status: status || "normal",
-        clockOutPhoto: clockOutPhotoUrl ?? null,
-      } as any);
+      try {
+        await db.updateAttendance(record.id, {
+          clockOutTime: now,
+          clockOutLocation: input.locationName,
+          clockOutLat: input.lat ?? null,
+          clockOutLng: input.lng ?? null,
+          status: status || "normal",
+          clockOutPhoto: clockOutPhotoUrl ?? null,
+        } as any);
+      } catch (dbErr: any) {
+        // Mask raw SQL errors to avoid leaking sensitive data to client
+        console.error('[clockOut] DB error:', dbErr?.message);
+        throw new Error('打卡記錄儲存失敗，請稍後再試');
+      }
 
       // Push notification for early leave
       if (status === "early_leave") {
