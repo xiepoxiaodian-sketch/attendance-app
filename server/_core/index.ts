@@ -142,23 +142,25 @@ async function startServer() {
         results.push('Added attendance.clockOutPhoto');
       }
 
-      // 0014: upgrade clockInPhoto/clockOutPhoto from text to mediumtext
+      // 0014: upgrade clockInPhoto/clockOutPhoto to mediumtext (force if not already mediumtext)
       {
         const [colRows] = await conn.execute(
           `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' AND COLUMN_NAME = 'clockInPhoto'`
         ) as any[];
-        if (colRows.length > 0 && String(colRows[0].COLUMN_TYPE).toLowerCase() === 'text') {
+        const currentType = colRows.length > 0 ? String(colRows[0].COLUMN_TYPE).toLowerCase() : '';
+        if (currentType && currentType !== 'mediumtext' && currentType !== 'longtext') {
           await conn.execute(`ALTER TABLE attendance MODIFY COLUMN clockInPhoto mediumtext`);
-          results.push('Upgraded attendance.clockInPhoto to mediumtext');
+          results.push(`Upgraded attendance.clockInPhoto from ${currentType} to mediumtext`);
         }
       }
       {
         const [colRows] = await conn.execute(
           `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' AND COLUMN_NAME = 'clockOutPhoto'`
         ) as any[];
-        if (colRows.length > 0 && String(colRows[0].COLUMN_TYPE).toLowerCase() === 'text') {
+        const currentType = colRows.length > 0 ? String(colRows[0].COLUMN_TYPE).toLowerCase() : '';
+        if (currentType && currentType !== 'mediumtext' && currentType !== 'longtext') {
           await conn.execute(`ALTER TABLE attendance MODIFY COLUMN clockOutPhoto mediumtext`);
-          results.push('Upgraded attendance.clockOutPhoto to mediumtext');
+          results.push(`Upgraded attendance.clockOutPhoto from ${currentType} to mediumtext`);
         }
       }
 
