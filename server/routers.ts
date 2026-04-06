@@ -389,6 +389,61 @@ const attendanceRouter = router({
     }))
     .query(async ({ input }) => {
       const records = await db.getAllAttendance(input.startDate, input.endDate, input.employeeId);
+      // Fetch all schedules in the date range for dynamic status recalculation
+      const allSchedules = input.startDate && input.endDate
+        ? await db.getAllSchedulesByDateRange(input.startDate, input.endDate)
+        : [];
+      // Build schedule lookup: employeeId_dateKey -> shifts[]
+      const scheduleMap = new Map<string, Array<{ startTime: string; endTime: string; label: string }>>();
+      for (const s of allSchedules) {
+        let sDateKey = "";
+        if (s.date) {
+          const d = s.date instanceof Date ? s.date : new Date(s.date as unknown as string);
+          if (!isNaN(d.getTime())) {
+            sDateKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+          } else {
+            sDateKey = String(s.date).split("T")[0].split(" ")[0];
+          }
+        }
+        const sKey = `${s.employeeId}_${sDateKey}`;
+        if (s.shifts) {
+          scheduleMap.set(sKey, s.shifts as Array<{ startTime: string; endTime: string; label: string }>);
+        }
+      }
+      const lateThreshold = parseInt(await db.getSetting("late_threshold_minutes") || "10");
+
+      // Helper: compute status from clock times vs scheduled shift
+      function computeStatus(
+        clockIn: Date | null,
+        clockOut: Date | null,
+        shift: { startTime: string; endTime: string } | undefined,
+        storedStatus: string | null
+      ): string {
+        if (!shift) return storedStatus || "normal";
+        const toTWMinutes = (d: Date) => {
+          const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+          return tw.getUTCHours() * 60 + tw.getUTCMinutes();
+        };
+        const [sh, sm] = shift.startTime.split(":").map(Number);
+        const [eh, em] = shift.endTime.split(":").map(Number);
+        const shiftStart = sh * 60 + sm;
+        const shiftEnd = eh * 60 + em;
+        let status = "normal";
+        if (clockIn) {
+          const inMin = toTWMinutes(clockIn instanceof Date ? clockIn : new Date(clockIn));
+          if (inMin - shiftStart > lateThreshold) status = "late";
+        }
+        if (clockOut) {
+          const outMin = toTWMinutes(clockOut instanceof Date ? clockOut : new Date(clockOut));
+          if (outMin < shiftEnd - 1) {
+            status = "early_leave";
+          } else if (status !== "late") {
+            status = "normal";
+          }
+        }
+        return status;
+      }
+
       // Group by employeeId + date (local date, not UTC)
       const map = new Map<string, {
         key: string;
@@ -424,6 +479,16 @@ const attendanceRouter = router({
           }
         }
         const groupKey = `${r.employeeId}_${dateKey}`;
+        // Find matching scheduled shift for dynamic status recalculation
+        const shiftsForDay = scheduleMap.get(groupKey);
+        const shiftLabel = r.shiftLabel || "一般班";
+        const matchedShift = shiftsForDay?.find(s => s.label === shiftLabel);
+        const dynamicStatus = computeStatus(
+          r.clockInTime ? (r.clockInTime instanceof Date ? r.clockInTime : new Date(r.clockInTime as any)) : null,
+          r.clockOutTime ? (r.clockOutTime instanceof Date ? r.clockOutTime : new Date(r.clockOutTime as any)) : null,
+          matchedShift,
+          r.status ?? null
+        );
         if (!map.has(groupKey)) {
           map.set(groupKey, {
             key: groupKey,
@@ -436,10 +501,10 @@ const attendanceRouter = router({
         }
         map.get(groupKey)!.shifts.push({
           id: r.id,
-          shiftLabel: r.shiftLabel || "一般班",
+          shiftLabel,
           clockInTime: r.clockInTime,
           clockOutTime: r.clockOutTime,
-          status: r.status ?? null,
+          status: dynamicStatus,
           note: r.note ?? null,
           clockInPhoto: (r as any).clockInPhoto ?? null,
           clockOutPhoto: (r as any).clockOutPhoto ?? null,
