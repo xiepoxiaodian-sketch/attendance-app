@@ -205,9 +205,31 @@ const attendanceRouter = router({
           clockInPhoto: clockInPhotoUrl ?? null,
         } as any);
       } catch (dbErr: any) {
-        // Mask raw SQL errors to avoid leaking sensitive data to client
-        console.error('[clockIn] DB error:', dbErr?.message);
-        throw new Error('打卡記錄儲存失敗，請稍後再試');
+        // If error is due to missing location/photo columns, retry without them
+        const msg = dbErr?.message || '';
+        const isColumnError = msg.includes('clockInLocation') || msg.includes('clockOutLocation') || msg.includes('Unknown column');
+        if (isColumnError) {
+          console.warn('[clockIn] Retrying without location columns (DB schema mismatch)');
+          try {
+            id = await db.createAttendance({
+              employeeId: input.employeeId,
+              date: today as unknown as Date,
+              clockInTime: now,
+              clockInLat: input.lat ?? null,
+              clockInLng: input.lng ?? null,
+              shiftLabel,
+              status,
+              clockInPhoto: clockInPhotoUrl ?? null,
+            } as any);
+          } catch (retryErr: any) {
+            console.error('[clockIn] Retry DB error:', retryErr?.message);
+            throw new Error('打卡記錄儲存失敗，請稍後再試');
+          }
+        } else {
+          // Mask raw SQL errors to avoid leaking sensitive data to client
+          console.error('[clockIn] DB error:', dbErr?.message);
+          throw new Error('打卡記錄儲存失敗，請稍後再試');
+        }
       }
 
       // Push notification for late clock-in
@@ -331,9 +353,28 @@ const attendanceRouter = router({
           clockOutPhoto: clockOutPhotoUrl ?? null,
         } as any);
       } catch (dbErr: any) {
-        // Mask raw SQL errors to avoid leaking sensitive data to client
-        console.error('[clockOut] DB error:', dbErr?.message);
-        throw new Error('打卡記錄儲存失敗，請稍後再試');
+        // If error is due to missing location columns, retry without them
+        const msg = dbErr?.message || '';
+        const isColumnError = msg.includes('clockOutLocation') || msg.includes('clockInLocation') || msg.includes('Unknown column');
+        if (isColumnError) {
+          console.warn('[clockOut] Retrying without location columns (DB schema mismatch)');
+          try {
+            await db.updateAttendance(record.id, {
+              clockOutTime: now,
+              clockOutLat: input.lat ?? null,
+              clockOutLng: input.lng ?? null,
+              status: status || "normal",
+              clockOutPhoto: clockOutPhotoUrl ?? null,
+            } as any);
+          } catch (retryErr: any) {
+            console.error('[clockOut] Retry DB error:', retryErr?.message);
+            throw new Error('打卡記錄儲存失敗，請稍後再試');
+          }
+        } else {
+          // Mask raw SQL errors to avoid leaking sensitive data to client
+          console.error('[clockOut] DB error:', dbErr?.message);
+          throw new Error('打卡記錄儲存失敗，請稍後再試');
+        }
       }
 
       // Push notification for early leave
