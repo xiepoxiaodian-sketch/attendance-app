@@ -1,5 +1,5 @@
 // 好好上班 PWA Service Worker
-const CACHE_NAME = "haohao-v2";
+const CACHE_NAME = "haohao-v6";
 const OFFLINE_URL = "/";
 
 // 安裝時快取核心資源
