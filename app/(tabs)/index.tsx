@@ -384,9 +384,25 @@ export default function ClockScreen() {
   const { data: settings } = trpc.settings.getAll.useQuery();
 
   const parseTrpcError = (err: any): string => {
-    const msg = err?.shape?.message || err?.data?.message || err?.message || "";
+    // Try to extract the actual message from tRPC error shape
+    const raw = err?.shape?.message || err?.data?.message || err?.message || "";
+    // Extract nested message if JSON-wrapped
+    let msg = raw;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed[0]?.message) msg = parsed[0].message;
+    } catch {}
+
+    // Filter out generic HTTP error codes
     if (!msg || msg === "INTERNAL_SERVER_ERROR" || msg === "BAD_REQUEST" || msg === "UNAUTHORIZED") {
       return "打卡失敗，請稍後再試（如問題持續請聯絡管理員）";
+    }
+    // Filter out SQL errors (contain backtick column names or INSERT/UPDATE keywords)
+    const isSqlError = /`[a-zA-Z]+`/.test(msg) || /INSERT|UPDATE|SELECT|WHERE|FROM/i.test(msg);
+    // Filter out base64 data leaking into error messages
+    const hasBase64 = /data:image\/|base64,/.test(msg) || msg.length > 300;
+    if (isSqlError || hasBase64) {
+      return "打卡記錄儲存失敗，請稍後再試（如問題持續請聯絡管理員）";
     }
     return msg;
   };
