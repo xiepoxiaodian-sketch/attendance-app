@@ -94,7 +94,8 @@ const STATUS_COLOR: Record<string, string> = {
   absent: "#ef4444",
 };
 
-router.get("/attendance-v2", async (req: Request, res: Response) => {
+// Handle both the original admin route and the v2 route
+router.get(["/admin/attendance", "/attendance-v2"], async (req: Request, res: Response) => {
   try {
     // Parse query params
     const today = (() => {

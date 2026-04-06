@@ -325,3 +325,8 @@
 - [x] 同員工同天合併顯示（多班次並列）
 - [x] 狀態正確判斷（遲到/早退/正常）
 - [x] 18 個單元測試全部通過
+
+## SSR 路由整合（原本連結直接使用）
+
+- [x] 將 SSR 路由改為同時攔截 /admin/attendance（原本路由）和 /attendance-v2
+- [x] SPA fallback 加入 /admin/attendance 例外，讓後端 SSR 優先回應
