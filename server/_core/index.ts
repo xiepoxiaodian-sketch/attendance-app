@@ -67,6 +67,21 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  // Diagnostic endpoint: check actual column types in DB
+  app.get("/api/db-check", async (_req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+      const [rows] = await conn.execute(
+        `SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' ORDER BY ORDINAL_POSITION`
+      ) as any[];
+      await conn.end();
+      res.json({ ok: true, columns: rows });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // Migration endpoint: run all pending schema migrations
   app.post("/api/migrate", async (_req, res) => {
     try {
