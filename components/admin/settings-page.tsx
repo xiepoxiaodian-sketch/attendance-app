@@ -98,6 +98,8 @@ function SystemSettings() {
   };
 
   const [form, setForm] = useState<Record<string, string>>({});
+  const [gettingLocation, setGettingLocation] = useState(false);
+
   useEffect(() => {
     if (settings) {
       setForm({ ...settings });
@@ -109,13 +111,37 @@ function SystemSettings() {
     setBatchMutation.mutate(updates);
   };
 
-  const fields = [
-    { key: "work_location_lat", label: "工作地點緯度", placeholder: "例：25.0330" },
-    { key: "work_location_lng", label: "工作地點經度", placeholder: "例：121.5654" },
-    { key: "allowed_radius", label: "允許打卡範圍（公尺）", placeholder: "例：200" },
-    { key: "late_threshold_minutes", label: "遲到判定（分鐘）", placeholder: "例：10" },
-    { key: "company_name", label: "公司名稱", placeholder: "您的公司名稱" },
-  ];
+  // Get current GPS location and fill lat/lng fields
+  const handleGetCurrentLocation = () => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.geolocation) {
+      setAlertMsg({ title: "不支援", message: "此瀏覽器不支援 GPS 定位" });
+      return;
+    }
+    setGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(7);
+        const lng = pos.coords.longitude.toFixed(7);
+        setForm(f => ({ ...f, work_location_lat: lat, work_location_lng: lng }));
+        setGettingLocation(false);
+        setAlertMsg({
+          title: "定位成功",
+          message: `已取得目前位置：\n緯度 ${lat}\n經度 ${lng}\n\n請確認這是正確的工作地點後再儲存設定。`,
+        });
+      },
+      (err) => {
+        setGettingLocation(false);
+        if (err.code === 1) {
+          setAlertMsg({ title: "定位失敗", message: "瀏覽器拒絕定位權限，請在網址列允許位置存取後再試。" });
+        } else if (err.code === 2) {
+          setAlertMsg({ title: "定位失敗", message: "無法取得位置，請確認 GPS 已開啟。" });
+        } else {
+          setAlertMsg({ title: "定位逾時", message: "定位請求逾時，請確認 GPS 信號良好後再試。" });
+        }
+      },
+      { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
+    );
+  };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
@@ -178,19 +204,110 @@ function SystemSettings() {
 
       <View style={{ backgroundColor: "white", borderRadius: 14, padding: 16, marginBottom: 16 }}>
         <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginBottom: 12 }}>地點與時間設定</Text>
-        {fields.map((field, i) => (
-          <View key={field.key} style={{ marginBottom: i < fields.length - 1 ? 12 : 0 }}>
-            <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 6 }}>{field.label}</Text>
-            <TextInput
-              value={form[field.key] ?? ""}
-              onChangeText={(v) => setForm(f => ({ ...f, [field.key]: v }))}
-              placeholder={field.placeholder}
-              returnKeyType="done"
-              style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: "#1E293B" }}
-              placeholderTextColor="#94A3B8"
-            />
+
+        {/* Lat/Lng with Get Location button */}
+        <View style={{ marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <Text style={{ fontSize: 13, color: "#64748B" }}>工作地點座標</Text>
+            <TouchableOpacity
+              onPress={handleGetCurrentLocation}
+              disabled={gettingLocation}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: gettingLocation ? "#E2E8F0" : "#EFF6FF",
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderWidth: 1,
+                borderColor: gettingLocation ? "#CBD5E1" : "#BFDBFE",
+                gap: 4,
+              }}
+            >
+              {gettingLocation ? (
+                <ActivityIndicator size="small" color="#1E40AF" />
+              ) : (
+                <Text style={{ fontSize: 12 }}>📍</Text>
+              )}
+              <Text style={{ fontSize: 12, color: "#1E40AF", fontWeight: "600" }}>
+                {gettingLocation ? "定位中..." : "使用目前位置"}
+              </Text>
+            </TouchableOpacity>
           </View>
-        ))}
+          <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 8 }}>
+            請在工作地點（店內）點擊「使用目前位置」，或手動輸入座標
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>緯度（Latitude）</Text>
+              <TextInput
+                value={form.work_location_lat ?? ""}
+                onChangeText={(v) => setForm(f => ({ ...f, work_location_lat: v }))}
+                placeholder="例：22.6157"
+                returnKeyType="done"
+                keyboardType="decimal-pad"
+                style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>經度（Longitude）</Text>
+              <TextInput
+                value={form.work_location_lng ?? ""}
+                onChangeText={(v) => setForm(f => ({ ...f, work_location_lng: v }))}
+                placeholder="例：120.2924"
+                returnKeyType="done"
+                keyboardType="decimal-pad"
+                style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Allowed radius */}
+        <View style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 6 }}>允許打卡範圍（公尺）</Text>
+          <TextInput
+            value={form.allowed_radius ?? ""}
+            onChangeText={(v) => setForm(f => ({ ...f, allowed_radius: v.replace(/[^0-9]/g, "") }))}
+            placeholder="例：200"
+            returnKeyType="done"
+            keyboardType="number-pad"
+            style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: "#1E293B" }}
+            placeholderTextColor="#94A3B8"
+          />
+          <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+            建議設定 100～300 公尺。手機 GPS 在室內誤差約 10～50 公尺，設定過小（如 5 公尺）會導致打卡失敗。
+          </Text>
+        </View>
+
+        {/* Late threshold */}
+        <View style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 6 }}>遲到判定（分鐘）</Text>
+          <TextInput
+            value={form.late_threshold_minutes ?? ""}
+            onChangeText={(v) => setForm(f => ({ ...f, late_threshold_minutes: v.replace(/[^0-9]/g, "") }))}
+            placeholder="例：10"
+            returnKeyType="done"
+            keyboardType="number-pad"
+            style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: "#1E293B" }}
+            placeholderTextColor="#94A3B8"
+          />
+        </View>
+
+        {/* Company name */}
+        <View>
+          <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 6 }}>公司名稱</Text>
+          <TextInput
+            value={form.company_name ?? ""}
+            onChangeText={(v) => setForm(f => ({ ...f, company_name: v }))}
+            placeholder="您的公司名稱"
+            returnKeyType="done"
+            style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: "#1E293B" }}
+            placeholderTextColor="#94A3B8"
+          />
+        </View>
       </View>
 
       {/* Push Notification Settings */}
@@ -247,7 +364,7 @@ function SystemSettings() {
                   onChangeText={(v) => setForm(f => ({ ...f, push_missing_threshold_minutes: v.replace(/[^0-9]/g, "") }))}
                   keyboardType="number-pad"
                   returnKeyType="done"
-                  style={{ width: 60, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 14, textAlign: "center", color: "#1E293B" }}
+                  style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: "#1E293B", width: 60, textAlign: "center" }}
                 />
                 <Text style={{ fontSize: 13, color: "#64748B" }}>分鐘</Text>
               </View>

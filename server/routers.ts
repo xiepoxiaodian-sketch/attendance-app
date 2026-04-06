@@ -141,14 +141,16 @@ const attendanceRouter = router({
 
       // Device binding check removed - devices are auto-registered on clock-in
 
-      if (input.lat && input.lng) {
-        const lat = await db.getSetting("work_location_lat");
-        const lng = await db.getSetting("work_location_lng");
+      // ── GPS Location check (only when require_gps is enabled) ─────────────────────────────
+      const requireGps = await db.getSetting("require_gps");
+      if (requireGps === "true" && input.lat && input.lng) {
+        const workLat = await db.getSetting("work_location_lat");
+        const workLng = await db.getSetting("work_location_lng");
         const radius = await db.getSetting("allowed_radius");
-        if (lat && lng && radius) {
-          const distance = getDistance(input.lat, input.lng, parseFloat(lat), parseFloat(lng));
+        if (workLat && workLng && radius) {
+          const distance = getDistance(input.lat, input.lng, parseFloat(workLat), parseFloat(workLng));
           if (distance > parseFloat(radius)) {
-            throw new Error(`您距離工作地點 ${Math.round(distance)} 公尺，超出允許範圍 ${radius} 公尺`);
+            throw new Error(`您距離工作地點 ${Math.round(distance)} 公尺，超出允許範圍 ${radius} 公尺，請確認您在工作地點後再打卡`);
           }
         }
       }
@@ -262,14 +264,16 @@ const attendanceRouter = router({
 
       // Device binding check removed - devices are auto-registered on clock-in
 
-      if (input.lat && input.lng) {
-        const lat = await db.getSetting("work_location_lat");
-        const lng = await db.getSetting("work_location_lng");
-        const radius = await db.getSetting("allowed_radius");
-        if (lat && lng && radius) {
-          const distance = getDistance(input.lat, input.lng, parseFloat(lat), parseFloat(lng));
-          if (distance > parseFloat(radius)) {
-            throw new Error(`您距離工作地點 ${Math.round(distance)} 公尺，超出允許範圍 ${radius} 公尺`);
+      // ── GPS Location check (only when require_gps is enabled) ─────────────────────────────
+      const requireGpsOut = await db.getSetting("require_gps");
+      if (requireGpsOut === "true" && input.lat && input.lng) {
+        const workLatOut = await db.getSetting("work_location_lat");
+        const workLngOut = await db.getSetting("work_location_lng");
+        const radiusOut = await db.getSetting("allowed_radius");
+        if (workLatOut && workLngOut && radiusOut) {
+          const distance = getDistance(input.lat, input.lng, parseFloat(workLatOut), parseFloat(workLngOut));
+          if (distance > parseFloat(radiusOut)) {
+            throw new Error(`您距離工作地點 ${Math.round(distance)} 公尺，超出允許範圍 ${radiusOut} 公尺，請確認您在工作地點後再打卡`);
           }
         }
       }
