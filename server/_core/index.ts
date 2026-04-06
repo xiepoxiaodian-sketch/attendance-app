@@ -164,7 +164,15 @@ async function startServer() {
         }
       }
 
-      // Ensure attendance table has all required columns
+      // Ensure attendance table has all required columns (including location text fields)
+      if (!(await hasColumn('attendance', 'clockInLocation'))) {
+        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockInLocation varchar(255)`);
+        results.push('Added attendance.clockInLocation');
+      }
+      if (!(await hasColumn('attendance', 'clockOutLocation'))) {
+        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockOutLocation varchar(255)`);
+        results.push('Added attendance.clockOutLocation');
+      }
       if (!(await hasColumn('attendance', 'clockInLat'))) {
         await conn.execute(`ALTER TABLE attendance ADD COLUMN clockInLat decimal(10,8)`);
         results.push('Added attendance.clockInLat');
