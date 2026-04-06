@@ -67,17 +67,15 @@ function toTimeStr(date: any): string {
 
 function buildDateTime(dateStr: string, timeStr: string): string | null {
   if (!timeStr || !timeStr.match(/^\d{2}:\d{2}$/)) return null;
-  const [h, m] = timeStr.split(":").map(Number);
-  const d = new Date(dateStr + "T00:00:00");
-  d.setHours(h, m, 0, 0);
-  return d.toISOString();
+  // Explicitly use Taiwan timezone (UTC+8) to avoid server timezone issues
+  return `${dateStr}T${timeStr}:00+08:00`;
 }
 
 // Get date string offset from today (e.g. 0=today, -1=yesterday, 1=tomorrow)
 function getDateOffset(offset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().split("T")[0];
+  // Use Taiwan timezone (UTC+8)
+  const tw = new Date(Date.now() + 8 * 60 * 60 * 1000 + offset * 24 * 60 * 60 * 1000);
+  return tw.toISOString().split("T")[0];
 }
 
 // ─── Edit Modal ─────────────────────────────────────────────────────────────

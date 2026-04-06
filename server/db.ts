@@ -276,7 +276,9 @@ export async function deleteAttendanceBatch(ids: number[]) {
 export async function getTodayAttendanceSummary() {
   const db = await getDb();
   if (!db) return { total: 0, clockedIn: 0, late: 0 };
-  const today = new Date().toISOString().split("T")[0];
+  // Use Taiwan timezone (UTC+8) for today's date
+  const twNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const today = twNow.toISOString().split("T")[0];
   const todayRecords = await db.select().from(attendance)
     .where(sql`DATE(${attendance.date}) = ${today}`);
   const totalResult = await db.select({ count: sql<number>`count(*)` }).from(employees)
@@ -655,13 +657,22 @@ export async function reviewPunchCorrection(
     // Auto-apply the correction to attendance record
     const [req] = await db.select().from(punchCorrections).where(eq(punchCorrections.id, id));
     if (!req) return;
-    const dateStr = typeof req.date === "string" ? req.date : (req.date as Date).toISOString().split("T")[0];
+    // Use Taiwan timezone: get date string safely
+    const getTWDateStr = (d: Date | string): string => {
+      const date = typeof d === "string" ? new Date(d) : d;
+      const tw = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+      return tw.toISOString().split("T")[0];
+    };
+    const dateStr = typeof req.date === "string" ? (req.date as string).slice(0, 10) : getTWDateStr(req.date as Date);
     const existing = await db.select().from(attendance)
       .where(and(eq(attendance.employeeId, req.employeeId), sql`DATE(${attendance.date}) = ${dateStr}`))
       .limit(1);
 
+    // IMPORTANT: append +08:00 so Node.js parses as Taiwan local time, not UTC
+    // Without timezone suffix, "2026-04-05T14:30:00" is treated as UTC → stored as UTC
+    // → when read back and displayed in TW time, shows as 22:30 instead of 14:30
     const toDateTime = (dateStr: string, timeStr: string) => {
-      return new Date(`${dateStr}T${timeStr}:00`);
+      return new Date(`${dateStr}T${timeStr}:00+08:00`);
     };
 
     if (existing.length > 0) {

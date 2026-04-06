@@ -25,9 +25,10 @@ const LEAVE_TYPES: Record<string, { label: string; color: string; bg: string }> 
 };
 
 export default function ScheduleViewScreen() {
-  const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
+  // Use Taiwan timezone (UTC+8) for today
+  const todayTW = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const [year, setYear] = useState(todayTW.getUTCFullYear());
+  const [month, setMonth] = useState(todayTW.getUTCMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const { employee } = useEmployeeAuth();
 
@@ -54,7 +55,7 @@ export default function ScheduleViewScreen() {
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstDow = getFirstDow(year, month);
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = todayTW.toISOString().slice(0, 10);
 
   const calendarCells: Array<{ day: number | null; dateStr: string | null }> = [];
   for (let i = 0; i < firstDow; i++) calendarCells.push({ day: null, dateStr: null });

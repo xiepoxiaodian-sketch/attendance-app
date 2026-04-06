@@ -167,8 +167,9 @@ export default function AdminAttendanceScreen() {
     initialTab?: "in" | "out";
   } | null>(null);
 
-  const today = new Date().toISOString().split("T")[0];
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  // Use Taiwan timezone (UTC+8) for date calculations
+  const today = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const weekAgo = new Date(Date.now() + 8 * 60 * 60 * 1000 - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(weekAgo);
   const [endDate, setEndDate] = useState(today);
 

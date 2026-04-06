@@ -14,6 +14,12 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
 
+// Get today's date string in Taiwan timezone (UTC+8)
+function getTWDateStr(offsetDays = 0): string {
+  const tw = new Date(Date.now() + 8 * 60 * 60 * 1000 + offsetDays * 24 * 60 * 60 * 1000);
+  return tw.toISOString().split("T")[0];
+}
+
 function formatTime(date: Date | string | null | undefined): string {
   if (!date) return "--:--";
   const d = typeof date === "string" ? new Date(date) : date;
@@ -119,7 +125,7 @@ function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
   employeeId: number;
   onSuccess: () => void;
 }) {
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(getTWDateStr());
   const [type, setType] = useState<"clock_in" | "clock_out" | "both">("clock_in");
   const [clockIn, setClockIn] = useState("09:00");
   const [clockOut, setClockOut] = useState("18:00");
@@ -330,8 +336,8 @@ export default function RecordsScreen() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"records" | "corrections">("records");
 
-  const endDate = new Date().toISOString().split("T")[0];
-  const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const endDate = getTWDateStr();
+  const startDate = getTWDateStr(-30);
 
   const { data: records, refetch, isLoading } = trpc.attendance.getHistory.useQuery(
     { employeeId: employee?.id ?? 0, startDate, endDate },
