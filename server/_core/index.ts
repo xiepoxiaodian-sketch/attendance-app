@@ -229,7 +229,7 @@ async function startServer() {
       if (req.path.startsWith("/api")) return;
       // SSR routes - skip SPA fallback
       if (req.path.startsWith("/attendance-v2")) return;
-      if (req.path === "/admin/attendance") return;
+      if (req.path.startsWith("/admin/attendance")) return;
       // Try exact path + .html (e.g. /admin/employees -> dist-web/admin/employees.html)
       const htmlPath = path.join(distWebPath, req.path.replace(/\/$/, "") + ".html");
       if (fs.existsSync(htmlPath)) {
