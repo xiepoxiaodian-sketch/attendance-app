@@ -348,3 +348,18 @@
 ## Excel 匯出時間修復
 
 - [x] 修復 Excel 匯出時間顯示為 UTC，改為台灣時間（UTC+8）
+
+## 打卡照片顯示修復
+
+- [ ] 診斷打卡照片上傳失敗原因（員工有拍照但資料庫是 null）
+- [ ] 修復照片上傳問題
+- [ ] 確保上傳失敗時有明確錯誤記錄
+
+## 打卡照片改存 MySQL（解決 Railway S3 無法存取問題）
+
+- [x] 資料庫 schema 改為 mediumtext（支援 16MB 照片）
+- [x] 執行 migration 更新資料庫
+- [x] 後端 clockIn/clockOut 改存 base64 到 DB，移除 S3 上傳
+- [x] 後端 getGrouped 已正確回傳 base64 照片資料
+- [x] 前端打卡記錄頁面已支援 base64 data URL 顯示照片
+- [x] cron job 每 24 小時自動清除 7 天前的照片

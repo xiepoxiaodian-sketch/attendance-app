@@ -182,20 +182,8 @@ const attendanceRouter = router({
         }
       }
 
-      // Upload selfie photo if provided
-      let clockInPhotoUrl: string | undefined;
-      if (input.photoBase64) {
-        try {
-          const { storagePut } = await import("./storage");
-          const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
-          const buffer = Buffer.from(base64Data, "base64");
-          const key = `clock-photos/${input.employeeId}/${today}-in-${Date.now()}.jpg`;
-          const result = await storagePut(key, buffer, "image/jpeg");
-          clockInPhotoUrl = result.url;
-        } catch (e) {
-          console.warn("[clockIn] Photo upload failed:", e);
-        }
-      }
+      // Store selfie photo as base64 directly in DB (no S3 dependency)
+      const clockInPhotoUrl: string | undefined = input.photoBase64 || undefined;
 
       const id = await db.createAttendance({
         employeeId: input.employeeId,
@@ -206,7 +194,7 @@ const attendanceRouter = router({
         clockInLng: input.lng?.toString() as unknown as any,
         shiftLabel,
         status,
-        clockInPhoto: clockInPhotoUrl,
+        clockInPhoto: clockInPhotoUrl ?? null,
       } as any);
 
       // Push notification for late clock-in
@@ -311,20 +299,8 @@ const attendanceRouter = router({
         }
       }
 
-      // Upload selfie photo if provided
-      let clockOutPhotoUrl: string | undefined;
-      if (input.photoBase64) {
-        try {
-          const { storagePut } = await import("./storage");
-          const base64Data = input.photoBase64.replace(/^data:image\/\w+;base64,/, "");
-          const buffer = Buffer.from(base64Data, "base64");
-          const key = `clock-photos/${input.employeeId}/${today}-out-${Date.now()}.jpg`;
-          const result = await storagePut(key, buffer, "image/jpeg");
-          clockOutPhotoUrl = result.url;
-        } catch (e) {
-          console.warn("[clockOut] Photo upload failed:", e);
-        }
-      }
+      // Store selfie photo as base64 directly in DB (no S3 dependency)
+      const clockOutPhotoUrl: string | undefined = input.photoBase64 || undefined;
 
       await db.updateAttendance(record.id, {
         clockOutTime: now,
@@ -332,7 +308,7 @@ const attendanceRouter = router({
         clockOutLat: input.lat?.toString() as unknown as any,
         clockOutLng: input.lng?.toString() as unknown as any,
         status: status || "normal",
-        clockOutPhoto: clockOutPhotoUrl,
+        clockOutPhoto: clockOutPhotoUrl ?? null,
       } as any);
 
       // Push notification for early leave
