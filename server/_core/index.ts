@@ -127,6 +127,53 @@ async function startServer() {
         results.push('Added attendance.clockOutPhoto');
       }
 
+      // 0014: upgrade clockInPhoto/clockOutPhoto from text to mediumtext
+      {
+        const [colRows] = await conn.execute(
+          `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' AND COLUMN_NAME = 'clockInPhoto'`
+        ) as any[];
+        if (colRows.length > 0 && String(colRows[0].COLUMN_TYPE).toLowerCase() === 'text') {
+          await conn.execute(`ALTER TABLE attendance MODIFY COLUMN clockInPhoto mediumtext`);
+          results.push('Upgraded attendance.clockInPhoto to mediumtext');
+        }
+      }
+      {
+        const [colRows] = await conn.execute(
+          `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' AND COLUMN_NAME = 'clockOutPhoto'`
+        ) as any[];
+        if (colRows.length > 0 && String(colRows[0].COLUMN_TYPE).toLowerCase() === 'text') {
+          await conn.execute(`ALTER TABLE attendance MODIFY COLUMN clockOutPhoto mediumtext`);
+          results.push('Upgraded attendance.clockOutPhoto to mediumtext');
+        }
+      }
+
+      // Ensure attendance table has all required columns
+      if (!(await hasColumn('attendance', 'clockInLat'))) {
+        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockInLat decimal(10,8)`);
+        results.push('Added attendance.clockInLat');
+      }
+      if (!(await hasColumn('attendance', 'clockInLng'))) {
+        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockInLng decimal(11,8)`);
+        results.push('Added attendance.clockInLng');
+      }
+      if (!(await hasColumn('attendance', 'clockOutLat'))) {
+        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockOutLat decimal(10,8)`);
+        results.push('Added attendance.clockOutLat');
+      }
+      if (!(await hasColumn('attendance', 'clockOutLng'))) {
+        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockOutLng decimal(11,8)`);
+        results.push('Added attendance.clockOutLng');
+      }
+      if (!(await hasColumn('attendance', 'shiftLabel'))) {
+        await conn.execute(`ALTER TABLE attendance ADD COLUMN shiftLabel varchar(64)`);
+        results.push('Added attendance.shiftLabel');
+      }
+      // Ensure employees table has tag column
+      if (!(await hasColumn('employees', 'tag'))) {
+        await conn.execute(`ALTER TABLE employees ADD COLUMN tag varchar(64)`);
+        results.push('Added employees.tag');
+      }
+
       await conn.end();
       res.json({ ok: true, applied: results, message: results.length > 0 ? results.join(', ') : 'All up to date' });
     } catch (err: any) {
