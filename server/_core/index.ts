@@ -149,8 +149,10 @@ async function startServer() {
         const records = await dbModule.getAllAttendance(startDate, endDate);
         headers = ["日期", "員工姓名", "帳號", "上班時間", "下班時間", "班次", "狀態", "備註"];
         const STATUS_LABELS: Record<string, string> = { normal: "正常", late: "遲到", early_leave: "早退", absent: "缺勤" };
-        const fmt = (v: unknown) => { if (!v) return ""; const d = new Date(v as string); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
-        const fmtD = (v: unknown) => { if (!v) return ""; const d = new Date(v as string); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+        // 台灣時間 UTC+8
+        const toTW = (v: unknown) => { if (!v) return null; const d = new Date(v as string); return new Date(d.getTime() + 8 * 60 * 60 * 1000); };
+        const fmt = (v: unknown) => { const d = toTW(v); if (!d) return ""; return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")} ${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")}`; };
+        const fmtD = (v: unknown) => { const d = toTW(v); if (!d) return ""; return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`; };
         rows = records.map((r: any) => [fmtD(r.date), r.employeeName ?? "", r.employeeUsername ?? "", fmt(r.clockInTime), fmt(r.clockOutTime), r.shiftLabel ?? "", STATUS_LABELS[r.status ?? ""] ?? r.status ?? "", r.note ?? ""]);
         filename = `打卡明細_${startDate ?? ""}_${endDate ?? ""}.xlsx`;
       } else if (type === "leave_records") {
