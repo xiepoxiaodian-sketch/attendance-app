@@ -1044,6 +1044,46 @@ const lineRouter = router({
 });
 
 // ============================================================
+// Feedback Router
+// ============================================================
+const feedbackRouter = router({
+  create: publicProcedure
+    .input(z.object({
+      employeeId: z.number(),
+      type: z.enum(["bug", "suggestion", "other"]),
+      title: z.string().min(1).max(200),
+      description: z.string().min(1),
+      screenshotBase64: z.string().optional().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const id = await db.createFeedback(input);
+      return { success: true, id };
+    }),
+
+  getAll: publicProcedure
+    .query(async () => {
+      return db.getAllFeedbacks();
+    }),
+
+  getById: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      return db.getFeedbackById(input.id);
+    }),
+
+  updateStatus: publicProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(["pending", "reviewing", "resolved", "closed"]),
+      adminNote: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      await db.updateFeedbackStatus(input.id, input.status, input.adminNote);
+      return { success: true };
+    }),
+});
+
+// ============================================================
 // Main App Router
 // ============================================================
 export const appRouter = router({
@@ -1066,6 +1106,7 @@ export const appRouter = router({
   leave: leaveRouter,
   punchCorrection: punchCorrectionRouter,
   push: pushRouter,
+  feedback: feedbackRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -9,6 +9,7 @@ import AdminReportsScreen from "@/components/admin/reports-page";
 import AdminDevicesScreen from "@/components/admin/devices-page";
 import AdminWorkShiftsScreen from "@/components/admin/work-shifts-page";
 import AdminSettingsScreen from "@/components/admin/settings-page";
+import AdminFeedbackScreen from "@/components/admin/feedback-page";
 
 function AdminContent() {
   const { currentPage } = useAdminNav();
@@ -32,6 +33,8 @@ function AdminContent() {
       return <AdminWorkShiftsScreen />;
     case "settings":
       return <AdminSettingsScreen />;
+    case "feedback":
+      return <AdminFeedbackScreen />;
     case "dashboard":
     default:
       return <AdminDashboard />;

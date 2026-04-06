@@ -86,6 +86,9 @@ const MAPPING = {
   "clock.badge.checkmark.fill": "pending-actions",
   "clock.badge.fill": "more-time",
   "rectangle.portrait.and.arrow.right": "logout",
+  "bubble.left.and.bubble.right.fill": "forum",
+  "exclamationmark.bubble.fill": "feedback",
+  "photo.on.rectangle": "add-photo-alternate",
 } as unknown as IconMapping;
 
 /**

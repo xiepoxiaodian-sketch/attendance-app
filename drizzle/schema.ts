@@ -6,6 +6,7 @@ import {
   mysqlTable,
   text,
   mediumtext,
+  longtext,
   timestamp,
   varchar,
   json,
@@ -224,3 +225,21 @@ export const lineOtpCodes = mysqlTable("lineOtpCodes", {
 
 export type LineOtpCode = typeof lineOtpCodes.$inferSelect;
 export type InsertLineOtpCode = typeof lineOtpCodes.$inferInsert;
+
+/**
+ * Employee feedback - bug reports and suggestions with optional screenshot
+ */
+export const feedbacks = mysqlTable("feedbacks", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  type: mysqlEnum("type", ["bug", "suggestion", "other"]).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description").notNull(),
+  screenshotBase64: longtext("screenshotBase64"),
+  status: mysqlEnum("status", ["pending", "reviewing", "resolved", "closed"]).default("pending").notNull(),
+  adminNote: text("adminNote"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Feedback = typeof feedbacks.$inferSelect;
+export type InsertFeedback = typeof feedbacks.$inferInsert;

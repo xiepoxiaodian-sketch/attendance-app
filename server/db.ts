@@ -13,6 +13,7 @@ import {
   punchCorrections,
   pushSubscriptions,
   lineOtpCodes,
+  feedbacks,
   InsertEmployee,
   InsertAttendance,
   InsertWorkShift,
@@ -816,4 +817,81 @@ export async function clearOldAttendancePhotos(retentionDays: number = 7): Promi
       )
     );
   return (result as any)[0]?.affectedRows ?? 0;
+}
+
+// ============================================================
+// Feedback
+// ============================================================
+export async function createFeedback(data: {
+  employeeId: number;
+  type: "bug" | "suggestion" | "other";
+  title: string;
+  description: string;
+  screenshotBase64?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const result = await db.insert(feedbacks).values({
+    employeeId: data.employeeId,
+    type: data.type,
+    title: data.title,
+    description: data.description,
+    screenshotBase64: data.screenshotBase64 ?? null,
+  });
+  return (result as any)[0]?.insertId as number;
+}
+
+export async function getAllFeedbacks() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: feedbacks.id,
+    employeeId: feedbacks.employeeId,
+    type: feedbacks.type,
+    title: feedbacks.title,
+    description: feedbacks.description,
+    screenshotBase64: feedbacks.screenshotBase64,
+    status: feedbacks.status,
+    adminNote: feedbacks.adminNote,
+    createdAt: feedbacks.createdAt,
+    updatedAt: feedbacks.updatedAt,
+    employeeName: employees.fullName,
+    employeeUsername: employees.username,
+  }).from(feedbacks)
+    .leftJoin(employees, eq(feedbacks.employeeId, employees.id))
+    .orderBy(sql`${feedbacks.createdAt} DESC`);
+}
+
+export async function getFeedbackById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select({
+    id: feedbacks.id,
+    employeeId: feedbacks.employeeId,
+    type: feedbacks.type,
+    title: feedbacks.title,
+    description: feedbacks.description,
+    screenshotBase64: feedbacks.screenshotBase64,
+    status: feedbacks.status,
+    adminNote: feedbacks.adminNote,
+    createdAt: feedbacks.createdAt,
+    updatedAt: feedbacks.updatedAt,
+    employeeName: employees.fullName,
+    employeeUsername: employees.username,
+  }).from(feedbacks)
+    .leftJoin(employees, eq(feedbacks.employeeId, employees.id))
+    .where(eq(feedbacks.id, id));
+  return result[0] ?? null;
+}
+
+export async function updateFeedbackStatus(
+  id: number,
+  status: "pending" | "reviewing" | "resolved" | "closed",
+  adminNote?: string
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(feedbacks)
+    .set({ status, ...(adminNote !== undefined ? { adminNote } : {}) })
+    .where(eq(feedbacks.id, id));
 }

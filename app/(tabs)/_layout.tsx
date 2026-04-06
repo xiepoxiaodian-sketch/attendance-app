@@ -95,6 +95,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="feedback"
+        options={{
+          title: "反饋",
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol size={size ?? 24} name="exclamationmark.bubble.fill" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "我的",

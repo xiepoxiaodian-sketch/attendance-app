@@ -18,6 +18,7 @@ const NAV_ITEMS: { label: string; icon: string; page: AdminPage }[] = [
   { label: "報表統計", icon: "chart.line.uptrend.xyaxis", page: "reports" },
   { label: "裝置管理", icon: "iphone", page: "devices" },
   { label: "系統設定", icon: "gear", page: "settings" },
+  { label: "意見反饋", icon: "exclamationmark.bubble.fill", page: "feedback" },
 ];
 
 type Props = {
