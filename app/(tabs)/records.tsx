@@ -73,47 +73,48 @@ function CorrectionStatusBadge({ status }: { status: string }) {
   );
 }
 
-// Simple time picker using scroll-style hour/minute selectors
+// Time picker using button grids - reliable on iOS Safari (avoids ScrollView contentOffset bug)
 function TimePicker({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
   const [h, m] = value.split(":").map(Number);
-  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
-  const minutes = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
   return (
-    <View style={{ alignItems: "center" }}>
-      <Text style={{ fontSize: 11, fontWeight: "600", color: "#475569", marginBottom: 6 }}>{label}</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-        {/* Hour */}
-        <View style={{ backgroundColor: "#F1F5F9", borderRadius: 8, overflow: "hidden" }}>
-          <ScrollView style={{ height: 120, width: 52 }} showsVerticalScrollIndicator={false}
-            contentOffset={{ x: 0, y: h * 40 }}
-          >
-            {hours.map((hh) => (
-              <TouchableOpacity key={hh} onPress={() => onChange(`${hh}:${String(m).padStart(2, "0")}`)}
-                style={{ height: 40, alignItems: "center", justifyContent: "center",
-                  backgroundColor: parseInt(hh) === h ? "#2563EB" : "transparent" }}>
-                <Text style={{ fontSize: 18, fontWeight: "700",
-                  color: parseInt(hh) === h ? "white" : "#475569" }}>{hh}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-        <Text style={{ fontSize: 20, fontWeight: "700", color: "#475569" }}>:</Text>
-        {/* Minute */}
-        <View style={{ backgroundColor: "#F1F5F9", borderRadius: 8, overflow: "hidden" }}>
-          <ScrollView style={{ height: 120, width: 52 }} showsVerticalScrollIndicator={false}
-            contentOffset={{ x: 0, y: minutes.indexOf(String(m).padStart(2, "0")) * 40 }}
-          >
-            {minutes.map((mm) => (
-              <TouchableOpacity key={mm} onPress={() => onChange(`${String(h).padStart(2, "0")}:${mm}`)}
-                style={{ height: 40, alignItems: "center", justifyContent: "center",
-                  backgroundColor: mm === String(m).padStart(2, "0") ? "#2563EB" : "transparent" }}>
-                <Text style={{ fontSize: 18, fontWeight: "700",
-                  color: mm === String(m).padStart(2, "0") ? "white" : "#475569" }}>{mm}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+    <View style={{ width: "100%" }}>
+      <Text style={{ fontSize: 12, fontWeight: "700", color: "#475569", marginBottom: 8, textAlign: "center" }}>{label}</Text>
+      {/* Current selected time display */}
+      <View style={{ backgroundColor: "#1E40AF", borderRadius: 10, paddingVertical: 8, marginBottom: 10, alignItems: "center" }}>
+        <Text style={{ fontSize: 26, fontWeight: "800", color: "white", letterSpacing: 3 }}>
+          {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}
+        </Text>
+      </View>
+      {/* Hour grid */}
+      <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4, textAlign: "center" }}>小時（24小時制）</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 4, marginBottom: 10 }}>
+        {hours.map((hh) => (
+          <TouchableOpacity key={hh} onPress={() => onChange(`${String(hh).padStart(2, "0")}:${String(m).padStart(2, "0")}`)}
+            style={{ width: 42, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 6,
+              backgroundColor: hh === h ? "#2563EB" : "#F1F5F9",
+              borderWidth: 1, borderColor: hh === h ? "#2563EB" : "#E2E8F0" }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: hh === h ? "white" : "#475569" }}>
+              {String(hh).padStart(2, "0")}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {/* Minute grid */}
+      <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4, textAlign: "center" }}>分鐘</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 4 }}>
+        {minutes.map((mm) => (
+          <TouchableOpacity key={mm} onPress={() => onChange(`${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`)}
+            style={{ width: 48, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 6,
+              backgroundColor: mm === m ? "#2563EB" : "#F1F5F9",
+              borderWidth: 1, borderColor: mm === m ? "#2563EB" : "#E2E8F0" }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: mm === m ? "white" : "#475569" }}>
+              {String(mm).padStart(2, "0")}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
     </View>
   );
@@ -196,21 +197,16 @@ function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
           {/* Time Pickers */}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
             <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 12 }}>補打時間</Text>
-            <View style={{ flexDirection: "row", justifyContent: type === "both" ? "space-around" : "center", gap: 16 }}>
+            <View style={{ gap: 20 }}>
               {(type === "clock_in" || type === "both") && (
                 <TimePicker label="上班時間" value={clockIn} onChange={setClockIn} />
+              )}
+              {type === "both" && (
+                <View style={{ height: 1, backgroundColor: "#E2E8F0" }} />
               )}
               {(type === "clock_out" || type === "both") && (
                 <TimePicker label="下班時間" value={clockOut} onChange={setClockOut} />
               )}
-            </View>
-            {/* Selected time display */}
-            <View style={{ marginTop: 12, backgroundColor: "#EFF6FF", borderRadius: 8, padding: 10, alignItems: "center" }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#2563EB" }}>
-                {type === "clock_in" && `上班 ${clockIn}`}
-                {type === "clock_out" && `下班 ${clockOut}`}
-                {type === "both" && `上班 ${clockIn}  →  下班 ${clockOut}`}
-              </Text>
             </View>
           </View>
           {/* Reason */}
