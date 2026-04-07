@@ -15,7 +15,7 @@ import * as ImagePicker from "expo-image-picker";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/hooks/use-auth";
+import { useEmployeeAuth } from "@/lib/employee-auth";
 
 type FeedbackType = "bug" | "suggestion" | "other";
 
@@ -26,7 +26,7 @@ const TYPE_OPTIONS: { value: FeedbackType; label: string; icon: string; color: s
 ];
 
 export default function FeedbackScreen() {
-  const { user } = useAuth();
+  const { employee } = useEmployeeAuth();
   const [type, setType] = useState<FeedbackType>("bug");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -78,12 +78,12 @@ export default function FeedbackScreen() {
       Alert.alert("請填寫說明");
       return;
     }
-    if (!user?.id) {
+    if (!employee?.id) {
       Alert.alert("請先登入");
       return;
     }
     createMutation.mutate({
-      employeeId: user.id,
+      employeeId: employee.id,
       type,
       title: title.trim(),
       description: description.trim(),
