@@ -270,7 +270,7 @@ function VerifyStepBadge({ step, error, success, onDismiss }: {
   const labels: Record<VerifyStep, string> = {
     idle: "",
     biometric: "🔐 生物識別驗證中...",
-    location: "📍 定位取得中...",
+    location: "📍 定位取得中...（最多等待 6 秒）",
     clocking: "⏳ 打卡記錄中...",
     done: "",
   };
@@ -558,9 +558,11 @@ export default function ClockScreen() {
       let lng: number | undefined;
       let locationName: string | undefined;
 
-      const requireGPS = settings === undefined
-        ? true
-        : (settings?.require_gps === "true" && !!(settings?.work_location_lat && settings?.work_location_lng));
+      // Only require GPS if settings are loaded AND GPS is enabled AND work location is configured
+      // If settings not yet loaded (undefined), default to false to avoid blocking clock-in
+      const requireGPS = settings !== undefined
+        && settings?.require_gps === "true"
+        && !!(settings?.work_location_lat && settings?.work_location_lng);
 
       const getLocationWithTimeout = (timeoutMs: number): Promise<{ latitude: number; longitude: number }> => {
         if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.geolocation) {
@@ -598,7 +600,7 @@ export default function ClockScreen() {
             throw new Error("no permission");
           }
         }
-        const coords = await getLocationWithTimeout(10000);
+        const coords = await getLocationWithTimeout(6000);
         lat = coords.latitude;
         lng = coords.longitude;
         locationName = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
