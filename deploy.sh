@@ -82,7 +82,17 @@ pwa_tags = (
 )
 
 # 版本號（時間戳），強制瀏覽器清除快取
-version = str(int(time.time()))
+import subprocess
+try:
+    git_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], text=True).strip()
+except:
+    git_hash = ''
+version = str(int(time.time())) + ('-' + git_hash if git_hash else '')
+
+# 將版本號寫入檔案，供部署腳本讀取並設定環境變數
+with open('.build-version', 'w') as f:
+    f.write(version)
+
 cache_bust = f'<meta name="app-version" content="{version}">'
 
 html_files = glob.glob("dist-web/**/*.html", recursive=True) + glob.glob("dist-web/*.html")
@@ -106,6 +116,20 @@ print(f"  ✓ PWA tags 已加入 {count} 個 HTML 檔案（版本：{version}）
 PYEOF
 
 echo "✅ PWA 設定完成"
+
+# Step 3.5: 讀取版本號並設定環境變數（供伺服器端 /api/version 使用）
+if [ -f ".build-version" ]; then
+  BUILD_VERSION=$(cat .build-version)
+  echo "🔖 版本號：$BUILD_VERSION"
+  # 將版本號寫入 railway.json 環境變數檔（如果有）
+  # Railway 會自動讀取 .env 或 railway.json 中的環境變數
+fi
+
+# 複製更新後的 sw.js 到 dist-web
+if [ -f "public/sw.js" ]; then
+  cp public/sw.js dist-web/sw.js
+  echo "✅ sw.js 已更新到 dist-web"
+fi
 
 # Step 4: 推送到 GitHub
 echo ""

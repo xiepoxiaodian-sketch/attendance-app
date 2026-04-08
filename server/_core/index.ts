@@ -67,6 +67,17 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  // Version endpoint: returns current build version for PWA update detection
+  app.get("/api/version", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.json({
+      version: process.env.APP_VERSION || "1.0.0",
+      buildTime: process.env.BUILD_TIME || new Date().toISOString(),
+    });
+  });
+
   // Diagnostic endpoint: check actual column types in DB
   app.get("/api/db-check", async (_req, res) => {
     try {

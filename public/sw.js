@@ -1,5 +1,6 @@
 // 好好上班 PWA Service Worker
-const CACHE_NAME = "haohao-v2";
+// v3：加入 SKIP_WAITING 訊息支援 + 改善 iOS/Android 更新機制
+const CACHE_NAME = "haohao-v3";
 const OFFLINE_URL = "/";
 
 // 安裝時快取核心資源
@@ -12,37 +13,64 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// 啟動時清理舊快取
+// 啟動時清理舊快取，並立即接管所有分頁
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      )
-    )
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key))
+        )
+      ),
+    ])
   );
-  self.clients.claim();
 });
 
-// 網路優先策略：優先從網路取得，失敗時回退到快取
+// 接收來自主執行緒的訊息（支援強制更新）
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
+// 快取策略：HTML 網路優先（確保最新版），靜態資源快取優先（加速載入）
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   if (event.request.url.includes("/api/") || event.request.url.includes("/trpc/")) return;
 
+  // HTML 頁面：網路優先，確保每次都取得最新版本
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const cloned = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request).then(
+            (cached) => cached || caches.match(OFFLINE_URL)
+          );
+        })
+    );
+    return;
+  }
+
+  // 靜態資源：快取優先（加速載入），快取不存在時從網路取得
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response.ok && event.request.url.includes("/_expo/static/")) {
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+      return fetch(event.request).then((response) => {
+        if (response.ok) {
           const cloned = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
         }
         return response;
-      })
-      .catch(() => {
-        return caches.match(event.request).then((cached) => cached || caches.match(OFFLINE_URL));
-      })
+      });
+    })
   );
 });
 

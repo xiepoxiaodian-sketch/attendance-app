@@ -368,3 +368,11 @@
 
 - [ ] 診斷地點驗證邏輯（距離計算、允許範圍設定、GPS 精度）
 - [ ] 修復員工人在店裡卻顯示「不在範圍」的問題
+
+## PWA 更新機制（iOS/Android 延遲更新改善）
+- [x] 後端加入 /api/version endpoint（回傳版本號，無快取）
+- [x] 建立 lib/pwa-update.ts（版本比對 + SW 更新偵測 + iOS 背景切回處理）
+- [x] app/_layout.tsx 加入 initPWAUpdate() 初始化（僅 Web 平台）
+- [x] public/sw.js 升級至 v3（加入 SKIP_WAITING 訊息支援、改善快取策略）
+- [x] deploy.sh 加入版本號產生（時間戳 + git hash）並複製 sw.js 到 dist-web
+- [x] Dockerfile 加入 .build-version 讀取並注入 APP_VERSION 環境變數
