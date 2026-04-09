@@ -294,7 +294,10 @@ export default function ScheduleOverview() {
                     const isToday = cell.dateStr === todayStr;
                     const isSelected = cell.dateStr === selectedDate;
                     const daySchedules = scheduleMap[cell.dateStr] ?? {};
-                    const scheduledCount = Object.keys(daySchedules).length;
+                    // 只計算有班次（上班）的員工
+                    const workingCount = Object.values(daySchedules).filter(e => e.shifts && e.shifts.length > 0).length;
+                    // 計算請假/休假的員工（有 leaveType 的）
+                    const leaveCount = Object.values(daySchedules).filter(e => e.leaveType).length;
                     const dow = (firstDow + cell.day - 1) % 7;
                     const isWeekend = dow === 0 || dow === 6;
                     return (
@@ -314,9 +317,14 @@ export default function ScheduleOverview() {
                             {cell.day}
                           </Text>
                         </View>
-                        {scheduledCount > 0 && (
+                        {workingCount > 0 && (
                           <View style={{ marginTop: 2, backgroundColor: "#BFDBFE", borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1 }}>
-                            <Text style={{ fontSize: 9, color: "#1D4ED8", fontWeight: "600" }}>{scheduledCount}人</Text>
+                            <Text style={{ fontSize: 9, color: "#1D4ED8", fontWeight: "600" }}>{workingCount}人</Text>
+                          </View>
+                        )}
+                        {leaveCount > 0 && (
+                          <View style={{ marginTop: 1, backgroundColor: "#FEE2E2", borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1 }}>
+                            <Text style={{ fontSize: 9, color: "#DC2626", fontWeight: "600" }}>假{leaveCount}</Text>
                           </View>
                         )}
                       </TouchableOpacity>
@@ -328,7 +336,7 @@ export default function ScheduleOverview() {
           </View>
 
           {/* Legend */}
-          <View style={{ flexDirection: "row", gap: 16, paddingHorizontal: 4 }}>
+          <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 4, flexWrap: "wrap" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#2563EB", alignItems: "center", justifyContent: "center" }}>
                 <Text style={{ fontSize: 9, color: "white", fontWeight: "700" }}>今</Text>
@@ -339,7 +347,13 @@ export default function ScheduleOverview() {
               <View style={{ backgroundColor: "#BFDBFE", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
                 <Text style={{ fontSize: 9, color: "#1D4ED8", fontWeight: "600" }}>N人</Text>
               </View>
-              <Text style={{ fontSize: 12, color: "#64748B" }}>已排班人數，點擊查看明細</Text>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>上班人數</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={{ backgroundColor: "#FEE2E2", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 9, color: "#DC2626", fontWeight: "600" }}>假N</Text>
+              </View>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>請假人數</Text>
             </View>
           </View>
 
