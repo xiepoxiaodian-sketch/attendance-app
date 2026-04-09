@@ -1,25 +1,24 @@
 {
   "name": "好好上班",
   "short_name": "好好上班",
-  "description": "員工出勤管理、排班、請假一站式後台系統",
+  "description": "打鹿岸原住民人文主題餐廳 員工打卡系統",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1E3A8A",
-  "theme_color": "#1E3A8A",
-  "orientation": "portrait-primary",
+  "theme_color": "#2563EB",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-selected_e2fb6214.png",
-      "sizes": "512x512",
+      "src": "/assets/icons/icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-selected_e2fb6214.png",
-      "sizes": "192x192",
+      "src": "/assets/icons/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ],
-  "categories": ["business", "productivity"]
+  ]
 }
