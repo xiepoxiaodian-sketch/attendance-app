@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl,
-  ActivityIndicator, Modal, TextInput, ScrollView,
+  ActivityIndicator, Modal, TextInput, ScrollView, Image,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
@@ -120,6 +120,17 @@ function ReviewModal({ visible, item, employeeName, onClose, onSubmit, submittin
             <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 6 }}>申請原因</Text>
             <Text style={{ fontSize: 14, color: "#1E293B", lineHeight: 20 }}>{item.reason}</Text>
           </View>
+          {/* Screenshot */}
+          {item.screenshotBase64 && (
+            <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>系統異常截圖</Text>
+              <Image
+                source={{ uri: item.screenshotBase64 }}
+                resizeMode="contain"
+                style={{ width: "100%", minHeight: 120, maxHeight: 400, borderRadius: 8 }}
+              />
+            </View>
+          )}
 
           {/* Action Selection */}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
@@ -302,9 +313,19 @@ export default function PunchCorrectionScreen() {
 
                 {/* Reason & Actions */}
                 <View style={{ padding: 14 }}>
-                  <Text style={{ fontSize: 12, color: "#64748B", marginBottom: item.reviewNote ? 8 : 0 }}>
+                  <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 8 }}>
                     原因：{item.reason}
                   </Text>
+                  {item.screenshotBase64 && (
+                    <View style={{ marginBottom: 8 }}>
+                      <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>📷 附上系統異常截圖</Text>
+                      <Image
+                        source={{ uri: item.screenshotBase64 }}
+                        resizeMode="contain"
+                        style={{ width: "100%", minHeight: 80, maxHeight: 160, borderRadius: 6, backgroundColor: "#F8FAFC" }}
+                      />
+                    </View>
+                  )}
                   {item.reviewNote && (
                     <View style={{ marginTop: 6, backgroundColor: item.status === "approved" ? "#F0FDF4" : "#FEF2F2", borderRadius: 8, padding: 8 }}>
                       <Text style={{ fontSize: 12, color: item.status === "approved" ? "#16A34A" : "#DC2626" }}>

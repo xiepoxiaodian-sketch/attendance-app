@@ -604,6 +604,7 @@ export async function createPunchCorrection(data: {
   requestedClockIn?: string;
   requestedClockOut?: string;
   reason: string;
+  screenshotBase64?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -614,6 +615,7 @@ export async function createPunchCorrection(data: {
     requestedClockIn: data.requestedClockIn ?? null,
     requestedClockOut: data.requestedClockOut ?? null,
     reason: data.reason,
+    screenshotBase64: data.screenshotBase64 ?? null,
     status: "pending",
   });
   return result[0].insertId;

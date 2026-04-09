@@ -996,6 +996,7 @@ const punchCorrectionRouter = router({
       requestedClockIn: z.string().optional(),
       requestedClockOut: z.string().optional(),
       reason: z.string().min(1),
+      screenshotBase64: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const id = await db.createPunchCorrection(input);

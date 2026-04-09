@@ -9,7 +9,11 @@ import {
   Modal,
   TextInput,
   ScrollView,
+  Image,
+  Alert,
+  Platform,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { ScreenContainer } from "@/components/screen-container";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
@@ -131,10 +135,35 @@ function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
   const [clockIn, setClockIn] = useState("09:00");
   const [clockOut, setClockOut] = useState("18:00");
   const [reason, setReason] = useState("");
+  const [screenshot, setScreenshot] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const createMutation = trpc.punchCorrection.create.useMutation();
+
+  const pickScreenshot = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("需要相片權限", "請在設定中允許存取相片庫");
+        return;
+      }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.5,
+      base64: true,
+      allowsEditing: false,
+    });
+    if (!result.canceled && result.assets[0]?.base64) {
+      const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      if (b64.length > 2000000) {
+        Alert.alert("圖片太大", "請選擇較小的圖片（建議 2MB 以下）");
+        return;
+      }
+      setScreenshot(b64);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!reason.trim()) { setError("請填寫原因"); return; }
@@ -148,8 +177,9 @@ function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
         requestedClockIn: (type === "clock_in" || type === "both") ? clockIn : undefined,
         requestedClockOut: (type === "clock_out" || type === "both") ? clockOut : undefined,
         reason: reason.trim(),
+        screenshotBase64: screenshot ?? undefined,
       });
-      setReason(""); setClockIn("09:00"); setClockOut("18:00");
+      setReason(""); setClockIn("09:00"); setClockOut("18:00"); setScreenshot(null);
       onSuccess();
       onClose();
     } catch (e: any) {
@@ -211,7 +241,7 @@ function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
           </View>
           {/* Reason */}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
-            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>原因說明</Text>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>原因說明 <Text style={{ color: "#EF4444" }}>*</Text></Text>
             <TextInput
               value={reason}
               onChangeText={setReason}
@@ -220,6 +250,34 @@ function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
               numberOfLines={4}
               style={{ fontSize: 14, color: "#1E293B", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 10, minHeight: 80, textAlignVertical: "top" }}
             />
+          </View>
+          {/* Screenshot Upload */}
+          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>系統異常截圖（選填）</Text>
+            {screenshot ? (
+              <View>
+                <Image
+                  source={{ uri: screenshot }}
+                  resizeMode="contain"
+                  style={{ width: "100%", minHeight: 120, maxHeight: 300, borderRadius: 8, marginBottom: 8 }}
+                />
+                <TouchableOpacity
+                  onPress={() => setScreenshot(null)}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", padding: 8, borderRadius: 8, backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FECACA" }}
+                >
+                  <Text style={{ color: "#DC2626", fontWeight: "600", fontSize: 13 }}>移除截圖</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={pickScreenshot}
+                style={{ borderWidth: 2, borderColor: "#CBD5E1", borderStyle: "dashed", borderRadius: 10, padding: 20, alignItems: "center", backgroundColor: "#F8FAFC" }}
+              >
+                <Text style={{ fontSize: 28, marginBottom: 6 }}>📷</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569" }}>點擊上傳截圖</Text>
+                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 3 }}>若因系統異常無法打卡，請附上截圖</Text>
+              </TouchableOpacity>
+            )}
           </View>
           {error ? <Text style={{ color: "#EF4444", fontSize: 13, textAlign: "center" }}>{error}</Text> : null}
           <View style={{ backgroundColor: "#FFF7ED", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "#FED7AA" }}>

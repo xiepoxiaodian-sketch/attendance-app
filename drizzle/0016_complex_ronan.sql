@@ -1,0 +1,1 @@
+ALTER TABLE `punchCorrections` ADD `screenshotBase64` longtext;

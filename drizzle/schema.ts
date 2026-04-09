@@ -184,6 +184,7 @@ export const punchCorrections = mysqlTable("punchCorrections", {
   requestedClockIn: varchar("requestedClockIn", { length: 8 }),   // HH:MM
   requestedClockOut: varchar("requestedClockOut", { length: 8 }),  // HH:MM
   reason: text("reason").notNull(),
+  screenshotBase64: longtext("screenshotBase64"),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
   reviewedBy: int("reviewedBy"),
   reviewNote: text("reviewNote"),
