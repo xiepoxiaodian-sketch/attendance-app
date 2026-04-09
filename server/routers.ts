@@ -575,8 +575,61 @@ const attendanceRouter = router({
       if (clockInTime !== undefined) updateData.clockInTime = clockInTime ? new Date(clockInTime) : null;
       if (clockOutTime !== undefined) updateData.clockOutTime = clockOutTime ? new Date(clockOutTime) : null;
       if (note !== undefined) updateData.note = note;
-      if (status !== undefined) updateData.status = status;
       if (shiftLabel !== undefined) updateData.shiftLabel = shiftLabel;
+
+      // 如果更換了班次，且管理員沒有手動指定 status，則根據新班次規定時間重新計算出勤狀態
+      if (status !== undefined) {
+        // 管理員手動指定狀態，直接使用
+        updateData.status = status;
+      } else if (shiftLabel !== undefined) {
+        // 更換班次，自動重新計算狀態
+        try {
+          // 取得目前打卡紀錄
+          const records = await db.getAllAttendance();
+          const record = records.find((r: any) => r.id === id);
+          if (record) {
+            const actualClockIn = clockInTime !== undefined
+              ? (clockInTime ? new Date(clockInTime) : null)
+              : record.clockInTime;
+            const actualClockOut = clockOutTime !== undefined
+              ? (clockOutTime ? new Date(clockOutTime) : null)
+              : record.clockOutTime;
+
+            if (actualClockIn) {
+              // 查詢新班次的規定時間
+              const allShifts = await db.getAllWorkShifts();
+              const matchedShift = allShifts.find((s: any) => s.name === shiftLabel);
+              if (matchedShift) {
+                const lateThreshold = parseInt(await db.getSetting("late_threshold_minutes") || "10");
+                const [sh, sm] = matchedShift.startTime.split(":").map(Number);
+                const [eh, em] = matchedShift.endTime.split(":").map(Number);
+                const shiftStartMin = sh * 60 + sm;
+                const shiftEndMin = eh * 60 + em;
+
+                // 實際上班時間轉為台灣時間的分鐘數
+                const inMin = actualClockIn.getUTCHours() * 60 + actualClockIn.getUTCMinutes() + 8 * 60;
+                const normalizedIn = inMin % (24 * 60);
+
+                let newStatus: "normal" | "late" | "early_leave" | "absent" = "normal";
+                if (normalizedIn - shiftStartMin > lateThreshold) {
+                  newStatus = "late";
+                }
+                if (actualClockOut) {
+                  const outMin = actualClockOut.getUTCHours() * 60 + actualClockOut.getUTCMinutes() + 8 * 60;
+                  const normalizedOut = outMin % (24 * 60);
+                  if (normalizedOut < shiftEndMin - 1) {
+                    newStatus = newStatus === "late" ? "late" : "early_leave";
+                  }
+                }
+                updateData.status = newStatus;
+              }
+            }
+          }
+        } catch (e) {
+          // 計算失敗時保持原狀態，不影響儲存
+        }
+      }
+
       await db.updateAttendance(id, updateData);
       return { success: true };
     }),

@@ -112,10 +112,10 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving, wor
     setSelectedShiftLabel(record?.shiftLabel ?? "");
   }, [record]);
 
+  // 選擇班次只更新班次標籤（規定時間基準），不覆蓋員工實際打卡時間
   const handleSelectShift = (shift: { name: string; startTime: string; endTime: string }) => {
     setSelectedShiftLabel(shift.name);
-    setClockIn(shift.startTime.slice(0, 5));
-    setClockOut(shift.endTime.slice(0, 5));
+    // 實際打卡時間 clockIn / clockOut 保持不變
   };
 
   const handleSave = () => {
@@ -167,14 +167,14 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving, wor
                 })}
               </View>
               {selectedShiftLabel ? (
-                <Text style={{ fontSize: 11, color: "#3B82F6", marginTop: 8 }}>已選：{selectedShiftLabel}（時間已自動帶入，可手動調整）</Text>
+                <Text style={{ fontSize: 11, color: "#3B82F6", marginTop: 8 }}>已選：{selectedShiftLabel}（系統將以此班次規定時間重新判斷出勤狀態）</Text>
               ) : (
-                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>選擇班次可自動帶入上下班時間</Text>
+                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>選擇正確班次，系統將重新計算遲到/早退/正常</Text>
               )}
             </View>
           )}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 14 }}>打卡時間（格式：HH:MM）</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 14 }}>實際打卡時間（格式：HH:MM）</Text>
             <View style={{ flexDirection: "row", gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 11, fontWeight: "600", color: "#22C55E", marginBottom: 6 }}>上班時間</Text>
