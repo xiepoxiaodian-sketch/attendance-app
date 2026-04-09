@@ -209,6 +209,11 @@ async function startServer() {
         await conn.execute(`ALTER TABLE employees ADD COLUMN tag varchar(64)`);
         results.push('Added employees.tag');
       }
+      // 0016: punchCorrections.screenshotBase64 column
+      if (!(await hasColumn('punchCorrections', 'screenshotBase64'))) {
+        await conn.execute(`ALTER TABLE punchCorrections ADD COLUMN screenshotBase64 longtext`);
+        results.push('Added punchCorrections.screenshotBase64');
+      }
 
       await conn.end();
       res.json({ ok: true, applied: results, message: results.length > 0 ? results.join(', ') : 'All up to date' });
