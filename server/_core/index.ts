@@ -79,15 +79,17 @@ async function startServer() {
   });
 
   // Diagnostic endpoint: check actual column types in DB
-  app.get("/api/db-check", async (_req, res) => {
+  app.get("/api/db-check", async (req, res) => {
     try {
       const mysql = await import("mysql2/promise");
       const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+      const tableName = (req.query.table as string) || 'attendance';
       const [rows] = await conn.execute(
-        `SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' ORDER BY ORDINAL_POSITION`
+        `SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
+        [tableName]
       ) as any[];
       await conn.end();
-      res.json({ ok: true, columns: rows });
+      res.json({ ok: true, table: tableName, columns: rows });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: err.message });
     }
