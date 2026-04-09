@@ -1158,11 +1158,10 @@ function MonthTab() {
                 const isToday = cell.dateStr === todayStr;
                 const isSelected = cell.dateStr === selectedDate;
                 const daySchedules = scheduleMap[cell.dateStr] ?? {};
-                const scheduledCount = Object.keys(daySchedules).length;
+                const workingCount = Object.values(daySchedules).filter(s => s.shifts && s.shifts.length > 0 && !s.leaveType).length;
+                const leaveCount = Object.values(daySchedules).filter(s => s.leaveType).length;
                 const dow = (firstDow + cell.day - 1) % 7;
                 const isWeekend = dow === 0 || dow === 6;
-                // Check if any employee has leave that day
-                const leaveCount = Object.values(daySchedules).filter(s => s.leaveType).length;
                 return (
                   <TouchableOpacity
                     key={col}
@@ -1172,9 +1171,9 @@ function MonthTab() {
                     <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: isToday ? "#2563EB" : "transparent", alignItems: "center", justifyContent: "center" }}>
                       <Text style={{ fontSize: 13, fontWeight: isToday || isSelected ? "700" : "400", color: isToday ? "white" : isWeekend ? "#EF4444" : "#1E293B" }}>{cell.day}</Text>
                     </View>
-                    {scheduledCount > 0 && (
+                    {workingCount > 0 && (
                       <View style={{ marginTop: 2, backgroundColor: "#BFDBFE", borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1 }}>
-                        <Text style={{ fontSize: 9, color: "#1D4ED8", fontWeight: "600" }}>{scheduledCount}人</Text>
+                        <Text style={{ fontSize: 9, color: "#1D4ED8", fontWeight: "600" }}>{workingCount}人</Text>
                       </View>
                     )}
                     {leaveCount > 0 && (

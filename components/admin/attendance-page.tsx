@@ -85,19 +85,28 @@ interface EditModalProps {
   record: any;
   employeeName: string;
   onClose: () => void;
-  onSave: (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string }) => void;
+  onSave: (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string; status?: string }) => void;
   saving: boolean;
 }
+
+const STATUS_OPTIONS = [
+  { value: "normal",      label: "正常",     bg: "#DCFCE7", color: "#16A34A" },
+  { value: "late",        label: "遲到",     bg: "#FEF3C7", color: "#D97706" },
+  { value: "early_leave", label: "早退",     bg: "#FEF3C7", color: "#D97706" },
+  { value: "absent",      label: "缺勤",     bg: "#FEE2E2", color: "#DC2626" },
+];
 
 function EditModal({ visible, record, employeeName, onClose, onSave, saving }: EditModalProps) {
   const [clockIn, setClockIn] = useState("");
   const [clockOut, setClockOut] = useState("");
   const [note, setNote] = useState("");
+  const [statusOverride, setStatusOverride] = useState<string>("normal");
 
   const initValues = useCallback(() => {
     setClockIn(record ? toTimeStr(record.clockInTime) : "");
     setClockOut(record ? toTimeStr(record.clockOutTime) : "");
     setNote(record?.note ?? "");
+    setStatusOverride(record?.status ?? "normal");
   }, [record]);
 
   const handleSave = () => {
@@ -105,7 +114,7 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving }: E
     const dateStr = record.dateKey;
     const newClockIn = clockIn ? buildDateTime(dateStr, clockIn) : null;
     const newClockOut = clockOut ? buildDateTime(dateStr, clockOut) : null;
-    onSave({ clockInTime: newClockIn, clockOutTime: newClockOut, note });
+    onSave({ clockInTime: newClockIn, clockOutTime: newClockOut, note, status: statusOverride });
   };
 
   if (!record) return null;
@@ -148,6 +157,20 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving }: E
               </View>
             </View>
             <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 10, textAlign: "center" }}>留空表示清除該欄位的打卡記錄</Text>
+          </View>
+          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 10 }}>出勤狀態</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {STATUS_OPTIONS.map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => setStatusOverride(opt.value)}
+                  style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: statusOverride === opt.value ? opt.bg : "#F1F5F9", borderWidth: 1.5, borderColor: statusOverride === opt.value ? opt.color : "transparent" }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: statusOverride === opt.value ? opt.color : "#94A3B8" }}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 8 }}>備注（選填）</Text>
@@ -259,11 +282,14 @@ export default function AdminAttendanceScreen() {
     setRefreshing(false);
   }, []);
 
-  const handleSaveEdit = async (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string }) => {
+  const handleSaveEdit = async (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string; status?: string }) => {
     if (!editRecord) return;
     setSaving(true);
     try {
-      await adminUpdateMutation.mutateAsync({ id: editRecord.id, ...data });
+      const validStatuses = ["normal", "late", "early_leave", "absent"] as const;
+      type ValidStatus = typeof validStatuses[number];
+      const status = validStatuses.includes(data.status as ValidStatus) ? data.status as ValidStatus : undefined;
+      await adminUpdateMutation.mutateAsync({ id: editRecord.id, ...data, status });
       setEditRecord(null);
     } finally {
       setSaving(false);
