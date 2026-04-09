@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl,
-  ActivityIndicator, Modal, TextInput, ScrollView, Image,
+  ActivityIndicator, Modal, TextInput, ScrollView, Image, Dimensions, StatusBar,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
@@ -55,6 +55,9 @@ interface ReviewModalProps {
 function ReviewModal({ visible, item, employeeName, onClose, onSubmit, submitting }: ReviewModalProps) {
   const [note, setNote] = useState("");
   const [action, setAction] = useState<"approved" | "rejected" | null>(null);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const screenWidth = Dimensions.get("window").width;
+  const screenHeight = Dimensions.get("window").height;
 
   const handleSubmit = () => {
     if (!action) return;
@@ -123,14 +126,42 @@ function ReviewModal({ visible, item, employeeName, onClose, onSubmit, submittin
           {/* Screenshot */}
           {item.screenshotBase64 && (
             <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>系統異常截圖</Text>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>系統異常截圖</Text>
+                <Text style={{ fontSize: 11, color: "#94A3B8" }}>點擊放大</Text>
+              </View>
+              <TouchableOpacity onPress={() => setImageViewerVisible(true)} activeOpacity={0.85}>
+                <Image
+                  source={{ uri: item.screenshotBase64 }}
+                  resizeMode="contain"
+                  style={{ width: "100%", minHeight: 120, maxHeight: 400, borderRadius: 8 }}
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Full-screen image viewer */}
+          <Modal
+            visible={imageViewerVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setImageViewerVisible(false)}
+          >
+            <StatusBar hidden />
+            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" }}>
+              <TouchableOpacity
+                onPress={() => setImageViewerVisible(false)}
+                style={{ position: "absolute", top: 20, right: 20, zIndex: 10, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, width: 40, height: 40, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: "white", fontSize: 18, fontWeight: "600" }}>✕</Text>
+              </TouchableOpacity>
               <Image
                 source={{ uri: item.screenshotBase64 }}
                 resizeMode="contain"
-                style={{ width: "100%", minHeight: 120, maxHeight: 400, borderRadius: 8 }}
+                style={{ width: screenWidth, height: screenHeight * 0.9 }}
               />
             </View>
-          )}
+          </Modal>
 
           {/* Action Selection */}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
