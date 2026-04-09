@@ -862,6 +862,8 @@ function MonthTab() {
   const [month, setMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  // 日期詳情 Modal
+  const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
 
   const startDate = `${year}-${String(month + 1).padStart(2, "0")}-01`;
   const lastDay = getDaysInMonth(year, month);
@@ -1165,7 +1167,7 @@ function MonthTab() {
                 return (
                   <TouchableOpacity
                     key={col}
-                    onPress={() => setSelectedDate(isSelected ? null : cell.dateStr!)}
+                    onPress={() => { setDayDetailDate(cell.dateStr!); setSelectedDate(cell.dateStr!); }}
                     style={{ flex: 1, height: 60, alignItems: "center", paddingTop: 6, borderRadius: 8, marginHorizontal: 1, backgroundColor: isSelected ? "#DBEAFE" : "transparent", borderWidth: isSelected ? 1.5 : 0, borderColor: isSelected ? "#2563EB" : "transparent" }}
                   >
                     <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: isToday ? "#2563EB" : "transparent", alignItems: "center", justifyContent: "center" }}>
@@ -1188,6 +1190,154 @@ function MonthTab() {
           ))}
         </View>
       </View>
+
+      {/* Day Detail Modal */}
+      <Modal
+        visible={dayDetailDate !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setDayDetailDate(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+          {/* Modal Header */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, paddingTop: 20, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
+            <TouchableOpacity onPress={() => setDayDetailDate(null)}>
+              <Text style={{ color: "#64748B", fontSize: 15 }}>關閉</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>
+              {dayDetailDate ? (() => {
+                const [y, m, d] = dayDetailDate.split("-").map(Number);
+                const dow = new Date(y, m - 1, d).getDay();
+                return `${m} 月 ${d} 日（${WEEKDAYS[dow]}）`;
+              })() : ""}
+            </Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          {dayDetailDate && (() => {
+            const daySchedules = scheduleMap[dayDetailDate] ?? {};
+            const workingEmps = activeEmployees.filter(e => {
+              const d = daySchedules[e.id];
+              return d?.shifts?.length > 0 && !d?.leaveType;
+            });
+            const leaveEmps = activeEmployees.filter(e => daySchedules[e.id]?.leaveType);
+            const unscheduledEmps = activeEmployees.filter(e => {
+              const d = daySchedules[e.id];
+              return !d || (!d.shifts?.length && !d.leaveType);
+            });
+            return (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 40 }}>
+                {/* Summary Cards */}
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <View style={{ flex: 1, backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#BFDBFE", padding: 14, alignItems: "center" }}>
+                    <Text style={{ fontSize: 28, fontWeight: "800", color: "#2563EB" }}>{workingEmps.length}</Text>
+                    <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>上班人數</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#FECACA", padding: 14, alignItems: "center" }}>
+                    <Text style={{ fontSize: 28, fontWeight: "800", color: "#DC2626" }}>{leaveEmps.length}</Text>
+                    <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>請假人數</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", padding: 14, alignItems: "center" }}>
+                    <Text style={{ fontSize: 28, fontWeight: "800", color: "#94A3B8" }}>{unscheduledEmps.length}</Text>
+                    <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>未排班</Text>
+                  </View>
+                </View>
+
+                {/* Working Employees */}
+                {workingEmps.length > 0 && (
+                  <View style={{ backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" }}>
+                    <View style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#22C55E" }} />
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#15803D" }}>上班中（{workingEmps.length} 人）</Text>
+                    </View>
+                    {workingEmps.map((emp, i) => {
+                      const d = daySchedules[emp.id];
+                      return (
+                        <View key={emp.id} style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: i < workingEmps.length - 1 ? 1 : 0, borderBottomColor: "#F8FAFC", flexDirection: "row", alignItems: "center", gap: 10 }}>
+                          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#DCFCE7", alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ fontSize: 13, fontWeight: "700", color: "#16A34A" }}>{emp.fullName[0]}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#1E293B" }}>{emp.fullName}</Text>
+                            <View style={{ marginTop: 3, gap: 2 }}>
+                              {d.shifts.map((shift: ShiftEntry, si: number) => (
+                                <Text key={si} style={{ fontSize: 12, color: "#475569" }}>
+                                  {shift.label ? `${shift.label}  ` : ""}{shift.startTime} – {shift.endTime}
+                                </Text>
+                              ))}
+                            </View>
+                          </View>
+                          <View style={{ backgroundColor: "#DCFCE7", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                            <Text style={{ fontSize: 11, fontWeight: "600", color: "#16A34A" }}>上班</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Leave Employees */}
+                {leaveEmps.length > 0 && (
+                  <View style={{ backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" }}>
+                    <View style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#EF4444" }} />
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#DC2626" }}>請假中（{leaveEmps.length} 人）</Text>
+                    </View>
+                    {leaveEmps.map((emp, i) => {
+                      const d = daySchedules[emp.id];
+                      const leaveInfo = LEAVE_TYPES.find(lt => lt.value === d.leaveType);
+                      return (
+                        <View key={emp.id} style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: i < leaveEmps.length - 1 ? 1 : 0, borderBottomColor: "#F8FAFC", flexDirection: "row", alignItems: "center", gap: 10 }}>
+                          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: leaveInfo?.bg ?? "#FEF2F2", alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ fontSize: 13, fontWeight: "700", color: leaveInfo?.color ?? "#DC2626" }}>{emp.fullName[0]}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#1E293B" }}>{emp.fullName}</Text>
+                            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                              {leaveInfo?.label ?? "請假"}
+                              {d.leaveMode === "partial" && d.leaveDuration ? `（${parseFloat(d.leaveDuration).toFixed(1)} 小時）` : "（整天）"}
+                            </Text>
+                          </View>
+                          <View style={{ backgroundColor: leaveInfo?.bg ?? "#FEF2F2", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                            <Text style={{ fontSize: 11, fontWeight: "600", color: leaveInfo?.color ?? "#DC2626" }}>{leaveInfo?.label ?? "請假"}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Unscheduled Employees */}
+                {unscheduledEmps.length > 0 && (
+                  <View style={{ backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" }}>
+                    <View style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#94A3B8" }} />
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#64748B" }}>未排班（{unscheduledEmps.length} 人）</Text>
+                    </View>
+                    {unscheduledEmps.map((emp, i) => (
+                      <View key={emp.id} style={{ paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: i < unscheduledEmps.length - 1 ? 1 : 0, borderBottomColor: "#F8FAFC", flexDirection: "row", alignItems: "center", gap: 10 }}>
+                        <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: "#94A3B8" }}>{emp.fullName[0]}</Text>
+                        </View>
+                        <Text style={{ flex: 1, fontSize: 14, fontWeight: "500", color: "#94A3B8" }}>{emp.fullName}</Text>
+                        <View style={{ backgroundColor: "#F1F5F9", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                          <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8" }}>未排班</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {workingEmps.length === 0 && leaveEmps.length === 0 && (
+                  <View style={{ paddingVertical: 40, alignItems: "center" }}>
+                    <Text style={{ fontSize: 15, color: "#94A3B8" }}>本日尚無任何排班資料</Text>
+                  </View>
+                )}
+              </ScrollView>
+            );
+          })()}
+        </View>
+      </Modal>
 
       {/* Legend */}
       <View style={{ flexDirection: "row", gap: 16, paddingHorizontal: 4, flexWrap: "wrap" }}>
