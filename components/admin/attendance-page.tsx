@@ -85,8 +85,9 @@ interface EditModalProps {
   record: any;
   employeeName: string;
   onClose: () => void;
-  onSave: (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string; status?: string }) => void;
+  onSave: (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string; status?: string; shiftLabel?: string }) => void;
   saving: boolean;
+  workShifts?: Array<{ id: number; name: string; startTime: string; endTime: string }>;
 }
 
 const STATUS_OPTIONS = [
@@ -96,25 +97,33 @@ const STATUS_OPTIONS = [
   { value: "absent",      label: "缺勤",     bg: "#FEE2E2", color: "#DC2626" },
 ];
 
-function EditModal({ visible, record, employeeName, onClose, onSave, saving }: EditModalProps) {
+function EditModal({ visible, record, employeeName, onClose, onSave, saving, workShifts = [] }: EditModalProps) {
   const [clockIn, setClockIn] = useState("");
   const [clockOut, setClockOut] = useState("");
   const [note, setNote] = useState("");
   const [statusOverride, setStatusOverride] = useState<string>("normal");
+  const [selectedShiftLabel, setSelectedShiftLabel] = useState<string>("");
 
   const initValues = useCallback(() => {
     setClockIn(record ? toTimeStr(record.clockInTime) : "");
     setClockOut(record ? toTimeStr(record.clockOutTime) : "");
     setNote(record?.note ?? "");
     setStatusOverride(record?.status ?? "normal");
+    setSelectedShiftLabel(record?.shiftLabel ?? "");
   }, [record]);
+
+  const handleSelectShift = (shift: { name: string; startTime: string; endTime: string }) => {
+    setSelectedShiftLabel(shift.name);
+    setClockIn(shift.startTime.slice(0, 5));
+    setClockOut(shift.endTime.slice(0, 5));
+  };
 
   const handleSave = () => {
     if (!record) return;
     const dateStr = record.dateKey;
     const newClockIn = clockIn ? buildDateTime(dateStr, clockIn) : null;
     const newClockOut = clockOut ? buildDateTime(dateStr, clockOut) : null;
-    onSave({ clockInTime: newClockIn, clockOutTime: newClockOut, note, status: statusOverride });
+    onSave({ clockInTime: newClockIn, clockOutTime: newClockOut, note, status: statusOverride, shiftLabel: selectedShiftLabel || undefined });
   };
 
   if (!record) return null;
@@ -139,6 +148,31 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving }: E
               <Text style={{ fontSize: 12, color: "#64748B" }}>{record.dateKey} · {record.shiftLabel || "一般班"}</Text>
             </View>
           </View>
+          {workShifts.length > 0 && (
+            <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 10 }}>班次</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {workShifts.map(shift => {
+                  const isSelected = selectedShiftLabel === shift.name;
+                  return (
+                    <TouchableOpacity
+                      key={shift.id}
+                      onPress={() => handleSelectShift(shift)}
+                      style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: isSelected ? "#EFF6FF" : "#F8FAFC", borderWidth: 1.5, borderColor: isSelected ? "#3B82F6" : "#E2E8F0" }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: isSelected ? "#2563EB" : "#64748B" }}>{shift.name}</Text>
+                      <Text style={{ fontSize: 11, color: isSelected ? "#3B82F6" : "#94A3B8", marginTop: 2 }}>{shift.startTime.slice(0,5)} – {shift.endTime.slice(0,5)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {selectedShiftLabel ? (
+                <Text style={{ fontSize: 11, color: "#3B82F6", marginTop: 8 }}>已選：{selectedShiftLabel}（時間已自動帶入，可手動調整）</Text>
+              ) : (
+                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>選擇班次可自動帶入上下班時間</Text>
+              )}
+            </View>
+          )}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 14 }}>打卡時間（格式：HH:MM）</Text>
             <View style={{ flexDirection: "row", gap: 12 }}>
@@ -272,9 +306,9 @@ export default function AdminAttendanceScreen() {
 
   const { data: groups, refetch, isLoading } = trpc.attendance.getGrouped.useQuery({ startDate, endDate });
   const { data: employees } = trpc.employees.list.useQuery();
-
+  const { data: workShiftsData } = trpc.workShifts.list.useQuery();
   const deleteMutation = trpc.attendance.delete.useMutation({ onSuccess: () => refetch() });
-  const adminUpdateMutation = trpc.attendance.adminUpdate.useMutation({ onSuccess: () => refetch() });
+  const adminUpdateMutation = trpc.attendance.adminUpdate.useMutation({ onSuccess: () => refetch() });;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -282,14 +316,14 @@ export default function AdminAttendanceScreen() {
     setRefreshing(false);
   }, []);
 
-  const handleSaveEdit = async (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string; status?: string }) => {
+  const handleSaveEdit = async (data: { clockInTime?: string | null; clockOutTime?: string | null; note?: string; status?: string; shiftLabel?: string }) => {
     if (!editRecord) return;
     setSaving(true);
     try {
       const validStatuses = ["normal", "late", "early_leave", "absent"] as const;
       type ValidStatus = typeof validStatuses[number];
       const status = validStatuses.includes(data.status as ValidStatus) ? data.status as ValidStatus : undefined;
-      await adminUpdateMutation.mutateAsync({ id: editRecord.id, ...data, status });
+      await adminUpdateMutation.mutateAsync({ id: editRecord.id, clockInTime: data.clockInTime, clockOutTime: data.clockOutTime, note: data.note, status, shiftLabel: data.shiftLabel });
       setEditRecord(null);
     } finally {
       setSaving(false);
@@ -372,6 +406,7 @@ export default function AdminAttendanceScreen() {
         onClose={() => setEditRecord(null)}
         onSave={handleSaveEdit}
         saving={saving}
+        workShifts={workShiftsData ?? []}
       />
 
       <PhotoModal uri={photoUri} onClose={() => setPhotoUri(null)} />
