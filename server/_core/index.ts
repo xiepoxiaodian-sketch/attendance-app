@@ -217,6 +217,18 @@ async function startServer() {
         results.push('Added punchCorrections.screenshotBase64');
       }
 
+      // 0017: attendance.status ENUM add late_and_early
+      {
+        const [enumRows] = await conn.execute(
+          `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' AND COLUMN_NAME = 'status'`
+        ) as any[];
+        const enumType = enumRows.length > 0 ? String(enumRows[0].COLUMN_TYPE) : '';
+        if (!enumType.includes('late_and_early')) {
+          await conn.execute(`ALTER TABLE attendance MODIFY COLUMN status ENUM('normal','late','early_leave','absent','late_and_early') NOT NULL DEFAULT 'normal'`);
+          results.push('Updated attendance.status ENUM to include late_and_early');
+        }
+      }
+
       await conn.end();
       res.json({ ok: true, applied: results, message: results.length > 0 ? results.join(', ') : 'All up to date' });
     } catch (err: any) {
