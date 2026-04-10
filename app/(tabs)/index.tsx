@@ -817,7 +817,7 @@ export default function ClockScreen() {
                     <Text style={{ fontSize: 22, fontWeight: "700", color: record?.clockInTime ? "#22C55E" : "#CBD5E1" }}>
                       {formatTime(record?.clockInTime)}
                     </Text>
-                    {record?.status === "late" && (
+                    {(record?.status === "late" || record?.status === "late_and_early") && (
                       <Text style={{ fontSize: 10, color: "#F59E0B", marginTop: 2, fontWeight: "600" }}>遲到</Text>
                     )}
                   </View>
@@ -830,8 +830,8 @@ export default function ClockScreen() {
                     <Text style={{ fontSize: 22, fontWeight: "700", color: record?.clockOutTime ? "#3B82F6" : "#CBD5E1" }}>
                       {formatTime(record?.clockOutTime)}
                     </Text>
-                    {record?.status === "early_leave" && (
-                      <Text style={{ fontSize: 10, color: "#F59E0B", marginTop: 2, fontWeight: "600" }}>早退</Text>
+                    {(record?.status === "early_leave" || record?.status === "late_and_early") && (
+                      <Text style={{ fontSize: 10, color: "#EA580C", marginTop: 2, fontWeight: "600" }}>早退</Text>
                     )}
                   </View>
                 </View>

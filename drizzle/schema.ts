@@ -71,7 +71,7 @@ export const attendance = mysqlTable("attendance", {
   clockOutLat: decimal("clockOutLat", { precision: 10, scale: 8 }),
   clockOutLng: decimal("clockOutLng", { precision: 11, scale: 8 }),
   shiftLabel: varchar("shiftLabel", { length: 64 }),
-  status: mysqlEnum("status", ["normal", "late", "early_leave", "absent"]).default("normal"),
+  status: mysqlEnum("status", ["normal", "late", "early_leave", "absent", "late_and_early"]).default("normal"),
   clockInPhoto: mediumtext("clockInPhoto"),
   clockOutPhoto: mediumtext("clockOutPhoto"),
   note: text("note"),

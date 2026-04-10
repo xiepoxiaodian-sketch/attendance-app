@@ -233,9 +233,16 @@ export default function AdminFeedbackScreen() {
                     <Text style={{ fontSize: 12, color: "#475569", fontWeight: "500" }}>
                       {fb.employeeName ?? "未知員工"} ({fb.employeeUsername ?? "—"})
                     </Text>
-                    {fb.screenshotBase64 && (
-                      <Text style={{ fontSize: 11, color: "#94A3B8", marginLeft: "auto" }}>📷 含截圖</Text>
-                    )}
+                    <View style={{ flexDirection: "row", gap: 6, marginLeft: "auto" }}>
+                      {fb.adminNote && (
+                        <View style={{ backgroundColor: "#DBEAFE", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 10, color: "#2563EB", fontWeight: "600" }}>💬 已回覆</Text>
+                        </View>
+                      )}
+                      {fb.screenshotBase64 && (
+                        <Text style={{ fontSize: 11, color: "#94A3B8" }}>📷 含截圖</Text>
+                      )}
+                    </View>
                   </View>
                 </TouchableOpacity>
               );
@@ -346,27 +353,30 @@ export default function AdminFeedbackScreen() {
                     </View>
                   )}
 
-                  {/* Admin Note */}
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151", marginBottom: 8 }}>
-                    管理員備注
-                  </Text>
+                  {/* Admin Reply */}
+                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 6 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E3A8A" }}>💬 回覆員工</Text>
+                    <View style={{ backgroundColor: "#DBEAFE", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                      <Text style={{ fontSize: 10, color: "#2563EB", fontWeight: "600" }}>員工可看到</Text>
+                    </View>
+                  </View>
                   <TextInput
                     value={adminNote}
                     onChangeText={setAdminNote}
-                    placeholder="輸入處理說明或備注..."
+                    placeholder="輸入回覆內容，員工將可在「我的反饋」中看到此回覆..."
                     placeholderTextColor="#94A3B8"
                     multiline
-                    numberOfLines={3}
+                    numberOfLines={4}
                     textAlignVertical="top"
                     style={{
-                      backgroundColor: "#F8FAFC",
+                      backgroundColor: "#EFF6FF",
                       borderWidth: 1.5,
-                      borderColor: "#E2E8F0",
+                      borderColor: "#BFDBFE",
                       borderRadius: 10,
                       padding: 12,
                       fontSize: 14,
                       color: "#1E293B",
-                      minHeight: 80,
+                      minHeight: 100,
                       marginBottom: 16,
                     }}
                   />

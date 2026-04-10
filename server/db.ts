@@ -897,3 +897,21 @@ export async function updateFeedbackStatus(
     .set({ status, ...(adminNote !== undefined ? { adminNote } : {}) })
     .where(eq(feedbacks.id, id));
 }
+
+export async function getFeedbacksByEmployee(employeeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: feedbacks.id,
+    type: feedbacks.type,
+    title: feedbacks.title,
+    description: feedbacks.description,
+    screenshotBase64: feedbacks.screenshotBase64,
+    status: feedbacks.status,
+    adminNote: feedbacks.adminNote,
+    createdAt: feedbacks.createdAt,
+    updatedAt: feedbacks.updatedAt,
+  }).from(feedbacks)
+    .where(eq(feedbacks.employeeId, employeeId))
+    .orderBy(sql`${feedbacks.createdAt} DESC`);
+}

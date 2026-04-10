@@ -329,10 +329,15 @@ const attendanceRouter = router({
         if (currentShift) {
           const [h, m] = currentShift.endTime.split(":").map(Number);
           const shiftEndMinutes = h * 60 + m;
+          const wasLate = record.status === "late" || record.status === "late_and_early";
           // Early leave: clocked out more than 1 minute before shift end
-          if (nowTWMinutes_out < shiftEndMinutes - 1) status = "early_leave";
-          // If was previously late but clocked out on time, keep late status
-          else if (record.status !== "late") status = "normal";
+          if (nowTWMinutes_out < shiftEndMinutes - 1) {
+            // If already late, mark as both late and early leave
+            status = wasLate ? "late_and_early" : "early_leave";
+          } else {
+            // Clocked out on time: preserve late status if applicable
+            status = wasLate ? "late" : "normal";
+          }
         }
       }
 
@@ -470,20 +475,20 @@ const attendanceRouter = router({
         const [eh, em] = shift.endTime.split(":").map(Number);
         const shiftStart = sh * 60 + sm;
         const shiftEnd = eh * 60 + em;
-        let status = "normal";
+        let isLate = false;
+        let isEarlyLeave = false;
         if (clockIn) {
           const inMin = toTWMinutes(clockIn instanceof Date ? clockIn : new Date(clockIn));
-          if (inMin - shiftStart > lateThreshold) status = "late";
+          if (inMin - shiftStart > lateThreshold) isLate = true;
         }
         if (clockOut) {
           const outMin = toTWMinutes(clockOut instanceof Date ? clockOut : new Date(clockOut));
-          if (outMin < shiftEnd - 1) {
-            status = "early_leave";
-          } else if (status !== "late") {
-            status = "normal";
-          }
+          if (outMin < shiftEnd - 1) isEarlyLeave = true;
         }
-        return status;
+        if (isLate && isEarlyLeave) return "late_and_early";
+        if (isLate) return "late";
+        if (isEarlyLeave) return "early_leave";
+        return "normal";
       }
 
       // Group by employeeId + date (local date, not UTC)
@@ -610,17 +615,17 @@ const attendanceRouter = router({
                 const inMin = actualClockIn.getUTCHours() * 60 + actualClockIn.getUTCMinutes() + 8 * 60;
                 const normalizedIn = inMin % (24 * 60);
 
-                let newStatus: "normal" | "late" | "early_leave" | "absent" = "normal";
-                if (normalizedIn - shiftStartMin > lateThreshold) {
-                  newStatus = "late";
-                }
+                let isLate2 = normalizedIn - shiftStartMin > lateThreshold;
+                let isEarlyLeave2 = false;
                 if (actualClockOut) {
                   const outMin = actualClockOut.getUTCHours() * 60 + actualClockOut.getUTCMinutes() + 8 * 60;
                   const normalizedOut = outMin % (24 * 60);
-                  if (normalizedOut < shiftEndMin - 1) {
-                    newStatus = newStatus === "late" ? "late" : "early_leave";
-                  }
+                  if (normalizedOut < shiftEndMin - 1) isEarlyLeave2 = true;
                 }
+                let newStatus: "normal" | "late" | "early_leave" | "absent" | "late_and_early" = "normal";
+                if (isLate2 && isEarlyLeave2) newStatus = "late_and_early";
+                else if (isLate2) newStatus = "late";
+                else if (isEarlyLeave2) newStatus = "early_leave";
                 updateData.status = newStatus;
               }
             }
@@ -1136,6 +1141,12 @@ const feedbackRouter = router({
     .mutation(async ({ input }) => {
       await db.updateFeedbackStatus(input.id, input.status, input.adminNote);
       return { success: true };
+    }),
+
+  getByEmployee: publicProcedure
+    .input(z.object({ employeeId: z.number() }))
+    .query(async ({ input }) => {
+      return db.getFeedbacksByEmployee(input.employeeId);
     }),
 });
 

@@ -41,6 +41,7 @@ function getStatusStyle(status: string | null | undefined) {
   switch (status) {
     case "late": return { bg: "#FEF3C7", text: "#D97706", label: "遲到" };
     case "early_leave": return { bg: "#FFF7ED", text: "#EA580C", label: "早退" };
+    case "late_and_early": return { bg: "#FEF3C7", text: "#D97706", label: "遲到+早退" };
     case "absent": return { bg: "#FEE2E2", text: "#DC2626", label: "缺勤" };
     case "no_clock_out": return { bg: "#F0F9FF", text: "#0284C7", label: "未下班打卡" };
     default: return { bg: "#DCFCE7", text: "#16A34A", label: "正常" };
@@ -54,6 +55,8 @@ function groupStatus(shifts: Array<{ status: string | null; clockInTime: any; cl
     return s.status || "normal";
   });
   if (statuses.includes("absent")) return "absent";
+  if (statuses.includes("late_and_early")) return "late_and_early";
+  if (statuses.includes("late") && statuses.includes("early_leave")) return "late_and_early";
   if (statuses.includes("late")) return "late";
   if (statuses.includes("early_leave")) return "early_leave";
   if (statuses.includes("no_clock_out")) return "no_clock_out";
@@ -91,10 +94,11 @@ interface EditModalProps {
 }
 
 const STATUS_OPTIONS = [
-  { value: "normal",      label: "正常",     bg: "#DCFCE7", color: "#16A34A" },
-  { value: "late",        label: "遲到",     bg: "#FEF3C7", color: "#D97706" },
-  { value: "early_leave", label: "早退",     bg: "#FEF3C7", color: "#D97706" },
-  { value: "absent",      label: "缺勤",     bg: "#FEE2E2", color: "#DC2626" },
+  { value: "normal",        label: "正常",       bg: "#DCFCE7", color: "#16A34A" },
+  { value: "late",          label: "遲到",       bg: "#FEF3C7", color: "#D97706" },
+  { value: "early_leave",   label: "早退",       bg: "#FFF7ED", color: "#EA580C" },
+  { value: "late_and_early",label: "遲到+早退", bg: "#FEF3C7", color: "#D97706" },
+  { value: "absent",        label: "缺勤",       bg: "#FEE2E2", color: "#DC2626" },
 ];
 
 function EditModal({ visible, record, employeeName, onClose, onSave, saving, workShifts = [] }: EditModalProps) {
@@ -274,13 +278,14 @@ function EmployeePicker({ visible, employees, selectedId, onSelect, onClose }: E
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type StatusFilter = "all" | "normal" | "late" | "early_leave" | "absent" | "no_clock_out";
+type StatusFilter = "all" | "normal" | "late" | "early_leave" | "late_and_early" | "absent" | "no_clock_out";
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "全部" },
   { key: "normal", label: "正常" },
   { key: "late", label: "遲到" },
   { key: "early_leave", label: "早退" },
+  { key: "late_and_early", label: "遲到+早退" },
   { key: "absent", label: "缺勤" },
   { key: "no_clock_out", label: "未下班打卡" },
 ];
@@ -376,7 +381,7 @@ export default function AdminAttendanceScreen() {
     if (searchQuery && !g.employeeName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
-  const counts: Record<StatusFilter, number> = { all: baseGroups.length, normal: 0, late: 0, early_leave: 0, absent: 0, no_clock_out: 0 };
+  const counts: Record<StatusFilter, number> = { all: baseGroups.length, normal: 0, late: 0, early_leave: 0, late_and_early: 0, absent: 0, no_clock_out: 0 };
   for (const g of baseGroups) {
     const s = getGroupStatusKey(g);
     counts[s] = (counts[s] ?? 0) + 1;
