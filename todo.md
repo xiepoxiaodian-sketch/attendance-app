@@ -376,3 +376,5 @@
 - [x] public/sw.js 升級至 v3（加入 SKIP_WAITING 訊息支援、改善快取策略）
 - [x] deploy.sh 加入版本號產生（時間戳 + git hash）並複製 sw.js 到 dist-web
 - [x] Dockerfile 加入 .build-version 讀取並注入 APP_VERSION 環境變數
+
+- [ ] 將所有列印功能改為直接下載 Excel（周排班、月總覽、排班總覽、月排班）
