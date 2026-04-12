@@ -83,66 +83,141 @@ function WeekTab() {
       annual: "特休", sick: "病假", personal: "事假",
       marriage: "婚假", bereavement: "喪假", official: "公假", other: "假",
     };
-    const colHeaders = weekDates.map(d => {
-      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-      return `<th style="background:${isWeekend ? "#F1F5F9" : "#1E40AF"};color:${isWeekend ? "#64748B" : "white"};padding:8px 4px;font-size:12px;text-align:center;border:1px solid #CBD5E1;">
-        <div style="font-weight:700">${WEEKDAY_LABELS[d.getDay()]}</div>
-        <div style="font-size:11px;margin-top:2px">${d.getMonth() + 1}/${d.getDate()}</div>
-      </th>`;
-    }).join("");
-    const rows = activeEmployees.map(emp => {
-      const cells = weekDates.map(d => {
-        const dateStr = toDateStr(d);
+    const buildTableHtml = (fontSize: number) => {
+      const colHeaders = weekDates.map(d => {
         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-        const schedule = scheduleMap[emp.id]?.[dateStr];
-        const hasSchedule = !!schedule?.shifts?.length;
-        let cellContent = `<span style="color:#CBD5E1">—</span>`;
-        let cellBg = isWeekend ? "#F8FAFC" : "white";
-        if (schedule?.leaveType && schedule.leaveMode === "allDay") {
-          const lbl = LEAVE_LABEL[schedule.leaveType] ?? "假";
-          cellBg = "#FEF2F2";
-          cellContent = `<span style="color:#DC2626;font-weight:700;font-size:12px">${lbl}</span>`;
-        } else if (hasSchedule) {
-          cellBg = "#EFF6FF";
-          cellContent = schedule.shifts.map((sh: any) =>
-            `<div style="font-size:11px;color:#1D4ED8;font-weight:600;line-height:1.4">${sh.startTime}<br/><span style="color:#93C5FD;font-size:10px">↓</span><br/>${sh.endTime}</div>`
-          ).join(`<div style="border-top:1px dashed #BFDBFE;margin:2px 0"></div>`);
-        }
-        return `<td style="background:${cellBg};padding:6px 4px;text-align:center;border:1px solid #E2E8F0;min-width:60px;vertical-align:middle">${cellContent}</td>`;
+        return `<th style="background:${isWeekend ? "#F1F5F9" : "#1E40AF"};color:${isWeekend ? "#64748B" : "white"};padding:8px 4px;font-size:${fontSize}px;text-align:center;border:1px solid #CBD5E1;">
+          <div style="font-weight:700">${WEEKDAY_LABELS[d.getDay()]}</div>
+          <div style="font-size:${fontSize - 1}px;margin-top:2px">${d.getMonth() + 1}/${d.getDate()}</div>
+        </th>`;
       }).join("");
-      return `<tr>
-        <td style="padding:6px 10px;border:1px solid #E2E8F0;white-space:nowrap;background:#F8FAFC;font-size:12px;font-weight:600;color:#1E293B">${emp.fullName}</td>
-        ${cells}
-      </tr>`;
-    }).join("");
+      const rows = activeEmployees.map(emp => {
+        const cells = weekDates.map(d => {
+          const dateStr = toDateStr(d);
+          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+          const schedule = scheduleMap[emp.id]?.[dateStr];
+          const hasSchedule = !!schedule?.shifts?.length;
+          let cellContent = `<span style="color:#CBD5E1">—</span>`;
+          let cellBg = isWeekend ? "#F8FAFC" : "white";
+          if (schedule?.leaveType && schedule.leaveMode === "allDay") {
+            const lbl = LEAVE_LABEL[schedule.leaveType] ?? "假";
+            cellBg = "#FEF2F2";
+            cellContent = `<span style="color:#DC2626;font-weight:700;font-size:${fontSize}px">${lbl}</span>`;
+          } else if (hasSchedule) {
+            cellBg = "#EFF6FF";
+            cellContent = schedule.shifts.map((sh: any) =>
+              `<div style="font-size:${fontSize}px;color:#1D4ED8;font-weight:600;line-height:1.4">${sh.startTime}<br/><span style="color:#93C5FD;font-size:${fontSize - 1}px">↓</span><br/>${sh.endTime}</div>`
+            ).join(`<div style="border-top:1px dashed #BFDBFE;margin:2px 0"></div>`);
+          }
+          return `<td style="background:${cellBg};padding:6px 4px;text-align:center;border:1px solid #E2E8F0;min-width:60px;vertical-align:middle">${cellContent}</td>`;
+        }).join("");
+        return `<tr>
+          <td style="padding:6px 10px;border:1px solid #E2E8F0;white-space:nowrap;background:#F8FAFC;font-size:${fontSize}px;font-weight:600;color:#1E293B">${emp.fullName}</td>
+          ${cells}
+        </tr>`;
+      }).join("");
+      return `<table id="mainTable" style="border-collapse:collapse;width:100%">
+        <thead><tr><th style="background:#1E40AF;color:white;padding:8px 10px;font-size:${fontSize}px;text-align:left;border:1px solid #CBD5E1;min-width:70px">員工</th>${colHeaders}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    };
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>排班表 ${year} ${dateRange}</title>
 <style>
   body { font-family: -apple-system, "Microsoft JhengHei", sans-serif; margin: 0; padding: 16px; }
   h1 { font-size: 18px; color: #1E293B; margin: 0 0 4px; }
-  .meta { font-size: 12px; color: #64748B; margin-bottom: 16px; }
-  table { border-collapse: collapse; width: 100%; }
+  .meta { font-size: 12px; color: #64748B; margin-bottom: 12px; }
+  .toolbar { display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap; padding:10px 14px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; }
+  .toolbar label { font-size:13px; color:#475569; font-weight:600; }
+  .toolbar input[type=range] { width:120px; accent-color:#1E40AF; }
+  .toolbar span { font-size:13px; color:#1E40AF; font-weight:700; min-width:30px; }
+  .btn { border:none; border-radius:8px; padding:8px 16px; font-size:13px; cursor:pointer; font-weight:600; }
   @media print {
     body { padding: 8px; }
-    button { display: none !important; }
+    .no-print { display: none !important; }
     @page { size: landscape; margin: 10mm; }
   }
 </style>
 </head><body>
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-  <div>
-    <h1>📅 週排班表</h1>
-    <div class="meta">${year} 年 ${dateRange} &nbsp;·&nbsp; 共 ${activeEmployees.length} 位員工 &nbsp;·&nbsp; 列印時間：${new Date().toLocaleString("zh-TW")}</div>
-  </div>
-  <div style="display:flex;gap:8px">
-    <button onclick="window.close()" style="background:#475569;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;font-weight:600">← 關閉視窗</button>
-    <button onclick="window.print()" style="background:#1E40AF;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;font-weight:600">🖸 列印</button>
-  </div>
+<div style="margin-bottom:8px">
+  <h1>📅 週排班表</h1>
+  <div class="meta">${year} 年 ${dateRange} &nbsp;·&nbsp; 共 ${activeEmployees.length} 位員工 &nbsp;·&nbsp; 列印時間：${new Date().toLocaleString("zh-TW")}</div>
 </div>
-<table>
-  <thead><tr><th style="background:#1E40AF;color:white;padding:8px 10px;font-size:12px;text-align:left;border:1px solid #CBD5E1;min-width:70px">員工</th>${colHeaders}</tr></thead>
-  <tbody>${rows}</tbody>
-</table>
+<div class="toolbar no-print">
+  <label>字體大小：</label>
+  <input type="range" id="fontSlider" min="8" max="18" value="12" oninput="updateFont(this.value)">
+  <span id="fontVal">12px</span>
+  <div style="flex:1"></div>
+  <button class="btn" onclick="window.close()" style="background:#94A3B8;color:white">← 關閉</button>
+  <button class="btn" onclick="downloadExcel()" style="background:#16A34A;color:white">⬇ 下載 Excel</button>
+  <button class="btn" onclick="window.print()" style="background:#1E40AF;color:white">🖨 列印</button>
+</div>
+<div id="tableWrap">${buildTableHtml(12)}</div>
+<script>
+function updateFont(val) {
+  document.getElementById('fontVal').textContent = val + 'px';
+  document.getElementById('tableWrap').innerHTML = buildTable(parseInt(val));
+}
+const empData = ${JSON.stringify(activeEmployees.map(e => e.fullName))};
+const weekDatesData = ${JSON.stringify(weekDates.map(d => ({ label: WEEKDAY_LABELS[d.getDay()] + ' ' + (d.getMonth()+1) + '/' + d.getDate(), dateStr: toDateStr(d) })))};
+const scheduleData = ${JSON.stringify((() => {
+  const result: Record<number, Record<string, string>> = {};
+  for (const emp of activeEmployees) {
+    result[emp.id] = {};
+    for (const d of weekDates) {
+      const dateStr = toDateStr(d);
+      const schedule = scheduleMap[emp.id]?.[dateStr];
+      if (schedule?.leaveType && schedule.leaveMode === 'allDay') {
+        const lbl: Record<string, string> = { annual:'特休', sick:'病假', personal:'事假', marriage:'婚假', bereavement:'喪假', official:'公假', other:'假' };
+        result[emp.id][dateStr] = lbl[schedule.leaveType] ?? '假';
+      } else if (schedule?.shifts?.length) {
+        result[emp.id][dateStr] = schedule.shifts.map((sh: any) => sh.startTime + '-' + sh.endTime).join(' / ');
+      } else {
+        result[emp.id][dateStr] = '';
+      }
+    }
+  }
+  return result;
+})())};
+const empIds = ${JSON.stringify(activeEmployees.map(e => e.id))};
+function buildTable(fs) {
+  const LEAVE = { annual:'特休', sick:'病假', personal:'事假', marriage:'婚假', bereavement:'喪假', official:'公假', other:'假' };
+  let h = '<table style="border-collapse:collapse;width:100%"><thead><tr>';
+  h += '<th style="background:#1E40AF;color:white;padding:8px 10px;font-size:'+fs+'px;text-align:left;border:1px solid #CBD5E1;min-width:70px">員工</th>';
+  weekDatesData.forEach(function(d) { h += '<th style="background:#1E40AF;color:white;padding:8px 4px;font-size:'+fs+'px;text-align:center;border:1px solid #CBD5E1"><div style="font-weight:700">'+d.label+'</div></th>'; });
+  h += '</tr></thead><tbody>';
+  empIds.forEach(function(id, i) {
+    h += '<tr><td style="padding:6px 10px;border:1px solid #E2E8F0;background:#F8FAFC;font-size:'+fs+'px;font-weight:600;color:#1E293B;white-space:nowrap">'+empData[i]+'</td>';
+    weekDatesData.forEach(function(d) {
+      const val = scheduleData[id] ? scheduleData[id][d.dateStr] : '';
+      let bg = 'white', txt = '<span style="color:#CBD5E1">—</span>';
+      if (val) { bg = '#EFF6FF'; txt = '<span style="color:#1D4ED8;font-size:'+fs+'px;font-weight:600">'+val+'</span>'; }
+      h += '<td style="background:'+bg+';padding:6px 4px;text-align:center;border:1px solid #E2E8F0;min-width:60px;vertical-align:middle">'+txt+'</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  return h;
+}
+function downloadExcel() {
+  let csv = '\uFEFF員工';
+  weekDatesData.forEach(function(d) { csv += ',' + d.label; });
+  csv += '\n';
+  empIds.forEach(function(id, i) {
+    csv += empData[i];
+    weekDatesData.forEach(function(d) {
+      const val = scheduleData[id] ? (scheduleData[id][d.dateStr] || '') : '';
+      csv += ',' + val;
+    });
+    csv += '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '週排班表_${year}_${dateRange.replace(/\s/g,'')}.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+<\/script>
 </body></html>`;
     const w = window.open("", "_blank");
     if (w) { w.document.write(html); w.document.close(); }
@@ -1063,51 +1138,190 @@ function MonthTab() {
       countRow('外場', (e) => (e as any).tag === 'outdoor', '#F0FDF4', '#15803D'),
     ].join('');
 
+    // Build table HTML with dynamic font size
+    const buildMonthTableHtml = (fs: number) => {
+      const dynDayHeaders = Array.from({ length: daysCount }, (_, i) => {
+        const d = i + 1;
+        const dateStr = fmtDate(year, month, d);
+        const dow = new Date(year, month, d).getDay();
+        const isWeekend = dow === 0 || dow === 6;
+        const isToday = dateStr === new Date().toISOString().slice(0, 10);
+        const bgColor = isToday ? '#DBEAFE' : isWeekend ? '#F8FAFC' : '#1E40AF';
+        const textColor = isToday ? '#1D4ED8' : isWeekend ? '#64748B' : 'white';
+        return `<th style="background:${bgColor};color:${textColor};padding:2px 1px;font-size:${fs}px;text-align:center;border:1px solid #CBD5E1;white-space:nowrap"><div style="font-weight:700">${d}</div><div style="font-size:${fs - 1}px;margin-top:1px">${WEEKDAY_LABELS[dow]}</div></th>`;
+      }).join('');
+      const dynBuildEmpRow = (emp: typeof printEmployees[0]) => {
+        const tagLabel = TAG_LABEL[(emp as any).tag ?? ''] ?? '';
+        const cells = Array.from({ length: daysCount }, (_, i) => {
+          const d = i + 1;
+          const dateStr = fmtDate(year, month, d);
+          const dow = new Date(year, month, d).getDay();
+          const isWeekend = dow === 0 || dow === 6;
+          const dayData = scheduleMap[dateStr]?.[emp.id];
+          let cellBg = isWeekend ? '#F8FAFC' : 'white';
+          let cellContent = `<span style="color:#CBD5E1">—</span>`;
+          if (dayData?.leaveType) {
+            const lt = LEAVE_LABEL[dayData.leaveType];
+            if (lt) { cellBg = lt.bg; cellContent = `<span style="color:${lt.color};font-weight:700;font-size:${fs}px">${lt.label}</span>`; }
+          } else if (dayData?.shifts?.length) {
+            cellBg = '#EFF6FF';
+            cellContent = dayData.shifts.map((sh: ShiftEntry) =>
+              `<div style="font-size:${fs}px;color:#1D4ED8;font-weight:600;line-height:1.2">${sh.startTime}<br/>${sh.endTime}</div>`
+            ).join('<div style="border-top:1px dashed #BFDBFE;margin:1px 0"></div>');
+          }
+          return `<td style="background:${cellBg};padding:2px 1px;text-align:center;border:1px solid #E2E8F0;vertical-align:middle">${cellContent}</td>`;
+        }).join('');
+        return `<tr><td style="padding:3px 5px;border:1px solid #E2E8F0;white-space:nowrap;background:#F8FAFC;font-size:${fs}px;font-weight:600;color:#1E293B">${emp.fullName}<br/><span style="font-size:${fs - 1}px;color:#64748B;font-weight:400">${tagLabel}</span></td>${cells}</tr>`;
+      };
+      let dynRows = '';
+      const validGroups2 = monthShiftGroups.filter(g => g.name.trim());
+      const groupColors = ['#EFF6FF','#F0FDF4','#FFF7ED','#F5F3FF','#ECFEFF','#FEF2F2'];
+      const groupTextColors = ['#1D4ED8','#15803D','#C2410C','#7C3AED','#0891B2','#DC2626'];
+      const tagToGroupName2: Record<string, string> = {};
+      validGroups2.forEach(g => {
+        const n = g.name;
+        if (n.includes('內場')) tagToGroupName2['indoor'] = n;
+        else if (n.includes('外場')) tagToGroupName2['outdoor'] = n;
+        else if (n.includes('干部') || n.includes('主管')) tagToGroupName2['supervisor'] = n;
+      });
+      const renderedIds2 = new Set<number>();
+      if (validGroups2.length > 0) {
+        validGroups2.forEach((group, gi) => {
+          const bg = groupColors[gi % groupColors.length];
+          const tc = groupTextColors[gi % groupTextColors.length];
+          const matchedTag = Object.entries(tagToGroupName2).find(([, v]) => v === group.name)?.[0];
+          const groupEmps2 = matchedTag ? printEmployees.filter(e => (e as any).tag === matchedTag) : [];
+          if (groupEmps2.length > 0) {
+            dynRows += `<tr><td colspan="${daysCount + 1}" style="background:${bg};padding:3px 6px;font-size:${fs}px;font-weight:700;color:${tc};border:1px solid #CBD5E1">${group.name}</td></tr>`;
+            groupEmps2.forEach(emp => { dynRows += dynBuildEmpRow(emp); renderedIds2.add(emp.id); });
+          }
+        });
+        const ungrouped2 = printEmployees.filter(e => !renderedIds2.has(e.id));
+        if (ungrouped2.length > 0) { dynRows += `<tr><td colspan="${daysCount + 1}" style="background:#F8FAFC;padding:3px 6px;font-size:${fs}px;font-weight:700;color:#64748B;border:1px solid #CBD5E1">其他</td></tr>`; ungrouped2.forEach(emp => { dynRows += dynBuildEmpRow(emp); }); }
+      } else {
+        const tagGroups2 = [{ tag:'indoor',label:'內場',bg:'#EFF6FF',tc:'#1D4ED8' },{ tag:'outdoor',label:'外場',bg:'#F0FDF4',tc:'#15803D' },{ tag:'supervisor',label:'幹部',bg:'#FFF7ED',tc:'#C2410C' }];
+        tagGroups2.forEach(({ tag, label, bg, tc }) => {
+          const groupEmps2 = printEmployees.filter(e => (e as any).tag === tag);
+          if (groupEmps2.length > 0) { dynRows += `<tr><td colspan="${daysCount + 1}" style="background:${bg};padding:3px 6px;font-size:${fs}px;font-weight:700;color:${tc};border:1px solid #CBD5E1">${label}</td></tr>`; groupEmps2.forEach(emp => { dynRows += dynBuildEmpRow(emp); renderedIds2.add(emp.id); }); }
+        });
+        const ungrouped2 = printEmployees.filter(e => !renderedIds2.has(e.id));
+        if (ungrouped2.length > 0) { dynRows += `<tr><td colspan="${daysCount + 1}" style="background:#F8FAFC;padding:3px 6px;font-size:${fs}px;font-weight:700;color:#64748B;border:1px solid #CBD5E1">其他</td></tr>`; ungrouped2.forEach(emp => { dynRows += dynBuildEmpRow(emp); }); }
+      }
+      const dynStatsRows = [
+        { label:'上班人數', filter: () => true, bg:'#F0FDF4', color:'#15803D' },
+        { label:'內場', filter: (e: typeof printEmployees[0]) => (e as any).tag === 'indoor', bg:'#EFF6FF', color:'#1D4ED8' },
+        { label:'外場', filter: (e: typeof printEmployees[0]) => (e as any).tag === 'outdoor', bg:'#F0FDF4', color:'#15803D' },
+      ].map(({ label, filter, bg, color }) => {
+        const cells = Array.from({ length: daysCount }, (_, i) => {
+          const d = i + 1;
+          const dateStr = fmtDate(year, month, d);
+          const dow = new Date(year, month, d).getDay();
+          const isWeekend = dow === 0 || dow === 6;
+          const count = activeEmployees.filter(emp => { if (!filter(emp)) return false; const dd = scheduleMap[dateStr]?.[emp.id]; return dd?.shifts?.length && !dd?.leaveType; }).length;
+          const cellBg = isWeekend ? '#F1F5F9' : bg;
+          return `<td style="background:${cellBg};padding:2px 1px;text-align:center;border:1px solid #E2E8F0;font-size:${fs}px;font-weight:700;color:${count > 0 ? color : '#CBD5E1'}">${count > 0 ? count : '—'}</td>`;
+        }).join('');
+        return `<tr><td style="padding:3px 5px;border:1px solid #E2E8F0;background:${bg};font-size:${fs}px;font-weight:700;color:${color};white-space:nowrap">${label}</td>${cells}</tr>`;
+      }).join('');
+      return `<table id="mainTable" style="border-collapse:collapse;width:100%;table-layout:fixed"><thead><tr><th style="background:#1E40AF;color:white;padding:3px 5px;font-size:${fs}px;text-align:left;border:1px solid #CBD5E1;min-width:40px;max-width:50px">員工</th>${dynDayHeaders}</tr></thead><tbody>${dynRows}${dynStatsRows}</tbody></table>`;
+    };
+
+    // Prepare Excel data
+    const excelData = (() => {
+      const result: Record<number, Record<string, string>> = {};
+      for (const emp of printEmployees) {
+        result[emp.id] = {};
+        for (let d = 1; d <= daysCount; d++) {
+          const dateStr = fmtDate(year, month, d);
+          const dayData = scheduleMap[dateStr]?.[emp.id];
+          const LEAVE_SIMPLE: Record<string, string> = { annual:'特休', sick:'病假', personal:'事假', marriage:'婚假', bereavement:'喪假', official:'公假', other:'休假' };
+          if (dayData?.leaveType) result[emp.id][dateStr] = LEAVE_SIMPLE[dayData.leaveType] ?? '假';
+          else if (dayData?.shifts?.length) result[emp.id][dateStr] = dayData.shifts.map((sh: ShiftEntry) => sh.startTime + '-' + sh.endTime).join(' / ');
+          else result[emp.id][dateStr] = '';
+        }
+      }
+      return result;
+    })();
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${monthName}排班表</title>
 <style>
   body { font-family: -apple-system, "Microsoft JhengHei", sans-serif; margin: 0; padding: 8px; }
   h1 { font-size: 14px; color: #1E293B; margin: 0 0 2px; }
   .meta { font-size: 9px; color: #64748B; margin-bottom: 6px; }
+  .toolbar { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; padding:8px 12px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; }
+  .toolbar label { font-size:12px; color:#475569; font-weight:600; }
+  .toolbar input[type=range] { width:100px; accent-color:#1E40AF; }
+  .toolbar span { font-size:12px; color:#1E40AF; font-weight:700; min-width:28px; }
+  .btn { border:none; border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer; font-weight:600; }
   .legend { display: flex; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; align-items: center; }
   .legend-item { display: flex; align-items: center; gap: 3px; font-size: 9px; color: #475569; }
   .legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
   td, th { overflow: hidden; }
   @media print {
     html, body { width: 297mm; height: 210mm; }
     body { padding: 3mm; margin: 0; }
-    button { display: none !important; }
+    .no-print { display: none !important; }
     @page { size: A4 landscape; margin: 5mm; }
-    table { font-size: 7px; }
   }
 </style>
 </head><body>
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-  <div>
-    <h1>好好上班 —— ${monthName}排班表</h1>
-    <div class="meta">列印時間：${printDate} &nbsp; 共 ${totalEmployees} 位員工</div>
-  </div>
-  <div style="text-align:right;font-size:9px;color:#475569;line-height:1.6">
-    <div>內場 ● 外場 ● 幹部</div>
-    <div>橫向 A4 / 每格顯示班次時間</div>
-    <div style="display:flex;gap:6px;margin-top:4px;justify-content:flex-end">
-      <button onclick="window.close()" style="background:#475569;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;font-weight:600">← 關閉視窗</button>
-      <button onclick="window.print()" style="background:#1E40AF;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;font-weight:600">🖸 列印</button>
-    </div>
-  </div>
+<div style="margin-bottom:6px">
+  <h1>好好上班 —— ${monthName}排班表</h1>
+  <div class="meta">列印時間：${printDate} &nbsp; 共 ${totalEmployees} 位員工</div>
 </div>
-<div class="legend">
+<div class="toolbar no-print">
+  <label>字體大小：</label>
+  <input type="range" id="fontSlider" min="6" max="14" value="8" oninput="updateFont(this.value)">
+  <span id="fontVal">8px</span>
+  <div style="flex:1"></div>
+  <button class="btn" onclick="window.close()" style="background:#94A3B8;color:white">← 關閉</button>
+  <button class="btn" onclick="downloadExcel()" style="background:#16A34A;color:white">⬇ 下載 Excel</button>
+  <button class="btn" onclick="window.print()" style="background:#1E40AF;color:white">🖨 列印</button>
+</div>
+<div class="legend no-print">
   <div class="legend-item"><span class="legend-dot" style="background:#EFF6FF;border:1px solid #BFDBFE"></span> 正常上班</div>
   <div class="legend-item"><span class="legend-dot" style="background:#FEF2F2;border:1px solid #FECACA"></span> 請假</div>
-  <div class="legend-item"><span class="legend-dot" style="background:#F8FAFC;border:1px solid #E2E8F0"></span> 休假日（六日）</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#F8FAFC;border:1px solid #E2E8F0"></span> 休假日</div>
   <div class="legend-item"><span class="legend-dot" style="background:#DBEAFE;border:1px solid #93C5FD"></span> 今日</div>
 </div>
-<table>
-  <thead><tr><th style="background:#1E40AF;color:white;padding:3px 5px;font-size:9px;text-align:left;border:1px solid #CBD5E1;min-width:40px;max-width:50px">員工</th>${dayHeaders}</tr></thead>
-  <tbody>${rows}${statsRows}</tbody>
-</table>
-<div style="margin-top:8px;font-size:10px;color:#94A3B8;text-align:right">＊本表為示意預覽，實際列印將使用資料庫即時資料</div>
+<div id="tableWrap">${buildMonthTableHtml(8)}</div>
+<script>
+const empIds = ${JSON.stringify(printEmployees.map(e => e.id))};
+const empNames = ${JSON.stringify(printEmployees.map(e => e.fullName))};
+const daysCount = ${daysCount};
+const yearNum = ${year};
+const monthNum = ${month + 1};
+const excelData = ${JSON.stringify(excelData)};
+const dayLabels = ${JSON.stringify(Array.from({ length: daysCount }, (_, i) => { const d = i + 1; const dow = new Date(year, month, d).getDay(); return d + '/' + ['\u65e5','\u4e00','\u4e8c','\u4e09','\u56db','\u4e94','\u516d'][dow]; }))};
+function fmtD(d) { return yearNum + '-' + String(monthNum).padStart(2,'0') + '-' + String(d).padStart(2,'0'); }
+function updateFont(val) {
+  document.getElementById('fontVal').textContent = val + 'px';
+  fetch('').then(); // dummy
+  const wrap = document.getElementById('tableWrap');
+  const tbl = wrap.querySelector('table');
+  if (tbl) { tbl.querySelectorAll('td,th').forEach(function(el) { el.style.fontSize = val + 'px'; }); }
+}
+function downloadExcel() {
+  let csv = '\uFEFF\u54e1\u5de5';
+  dayLabels.forEach(function(l) { csv += ',' + l; });
+  csv += '\n';
+  empIds.forEach(function(id, i) {
+    csv += empNames[i];
+    for (var d = 1; d <= daysCount; d++) {
+      var dateStr = fmtD(d);
+      var val = excelData[id] ? (excelData[id][dateStr] || '') : '';
+      csv += ',' + val;
+    }
+    csv += '\n';
+  });
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = '${year}\u5e74${month + 1}\u6708\u6392\u73ed\u8868.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+<\/script>
 </body></html>`;
     const w = window.open('', '_blank');
     if (w) { w.document.write(html); w.document.close(); }
