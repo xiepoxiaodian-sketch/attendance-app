@@ -107,8 +107,11 @@ function WeekTab() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `週排班表_${year}_${dateRange.replace(/\s/g, "")}.csv`;
+    a.style.display = "none";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   // 解析分組設定
@@ -890,8 +893,11 @@ function MonthTab() {
     const a = document.createElement('a');
     a.href = url;
     a.download = `${year}年${month + 1}月排班表.csv`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const daysInMonth = getDaysInMonth(year, month);
