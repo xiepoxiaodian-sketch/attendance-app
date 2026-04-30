@@ -121,7 +121,7 @@ async function cronTick() {
     const empMap = new Map(allEmployees.map((e) => [e.id, e]));
 
     for (const sched of todaySchedules) {
-      const emp = empMap.get(sched.employeeId as number);
+      const emp = empMap.get(sched.employeeId);
       if (!emp || !emp.isActive) continue;
 
       // Skip admin accounts
@@ -131,7 +131,7 @@ async function cronTick() {
       if (!shifts || !shifts.length) continue;
 
       // Get today's attendance for this employee
-      const attRecords = await db.getAttendanceByEmployeeAndDate(sched.employeeId as number, today);
+      const attRecords = await db.getAttendanceByEmployeeAndDate(sched.employeeId, today);
       const hasClockedIn = attRecords.some(r => r.clockInTime != null);
 
       for (const shift of shifts) {
@@ -143,7 +143,7 @@ async function cronTick() {
           const reminderTarget = shiftStartMins - 5;
           if (nowMins === reminderTarget && !sentToday.has(reminderKey)) {
             sentToday.add(reminderKey);
-            await sendPushToEmployee(sched.employeeId as number, {
+            await sendPushToEmployee(sched.employeeId, {
               title: "⏰ 打卡提醒",
               body: `${emp.fullName}，您的班次「${shift.label || shift.startTime}」將在 5 分鐘後開始，請記得打卡！`,
             });

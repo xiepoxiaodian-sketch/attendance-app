@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,7 +10,6 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
-import { useCallback, useEffect, useState } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
 import { ConfirmDialog, AlertDialog } from "@/components/confirm-dialog";
@@ -132,7 +132,6 @@ export default function AdminEmployeesScreen() {
   const [formError, setFormError] = useState("");
   const [alertDialog, setAlertDialog] = useState<{ title: string; message: string } | null>(null);
   const [confirmDeleteEmp, setConfirmDeleteEmp] = useState<Employee | null>(null);
-  const [displayedEmployees, setDisplayedEmployees] = useState<Employee[]>([]);
 
   const { data: employees, refetch, isLoading } = trpc.employees.list.useQuery();
 
@@ -167,22 +166,11 @@ export default function AdminEmployeesScreen() {
     onSuccess: () => refetch(),
   });
 
-  const reorderMutation = trpc.employees.reorder.useMutation({
-    onSuccess: () => refetch(),
-  });
-
-  // 同步顯示的員工列表
-  useEffect(() => {
-    if (employees) {
-      setDisplayedEmployees([...employees]);
-    }
-  }, [employees]);
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
-  }, [refetch]);
+  }, []);
 
   const handleCreate = () => {
     setFormError("");
@@ -242,23 +230,7 @@ export default function AdminEmployeesScreen() {
     resetPasswordMutation.mutate({ id: selectedEmployee.id, newPassword });
   };
 
-  const handleMoveUp = (index: number) => {
-    if (index === 0) return;
-    const newList = [...displayedEmployees];
-    [newList[index], newList[index - 1]] = [newList[index - 1], newList[index]];
-    setDisplayedEmployees(newList);
-    reorderMutation.mutate({ orderedIds: newList.map(e => e.id) });
-  };
-
-  const handleMoveDown = (index: number) => {
-    if (index === displayedEmployees.length - 1) return;
-    const newList = [...displayedEmployees];
-    [newList[index], newList[index + 1]] = [newList[index + 1], newList[index]];
-    setDisplayedEmployees(newList);
-    reorderMutation.mutate({ orderedIds: newList.map(e => e.id) });
-  };
-
-  const filteredEmployees = displayedEmployees.filter(e =>
+  const filteredEmployees = (employees ?? []).filter(e =>
     !searchQuery ||
     e.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.username.toLowerCase().includes(searchQuery.toLowerCase())
@@ -330,7 +302,7 @@ export default function AdminEmployeesScreen() {
               </Text>
             </View>
           }
-          renderItem={({ item, index }) => (
+          renderItem={({ item }) => (
             <View style={{
               backgroundColor: "white",
               borderRadius: 12,
@@ -390,22 +362,22 @@ export default function AdminEmployeesScreen() {
               </View>
 
               {/* Action Buttons */}
-              <View style={{ flexDirection: "row", marginTop: 12, gap: 8, flexWrap: "wrap" }}>
+              <View style={{ flexDirection: "row", marginTop: 12, gap: 8 }}>
                 <TouchableOpacity
                   onPress={() => handleEdit(item)}
-                  style={{ flex: 1, minWidth: 70, backgroundColor: "#EFF6FF", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}
+                  style={{ flex: 1, backgroundColor: "#EFF6FF", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}
                 >
                   <Text style={{ color: "#2563EB", fontSize: 13, fontWeight: "600" }}>編輯</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => { setSelectedEmployee(item); setNewPassword(""); setShowResetModal(true); }}
-                  style={{ flex: 1, minWidth: 70, backgroundColor: "#F0FDF4", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}
+                  style={{ flex: 1, backgroundColor: "#F0FDF4", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}
                 >
                   <Text style={{ color: "#16A34A", fontSize: 13, fontWeight: "600" }}>重置密碼</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => handleToggleActive(item)}
-                  style={{ flex: 1, minWidth: 70, backgroundColor: item.isActive ? "#FFFBEB" : "#F0FDF4", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}
+                  style={{ flex: 1, backgroundColor: item.isActive ? "#FFFBEB" : "#F0FDF4", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}
                 >
                   <Text style={{ color: item.isActive ? "#D97706" : "#16A34A", fontSize: 13, fontWeight: "600" }}>
                     {item.isActive ? "停用" : "啟用"}
@@ -413,27 +385,9 @@ export default function AdminEmployeesScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => handleDelete(item)}
-                  style={{ flex: 1, minWidth: 70, backgroundColor: "#FEF2F2", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}
+                  style={{ flex: 1, backgroundColor: "#FEF2F2", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}
                 >
                   <Text style={{ color: "#DC2626", fontSize: 13, fontWeight: "600" }}>刪除</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Sort Buttons */}
-              <View style={{ flexDirection: "row", marginTop: 8, gap: 8 }}>
-                <TouchableOpacity
-                  onPress={() => handleMoveUp(index!)}
-                  disabled={index === 0}
-                  style={{ flex: 1, backgroundColor: index === 0 ? "#F1F5F9" : "#E0E7FF", borderRadius: 8, paddingVertical: 7, alignItems: "center", opacity: index === 0 ? 0.5 : 1 }}
-                >
-                  <Text style={{ color: index === 0 ? "#94A3B8" : "#4F46E5", fontSize: 13, fontWeight: "600" }}>↑ 上移</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleMoveDown(index!)}
-                  disabled={index === displayedEmployees.length - 1}
-                  style={{ flex: 1, backgroundColor: index === displayedEmployees.length - 1 ? "#F1F5F9" : "#E0E7FF", borderRadius: 8, paddingVertical: 7, alignItems: "center", opacity: index === displayedEmployees.length - 1 ? 0.5 : 1 }}
-                >
-                  <Text style={{ color: index === displayedEmployees.length - 1 ? "#94A3B8" : "#4F46E5", fontSize: 13, fontWeight: "600" }}>↓ 下移</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -444,31 +398,57 @@ export default function AdminEmployeesScreen() {
       {/* Create/Edit Modal */}
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
-          <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 40 }}>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: "#1E293B", marginBottom: 20 }}>
+          {/* Modal Header */}
+          <View style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: "#E2E8F0",
+            backgroundColor: "white",
+          }}>
+            <TouchableOpacity onPress={() => setShowModal(false)}>
+              <Text style={{ color: "#64748B", fontSize: 16 }}>取消</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B" }}>
               {selectedEmployee ? "編輯員工" : "新增員工"}
             </Text>
+            <TouchableOpacity
+              onPress={selectedEmployee ? handleUpdate : handleCreate}
+              disabled={createMutation.isPending || updateMutation.isPending}
+            >
+              {createMutation.isPending || updateMutation.isPending ? (
+                <ActivityIndicator size="small" color="#2563EB" />
+              ) : (
+                <Text style={{ color: "#2563EB", fontSize: 16, fontWeight: "700" }}>
+                  {selectedEmployee ? "更新" : "建立"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
-            {formError && (
-              <View style={{ backgroundColor: "#FEE2E2", borderRadius: 10, padding: 12, marginBottom: 16 }}>
-                <Text style={{ color: "#DC2626", fontSize: 13 }}>{formError}</Text>
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+            {formError ? (
+              <View style={{ backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#FECACA", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                <Text style={{ color: "#EF4444", fontSize: 13 }}>{formError}</Text>
               </View>
-            )}
+            ) : null}
 
             <FormField
               label="帳號"
               value={form.username}
-              onChangeText={(v) => setForm({ ...form, username: v })}
-              placeholder="輸入帳號"
+              onChangeText={(v) => setForm(f => ({ ...f, username: v }))}
+              placeholder="登入帳號"
               disabled={!!selectedEmployee}
             />
 
             {!selectedEmployee && (
               <FormField
-                label="密碼"
+                label="初始密碼"
                 value={form.password}
-                onChangeText={(v) => setForm({ ...form, password: v })}
-                placeholder="輸入密碼（至少 6 個字元）"
+                onChangeText={(v) => setForm(f => ({ ...f, password: v }))}
+                placeholder="至少 6 個字元"
                 secure
               />
             )}
@@ -476,119 +456,104 @@ export default function AdminEmployeesScreen() {
             <FormField
               label="姓名"
               value={form.fullName}
-              onChangeText={(v) => setForm({ ...form, fullName: v })}
-              placeholder="輸入姓名"
-            />
-
-            <SegmentControl
-              label="角色"
-              options={[
-                { label: "員工", value: "employee" },
-                { label: "管理員", value: "admin" },
-              ]}
-              value={form.role}
-              onChange={(v) => setForm({ ...form, role: v as "admin" | "employee" })}
-            />
-
-            <SegmentControl
-              label="員工類型"
-              options={[
-                { label: "全職", value: "full_time" },
-                { label: "兼職", value: "part_time" },
-              ]}
-              value={form.employeeType}
-              onChange={(v) => setForm({ ...form, employeeType: v as "full_time" | "part_time" })}
+              onChangeText={(v) => setForm(f => ({ ...f, fullName: v }))}
+              placeholder="員工姓名"
             />
 
             <FormField
-              label="職位"
+              label="職稱"
               value={form.jobTitle}
-              onChangeText={(v) => setForm({ ...form, jobTitle: v })}
-              placeholder="輸入職位（可選）"
+              onChangeText={(v) => setForm(f => ({ ...f, jobTitle: v }))}
+              placeholder="例：工程師、店員"
             />
 
             <FormField
               label="電話"
               value={form.phone}
-              onChangeText={(v) => setForm({ ...form, phone: v })}
-              placeholder="輸入電話（可選）"
+              onChangeText={(v) => setForm(f => ({ ...f, phone: v }))}
+              placeholder="聯絡電話"
               keyboardType="phone-pad"
             />
 
             <SegmentControl
-              label="標籤"
-              options={[
-                { label: "無", value: "" },
-                { label: "內場", value: "indoor" },
-                { label: "外場", value: "outdoor" },
-                { label: "幹部", value: "supervisor" },
-              ]}
-              value={form.tag}
-              onChange={(v) => setForm({ ...form, tag: v as "" | "indoor" | "outdoor" | "supervisor" })}
+              label="角色"
+              options={[{ label: "員工", value: "employee" }, { label: "管理員", value: "admin" }]}
+              value={form.role}
+              onChange={(v) => setForm(f => ({ ...f, role: v as "admin" | "employee" }))}
             />
 
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
-              <TouchableOpacity
-                onPress={() => setShowModal(false)}
-                style={{ flex: 1, backgroundColor: "#F1F5F9", borderRadius: 10, paddingVertical: 12, alignItems: "center" }}
-              >
-                <Text style={{ color: "#64748B", fontWeight: "600", fontSize: 15 }}>取消</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={selectedEmployee ? handleUpdate : handleCreate}
-                style={{ flex: 1, backgroundColor: "#2563EB", borderRadius: 10, paddingVertical: 12, alignItems: "center" }}
-              >
-                <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>
-                  {selectedEmployee ? "更新" : "建立"}
-                </Text>
-              </TouchableOpacity>
+            <SegmentControl
+              label="類型"
+              options={[{ label: "全職", value: "full_time" }, { label: "兼職", value: "part_time" }]}
+              value={form.employeeType}
+              onChange={(v) => setForm(f => ({ ...f, employeeType: v as "full_time" | "part_time" }))}
+            />
+
+            {/* Tag */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 }}>標籤</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {[{ label: "無", value: "" }, { label: "內場", value: "indoor" }, { label: "外場", value: "outdoor" }, { label: "幹部", value: "supervisor" }].map(opt => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    onPress={() => setForm(f => ({ ...f, tag: opt.value as "" | "indoor" | "outdoor" | "supervisor" }))}
+                    style={{
+                      flex: 1, paddingVertical: 9, alignItems: "center", borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: form.tag === opt.value ? (opt.value ? TAG_LABELS[opt.value]?.text ?? "#2563EB" : "#2563EB") : "#E2E8F0",
+                      backgroundColor: form.tag === opt.value ? (opt.value ? TAG_LABELS[opt.value]?.bg ?? "#EFF6FF" : "#EFF6FF") : "white",
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: form.tag === opt.value ? (opt.value ? TAG_LABELS[opt.value]?.text ?? "#2563EB" : "#2563EB") : "#64748B" }}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </ScrollView>
         </View>
       </Modal>
 
       {/* Reset Password Modal */}
-      <Modal visible={showResetModal} animationType="fade" transparent>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 20 }}>
-          <View style={{ backgroundColor: "white", borderRadius: 16, padding: 20, width: "100%", maxWidth: 400 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#1E293B", marginBottom: 12 }}>重置密碼</Text>
-            <Text style={{ fontSize: 14, color: "#64748B", marginBottom: 16 }}>
-              為 {selectedEmployee?.fullName} 設定新密碼
-            </Text>
+      <Modal visible={showResetModal} animationType="slide" presentationStyle="formSheet">
+        <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+          <View style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: "#E2E8F0",
+            backgroundColor: "white",
+          }}>
+            <TouchableOpacity onPress={() => setShowResetModal(false)}>
+              <Text style={{ color: "#64748B", fontSize: 16 }}>取消</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B" }}>重置密碼</Text>
+            <TouchableOpacity onPress={handleResetPassword} disabled={resetPasswordMutation.isPending}>
+              {resetPasswordMutation.isPending ? (
+                <ActivityIndicator size="small" color="#2563EB" />
+              ) : (
+                <Text style={{ color: "#2563EB", fontSize: 16, fontWeight: "700" }}>確認</Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
-            <TextInput
+          <View style={{ padding: 16 }}>
+            <Text style={{ fontSize: 14, color: "#64748B", marginBottom: 16 }}>
+              為 <Text style={{ fontWeight: "700", color: "#1E293B" }}>{selectedEmployee?.fullName}</Text> 設定新密碼
+            </Text>
+            <FormField
+              label="新密碼"
               value={newPassword}
               onChangeText={setNewPassword}
-              placeholder="輸入新密碼（至少 6 個字元）"
-              secureTextEntry
-              style={{
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderRadius: 10,
-                paddingHorizontal: 14,
-                paddingVertical: 11,
-                fontSize: 15,
-                color: "#1E293B",
-                marginBottom: 16,
-              }}
-              placeholderTextColor="#94A3B8"
+              placeholder="至少 6 個字元"
+              secure
             />
-
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity
-                onPress={() => setShowResetModal(false)}
-                style={{ flex: 1, backgroundColor: "#F1F5F9", borderRadius: 10, paddingVertical: 12, alignItems: "center" }}
-              >
-                <Text style={{ color: "#64748B", fontWeight: "600", fontSize: 15 }}>取消</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleResetPassword}
-                style={{ flex: 1, backgroundColor: "#16A34A", borderRadius: 10, paddingVertical: 12, alignItems: "center" }}
-              >
-                <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>確認</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}>
+              重置後員工下次登入時需重新完成設定流程
+            </Text>
           </View>
         </View>
       </Modal>

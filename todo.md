@@ -378,12 +378,3 @@
 - [x] Dockerfile 加入 .build-version 讀取並注入 APP_VERSION 環境變數
 
 - [ ] 將所有列印功能改為直接下載 Excel（周排班、月總覽、排班總覽、月排班）
-
-## 自訂拖拽排序功能
-- [x] 資料庫 schema：employees 表已有 sortOrder 欄位（排序位置）
-- [x] 資料庫 schema：schedules 表加入 sortOrder 欄位（排班排序位置）
-- [x] 後端 API：employees.reorder（批量更新排序位置）
-- [x] 後端 API：schedules.reorder（批量更新排班排序位置）
-- [x] 前端：員工管理頁面加入上下移動按鈕排序功能
-- [x] 前端：排班管理頁面加入上下移動按鈕排序功能
-- [x] 前端：排序結果即時保存到資料庫
