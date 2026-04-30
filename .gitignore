@@ -2,6 +2,9 @@
 
 # dependencies
 node_modules/
+# Allow dist-web/assets (contains fonts and images needed for production)
+!dist-web/assets/
+!dist-web/assets/**
 
 # Expo
 .expo/

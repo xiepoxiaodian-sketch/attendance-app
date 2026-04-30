@@ -8,6 +8,118 @@
       "when": 1763372440610,
       "tag": "0000_elite_eternals",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1775172875567,
+      "tag": "0001_special_hannibal_king",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1775178877446,
+      "tag": "0002_past_the_fury",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1775298416557,
+      "tag": "0003_serious_magma",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1775298597278,
+      "tag": "0004_fat_northstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1775301813122,
+      "tag": "0005_rainy_sinister_six",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1775311082466,
+      "tag": "0006_goofy_bruce_banner",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1775314887528,
+      "tag": "0007_legal_purple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1775327293881,
+      "tag": "0008_fearless_spacker_dave",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1775328002076,
+      "tag": "0009_chilly_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1775328857636,
+      "tag": "0010_naive_scrambler",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1775404774208,
+      "tag": "0011_regular_warlock",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1775404915458,
+      "tag": "0012_silky_loners",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1775405830762,
+      "tag": "0013_quiet_rick_jones",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1775457774083,
+      "tag": "0014_cultured_dark_beast",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "5",
+      "when": 1775498377467,
+      "tag": "0015_ambiguous_thunderbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1775759534167,
+      "tag": "0016_complex_ronan",
+      "breakpoints": true
     }
   ]
 }

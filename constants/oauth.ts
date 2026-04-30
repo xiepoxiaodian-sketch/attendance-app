@@ -28,21 +28,29 @@ export const API_BASE_URL = env.apiBaseUrl;
  * Get the API base URL, deriving from current hostname if not set.
  * Metro runs on 8081, API server runs on 3000.
  * URL pattern: https://PORT-sandboxid.region.domain
+ *
+ * IMPORTANT: In production (Railway), we use relative URLs ("") so the
+ * frontend calls the same server it's served from. Only in the Manus
+ * sandbox dev environment do we need to switch port 8081 -> 3000.
  */
 export function getApiBaseUrl(): string {
-  // If API_BASE_URL is set, use it
-  if (API_BASE_URL) {
-    return API_BASE_URL.replace(/\/$/, "");
-  }
-
-  // On web, derive from current hostname by replacing port 8081 with 3000
+  // On web, check if we're in the Manus sandbox dev environment
   if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
     const { protocol, hostname } = window.location;
-    // Pattern: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain
-    const apiHostname = hostname.replace(/^8081-/, "3000-");
-    if (apiHostname !== hostname) {
+    // Sandbox pattern: 8081-sandboxid.region.manus.computer
+    // In this case, derive API URL by replacing port 8081 with 3000
+    if (/^8081-/.test(hostname)) {
+      const apiHostname = hostname.replace(/^8081-/, "3000-");
       return `${protocol}//${apiHostname}`;
     }
+    // In production (Railway or any other host), use relative URL
+    // so the API is served from the same origin
+    return "";
+  }
+
+  // For native apps: use the API_BASE_URL env var if set
+  if (API_BASE_URL) {
+    return API_BASE_URL.replace(/\/$/, "");
   }
 
   // Fallback to empty (will use relative URL)
