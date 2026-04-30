@@ -1,1 +1,0 @@
-ALTER TABLE `devices` ADD `status` enum('approved','pending','rejected') DEFAULT 'approved' NOT NULL;

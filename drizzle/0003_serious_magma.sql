@@ -1,1 +1,0 @@
-ALTER TABLE `workShifts` ADD `sortOrder` int DEFAULT 0 NOT NULL;

@@ -1,15 +1,11 @@
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
-import fs from "fs";
 import net from "net";
-import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { startCronJobs } from "../cron-jobs";
-import attendanceSsrRouter from "../attendance-ssr";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -60,259 +56,9 @@ async function startServer() {
 
   registerOAuthRoutes(app);
 
-  // SSR attendance page
-  app.use(attendanceSsrRouter);
-
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });
   });
-
-  // Version endpoint: returns current build version for PWA update detection
-  app.get("/api/version", (_req, res) => {
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    res.json({
-      version: process.env.APP_VERSION || "1.0.0",
-      buildTime: process.env.BUILD_TIME || new Date().toISOString(),
-    });
-  });
-
-  // Diagnostic endpoint: check actual column types in DB
-  app.get("/api/db-check", async (req, res) => {
-    try {
-      const mysql = await import("mysql2/promise");
-      const conn = await mysql.createConnection(process.env.DATABASE_URL!);
-      const tableName = (req.query.table as string) || 'attendance';
-      const [rows] = await conn.execute(
-        `SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
-        [tableName]
-      ) as any[];
-      await conn.end();
-      res.json({ ok: true, table: tableName, columns: rows });
-    } catch (err: any) {
-      res.status(500).json({ ok: false, error: err.message });
-    }
-  });
-
-  // Migration endpoint: run all pending schema migrations
-  app.post("/api/migrate", async (_req, res) => {
-    try {
-      const mysql = await import("mysql2/promise");
-      const conn = await mysql.createConnection(process.env.DATABASE_URL!);
-      const results: string[] = [];
-
-      // Helper: check if column exists
-      async function hasColumn(table: string, column: string): Promise<boolean> {
-        const [rows] = await conn.execute(
-          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
-          [table, column]
-        ) as any[];
-        return rows.length > 0;
-      }
-      // Helper: check if table exists
-      async function hasTable(table: string): Promise<boolean> {
-        const [rows] = await conn.execute(
-          `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
-          [table]
-        ) as any[];
-        return rows.length > 0;
-      }
-
-      // 0009: devices.status column
-      if (!(await hasColumn('devices', 'status'))) {
-        await conn.execute(`ALTER TABLE devices ADD COLUMN status ENUM('approved','pending','rejected') NOT NULL DEFAULT 'approved'`);
-        results.push('Added devices.status');
-      }
-
-      // 0011: employees.lineUserId column
-      if (!(await hasColumn('employees', 'lineUserId'))) {
-        await conn.execute(`ALTER TABLE employees ADD COLUMN lineUserId varchar(64)`);
-        results.push('Added employees.lineUserId');
-      }
-
-      // 0012: lineOtpCodes table
-      if (!(await hasTable('lineOtpCodes'))) {
-        await conn.execute(`CREATE TABLE lineOtpCodes (
-          id int AUTO_INCREMENT NOT NULL,
-          employeeId int NOT NULL,
-          code varchar(6) NOT NULL,
-          expiresAt timestamp NOT NULL,
-          used boolean NOT NULL DEFAULT false,
-          createdAt timestamp NOT NULL DEFAULT (now()),
-          CONSTRAINT lineOtpCodes_id PRIMARY KEY(id)
-        )`);
-        results.push('Created lineOtpCodes table');
-      }
-
-      // 0013: attendance.clockInPhoto and clockOutPhoto columns
-      if (!(await hasColumn('attendance', 'clockInPhoto'))) {
-        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockInPhoto text`);
-        results.push('Added attendance.clockInPhoto');
-      }
-      if (!(await hasColumn('attendance', 'clockOutPhoto'))) {
-        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockOutPhoto text`);
-        results.push('Added attendance.clockOutPhoto');
-      }
-
-      // 0014: upgrade clockInPhoto/clockOutPhoto to mediumtext (force if not already mediumtext)
-      {
-        const [colRows] = await conn.execute(
-          `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' AND COLUMN_NAME = 'clockInPhoto'`
-        ) as any[];
-        const currentType = colRows.length > 0 ? String(colRows[0].COLUMN_TYPE).toLowerCase() : '';
-        if (currentType && currentType !== 'mediumtext' && currentType !== 'longtext') {
-          await conn.execute(`ALTER TABLE attendance MODIFY COLUMN clockInPhoto mediumtext`);
-          results.push(`Upgraded attendance.clockInPhoto from ${currentType} to mediumtext`);
-        }
-      }
-      {
-        const [colRows] = await conn.execute(
-          `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' AND COLUMN_NAME = 'clockOutPhoto'`
-        ) as any[];
-        const currentType = colRows.length > 0 ? String(colRows[0].COLUMN_TYPE).toLowerCase() : '';
-        if (currentType && currentType !== 'mediumtext' && currentType !== 'longtext') {
-          await conn.execute(`ALTER TABLE attendance MODIFY COLUMN clockOutPhoto mediumtext`);
-          results.push(`Upgraded attendance.clockOutPhoto from ${currentType} to mediumtext`);
-        }
-      }
-
-      // Ensure attendance table has all required columns (including location text fields)
-      if (!(await hasColumn('attendance', 'clockInLocation'))) {
-        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockInLocation varchar(255)`);
-        results.push('Added attendance.clockInLocation');
-      }
-      if (!(await hasColumn('attendance', 'clockOutLocation'))) {
-        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockOutLocation varchar(255)`);
-        results.push('Added attendance.clockOutLocation');
-      }
-      if (!(await hasColumn('attendance', 'clockInLat'))) {
-        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockInLat decimal(10,8)`);
-        results.push('Added attendance.clockInLat');
-      }
-      if (!(await hasColumn('attendance', 'clockInLng'))) {
-        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockInLng decimal(11,8)`);
-        results.push('Added attendance.clockInLng');
-      }
-      if (!(await hasColumn('attendance', 'clockOutLat'))) {
-        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockOutLat decimal(10,8)`);
-        results.push('Added attendance.clockOutLat');
-      }
-      if (!(await hasColumn('attendance', 'clockOutLng'))) {
-        await conn.execute(`ALTER TABLE attendance ADD COLUMN clockOutLng decimal(11,8)`);
-        results.push('Added attendance.clockOutLng');
-      }
-      if (!(await hasColumn('attendance', 'shiftLabel'))) {
-        await conn.execute(`ALTER TABLE attendance ADD COLUMN shiftLabel varchar(64)`);
-        results.push('Added attendance.shiftLabel');
-      }
-      // Ensure employees table has tag column
-      if (!(await hasColumn('employees', 'tag'))) {
-        await conn.execute(`ALTER TABLE employees ADD COLUMN tag varchar(64)`);
-        results.push('Added employees.tag');
-      }
-      // 0016: punchCorrections.screenshotBase64 column
-      if (!(await hasColumn('punchCorrections', 'screenshotBase64'))) {
-        await conn.execute(`ALTER TABLE punchCorrections ADD COLUMN screenshotBase64 longtext`);
-        results.push('Added punchCorrections.screenshotBase64');
-      }
-
-      // 0017: attendance.status ENUM add late_and_early
-      {
-        const [enumRows] = await conn.execute(
-          `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance' AND COLUMN_NAME = 'status'`
-        ) as any[];
-        const enumType = enumRows.length > 0 ? String(enumRows[0].COLUMN_TYPE) : '';
-        if (!enumType.includes('late_and_early')) {
-          await conn.execute(`ALTER TABLE attendance MODIFY COLUMN status ENUM('normal','late','early_leave','absent','late_and_early') NOT NULL DEFAULT 'normal'`);
-          results.push('Updated attendance.status ENUM to include late_and_early');
-        }
-      }
-
-      await conn.end();
-      res.json({ ok: true, applied: results, message: results.length > 0 ? results.join(', ') : 'All up to date' });
-    } catch (err: any) {
-      res.status(500).json({ ok: false, error: err.message });
-    }
-  });
-
-  // Excel export endpoint - server-side xlsx generation
-  app.get("/api/export/excel", async (req, res) => {
-    try {
-      const XLSX = await import("xlsx");
-      const { type, startDate, endDate } = req.query as Record<string, string>;
-      const dbModule = await import("../db");
-
-      let headers: string[] = [];
-      let rows: string[][] = [];
-      let filename = "report.xlsx";
-
-      if (type === "attendance_detail") {
-        const records = await dbModule.getAllAttendance(startDate, endDate);
-        headers = ["日期", "員工姓名", "帳號", "上班時間", "下班時間", "班次", "狀態", "備註"];
-        const STATUS_LABELS: Record<string, string> = { normal: "正常", late: "遲到", early_leave: "早退", absent: "缺勤" };
-        // 台灣時間 UTC+8
-        const toTW = (v: unknown) => { if (!v) return null; const d = new Date(v as string); return new Date(d.getTime() + 8 * 60 * 60 * 1000); };
-        const fmt = (v: unknown) => { const d = toTW(v); if (!d) return ""; return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")} ${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")}`; };
-        const fmtD = (v: unknown) => { const d = toTW(v); if (!d) return ""; return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`; };
-        rows = records.map((r: any) => [fmtD(r.date), r.employeeName ?? "", r.employeeUsername ?? "", fmt(r.clockInTime), fmt(r.clockOutTime), r.shiftLabel ?? "", STATUS_LABELS[r.status ?? ""] ?? r.status ?? "", r.note ?? ""]);
-        filename = `打卡明細_${startDate ?? ""}_${endDate ?? ""}.xlsx`;
-      } else if (type === "leave_records") {
-        const records = await dbModule.getAllLeaveRequests("approved");
-        headers = ["員工姓名", "假別", "開始日期", "結束日期", "天數", "申請時間", "備註"];
-        const LEAVE_LABELS: Record<string, string> = { annual: "特休", sick: "病假", personal: "事假", marriage: "婚假", bereavement: "喪假", official: "公假", other: "休假" };
-        const fmtD = (v: unknown) => { if (!v) return ""; const d = new Date(v as string); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
-        const fmt = (v: unknown) => { if (!v) return ""; const d = new Date(v as string); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
-        rows = (records as any[]).map(l => [l.employeeName ?? "", LEAVE_LABELS[l.leaveType ?? ""] ?? l.leaveType ?? "", fmtD(l.startDate), fmtD(l.endDate), String(l.totalDays ?? ""), fmt(l.createdAt), l.reason ?? ""]);
-        filename = `請假紀錄_${startDate ?? ""}_${endDate ?? ""}.xlsx`;
-      }
-
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map((h, i) => ({ wch: Math.min(Math.max(Math.max(h.length, ...rows.map(r => (r[i] ?? "").length)) + 2, 10), 40) }));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "資料");
-      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-      res.setHeader("Cache-Control", "no-cache");
-      res.send(buf);
-    } catch (err: any) {
-      console.error("[Excel Export]", err);
-      res.status(500).json({ ok: false, error: err.message });
-    }
-  });
-
-  // LINE Bot Webhook endpoint
-  app.post("/api/line/webhook", async (req, res) => {
-    try {
-      const { lineWebhookHandler } = await import("../line-bot");
-      await lineWebhookHandler(req, res);
-    } catch (err: any) {
-      console.error("[LINE Webhook] Error:", err);
-      res.status(500).json({ ok: false });
-    }
-  });
-
-  // Serve static frontend files in production
-  const distWebPath = path.join(process.cwd(), "dist-web");
-  if (process.env.NODE_ENV === "production") {
-    // JS/CSS assets have content-hash in filename → long cache
-    app.use("/_expo", express.static(path.join(distWebPath, "_expo"), {
-      maxAge: "1y",
-      immutable: true,
-    }));
-    // HTML pages must NOT be cached so new deploys take effect immediately
-    app.use(express.static(distWebPath, {
-      setHeaders(res, filePath) {
-        if (filePath.endsWith(".html")) {
-          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-          res.setHeader("Pragma", "no-cache");
-          res.setHeader("Expires", "0");
-        }
-      },
-    }));
-  }
 
   app.use(
     "/api/trpc",
@@ -321,35 +67,6 @@ async function startServer() {
       createContext,
     }),
   );
-
-  // SPA fallback: serve route-specific .html first, then index.html for all non-API routes in production
-  if (process.env.NODE_ENV === "production") {
-    const noCache = (res: any) => {
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.setHeader("Pragma", "no-cache");
-      res.setHeader("Expires", "0");
-    };
-    app.get("*", (req, res) => {
-      if (req.path.startsWith("/api")) return;
-      // SSR routes - skip SPA fallback
-      if (req.path.startsWith("/attendance-v2")) return;
-      // Try exact path + .html (e.g. /admin/employees -> dist-web/admin/employees.html)
-      const htmlPath = path.join(distWebPath, req.path.replace(/\/$/, "") + ".html");
-      if (fs.existsSync(htmlPath)) {
-        noCache(res);
-        return res.sendFile(htmlPath);
-      }
-      // Try path/index.html (e.g. /admin -> dist-web/admin/index.html)
-      const indexPath = path.join(distWebPath, req.path.replace(/\/$/, ""), "index.html");
-      if (fs.existsSync(indexPath)) {
-        noCache(res);
-        return res.sendFile(indexPath);
-      }
-      // Fallback to root index.html
-      noCache(res);
-      res.sendFile(path.join(distWebPath, "index.html"));
-    });
-  }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
@@ -364,6 +81,3 @@ async function startServer() {
 }
 
 startServer().catch(console.error);
-
-// Start cron jobs for push notifications
-startCronJobs();

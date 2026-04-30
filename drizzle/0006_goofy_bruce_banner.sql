@@ -1,1 +1,0 @@
-ALTER TABLE `employees` ADD `tag` enum('indoor','outdoor','supervisor');

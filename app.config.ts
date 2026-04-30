@@ -28,11 +28,11 @@ const schemeFromBundleId = `manus${timestamp}`;
 
 const env = {
   // App branding - update these values directly (do not use env vars)
-  appName: "好好上班",
+  appName: "員工打卡系統",
   appSlug: "attendance-app",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-selected_e2fb6214.png",
+  logoUrl: "",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -43,7 +43,7 @@ const config: ExpoConfig = {
   slug: env.appSlug,
   version: "1.0.0",
   orientation: "portrait",
-  icon: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-selected_e2fb6214.png",
+  icon: "./assets/images/icon.png",
   scheme: env.scheme,
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
@@ -57,7 +57,7 @@ const config: ExpoConfig = {
   android: {
     adaptiveIcon: {
       backgroundColor: "#E6F4FE",
-      foregroundImage: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-selected_e2fb6214.png",
+      foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
@@ -82,16 +82,10 @@ const config: ExpoConfig = {
   web: {
     bundler: "metro",
     output: "static",
-    favicon: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-selected_e2fb6214.png",
+    favicon: "./assets/images/favicon.png",
   },
   plugins: [
     "expo-router",
-    [
-      "expo-image-picker",
-      {
-        "photosPermission": "Allow $(PRODUCT_NAME) to access your photos for feedback screenshots."
-      }
-    ],
     [
       "expo-audio",
       {
@@ -108,7 +102,7 @@ const config: ExpoConfig = {
     [
       "expo-splash-screen",
       {
-        image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663487173990/dvHycosbPvRvBSsW7DJCxS/app-icon-selected_e2fb6214.png",
+        image: "./assets/images/splash-icon.png",
         imageWidth: 200,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
@@ -129,7 +123,7 @@ const config: ExpoConfig = {
   ],
   experiments: {
     typedRoutes: true,
-    reactCompiler: false,
+    reactCompiler: true,
   },
 };
 
