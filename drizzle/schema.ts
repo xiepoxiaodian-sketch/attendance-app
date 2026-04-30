@@ -109,13 +109,14 @@ export const schedules = mysqlTable("schedules", {
   id: int("id").autoincrement().primaryKey(),
   employeeId: int("employeeId").notNull(),
   date: date("date").notNull(),
-  shifts: json("shifts").notNull().$type<Array<{ startTime: string; endTime: string; label: string }>>(),
+  shifts: json("shifts").notNull().$type<Array<{ startTime: string; endTime: string; label: string }>(),
   // Leave fields - null means no leave on this day
   leaveType: mysqlEnum("leaveType", ["annual", "sick", "personal", "marriage", "bereavement", "official", "other"]),
   leaveMode: mysqlEnum("leaveMode", ["allDay", "partial"]),
   leaveStart: varchar("leaveStart", { length: 8 }), // HH:MM
   leaveEnd: varchar("leaveEnd", { length: 8 }),   // HH:MM
   leaveDuration: decimal("leaveDuration", { precision: 4, scale: 1 }), // hours, e.g. 4.0
+  sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

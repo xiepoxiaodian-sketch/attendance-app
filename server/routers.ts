@@ -853,6 +853,13 @@ const schedulesRouter = router({
       await db.deleteSchedule(input.id);
       return { success: true };
     }),
+
+  reorder: publicProcedure
+    .input(z.object({ orderedIds: z.array(z.number()) }))
+    .mutation(async ({ input }) => {
+      await db.reorderSchedules(input.orderedIds);
+      return { success: true };
+    }),
 });
 
 // ============================================================

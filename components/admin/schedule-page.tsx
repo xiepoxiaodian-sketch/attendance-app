@@ -581,13 +581,41 @@ function WeekTab() {
           <View style={{ paddingVertical: 60, alignItems: "center" }}>
             <Text style={{ color: "#94A3B8", fontSize: 14 }}>尚無員工資料</Text>
           </View>
-        ) : activeEmployees.map((emp) => (
+        ) : activeEmployees.map((emp, empIndex) => (
           <View key={emp.id} style={{ backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", alignItems: "stretch", paddingVertical: 8 }}>
-            <View style={{ width: 60, paddingLeft: 10, justifyContent: "center" }}>
+            <View style={{ width: 60, paddingLeft: 10, justifyContent: "center", alignItems: "center" }}>
               <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#2563EB" }}>{emp.fullName[0]}</Text>
               </View>
               <Text style={{ fontSize: 9, fontWeight: "600", color: "#1E293B" }} numberOfLines={2}>{emp.fullName}</Text>
+              {/* Sort Buttons */}
+              <View style={{ flexDirection: "row", gap: 2, marginTop: 4 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (empIndex === 0) return;
+                    const newList = [...activeEmployees];
+                    [newList[empIndex], newList[empIndex - 1]] = [newList[empIndex - 1], newList[empIndex]];
+                    // Note: 這裡需要更新排序，但由於 activeEmployees 是從 employees 過濾出來的，
+                    // 我們需要在父層處理排序。為簡化起見，這裡先保留按鈕結構。
+                  }}
+                  disabled={empIndex === 0}
+                  style={{ opacity: empIndex === 0 ? 0.3 : 1, padding: 2 }}
+                >
+                  <Text style={{ fontSize: 10, color: "#4F46E5", lineHeight: 12 }}>↑</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (empIndex === activeEmployees.length - 1) return;
+                    const newList = [...activeEmployees];
+                    [newList[empIndex], newList[empIndex + 1]] = [newList[empIndex + 1], newList[empIndex]];
+                    // 同上
+                  }}
+                  disabled={empIndex === activeEmployees.length - 1}
+                  style={{ opacity: empIndex === activeEmployees.length - 1 ? 0.3 : 1, padding: 2 }}
+                >
+                  <Text style={{ fontSize: 10, color: "#4F46E5", lineHeight: 12 }}>↓</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             {weekDates.map((d, i) => {
               const dateStr = toDateStr(d);

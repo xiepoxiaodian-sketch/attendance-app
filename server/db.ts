@@ -408,6 +408,14 @@ export async function deleteSchedule(id: number) {
   await db.delete(schedules).where(eq(schedules.id, id));
 }
 
+export async function reorderSchedules(orderedIds: number[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await Promise.all(orderedIds.map((id, index) =>
+    db.update(schedules).set({ sortOrder: index }).where(eq(schedules.id, id))
+  ));
+}
+
 // ============================================================
 // Devices
 // ============================================================
