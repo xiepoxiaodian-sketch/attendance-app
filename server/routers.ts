@@ -657,6 +657,199 @@ const attendanceRouter = router({
     const result = await db.getTodayAttendanceSummary();
     return result ?? { total: 0, clockedIn: 0, late: 0 };
   }),
+
+  // 薪資計算：取得指定月份各員工的出勤詳細（含打卡明細、上班時數、遅到早退、休假天數、請假天數）
+  getMonthlySalary: publicProcedure
+    .input(z.object({
+      year: z.number(),
+      month: z.number(), // 1-12
+      employeeId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const { year, month, employeeId } = input;
+      const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+      // 取得所有員工列表（或單一員工）
+      const allEmployees = await db.getAllEmployees();
+      const targetEmployees = employeeId
+        ? allEmployees.filter((e: any) => e.id === employeeId)
+        : allEmployees.filter((e: any) => e.isActive && e.role === "employee");
+
+      // 取得指定日期範圍的所有打卡記錄
+      const records = await db.getAllAttendance(startDate, endDate, employeeId);
+
+      // 取得所有排班（用於判斷休假天數）
+      const allSchedules = await db.getAllSchedulesByDateRange(startDate, endDate);
+
+      // 取得已核准請假
+      const allLeaves = await db.getAllLeaveRequests("approved");
+      const monthLeaves = allLeaves.filter((l: any) => {
+        const lStart = new Date(l.startDate as string);
+        const lEnd = new Date(l.endDate as string);
+        const mStart = new Date(startDate);
+        const mEnd = new Date(endDate);
+        return lStart <= mEnd && lEnd >= mStart;
+      });
+
+      // 取得遲到閾値設定
+      const lateThreshold = parseInt(await db.getSetting("late_threshold_minutes") || "10");
+
+      // 建立排班查找表
+      const scheduleMap = new Map<string, Array<{ startTime: string; endTime: string; label: string }>>();
+      for (const s of allSchedules) {
+        const rawDate = s.date instanceof Date ? s.date : new Date(s.date as any);
+        const y = rawDate.getFullYear();
+        const mo = String(rawDate.getMonth() + 1).padStart(2, "0");
+        const dy = String(rawDate.getDate()).padStart(2, "0");
+        const dateKey = `${y}-${mo}-${dy}`;
+        const sKey = `${s.employeeId}_${dateKey}`;
+        if (s.shifts && (s.shifts as any[]).length > 0) {
+          scheduleMap.set(sKey, s.shifts as any[]);
+        }
+      }
+
+      // 計算出勤狀態的 helper
+      const toTWMinutes = (d: Date) => {
+        const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+        return tw.getUTCHours() * 60 + tw.getUTCMinutes();
+      };
+      function computeStatus(
+        clockIn: Date | null,
+        clockOut: Date | null,
+        shift: { startTime: string; endTime: string } | undefined,
+        storedStatus: string | null
+      ): string {
+        if (!shift) return storedStatus || "normal";
+        const [sh, sm] = shift.startTime.split(":").map(Number);
+        const [eh, em] = shift.endTime.split(":").map(Number);
+        const shiftStart = sh * 60 + sm;
+        const shiftEnd = eh * 60 + em;
+        let isLate = false;
+        let isEarlyLeave = false;
+        if (clockIn) {
+          const inMin = toTWMinutes(clockIn instanceof Date ? clockIn : new Date(clockIn));
+          if (inMin - shiftStart > lateThreshold) isLate = true;
+        }
+        if (clockOut) {
+          const outMin = toTWMinutes(clockOut instanceof Date ? clockOut : new Date(clockOut));
+          if (outMin < shiftEnd - 1) isEarlyLeave = true;
+        }
+        if (isLate && isEarlyLeave) return "late_and_early";
+        if (isLate) return "late";
+        if (isEarlyLeave) return "early_leave";
+        return "normal";
+      }
+
+      // 對每位員工建立詳細資料
+      const result = targetEmployees.map((emp: any) => {
+        const empRecords = records.filter((r: any) => r.employeeId === emp.id);
+
+        // 按日期分組打卡記錄
+        const dailyMap = new Map<string, Array<{
+          id: number;
+          shiftLabel: string;
+          clockInTime: any;
+          clockOutTime: any;
+          status: string;
+          workMinutes: number;
+        }>>();
+
+        for (const r of empRecords) {
+          let dateKey = "";
+          if (r.date) {
+            const d = r.date instanceof Date ? r.date : new Date(r.date as any);
+            if (!isNaN(d.getTime())) {
+              dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            } else {
+              dateKey = String(r.date).split("T")[0].split(" ")[0];
+            }
+          }
+          const groupKey = `${emp.id}_${dateKey}`;
+          const shiftsForDay = scheduleMap.get(groupKey);
+          const shiftLabel = r.shiftLabel || "一般班";
+          const matchedShift = shiftsForDay?.find((s: any) => s.label === shiftLabel);
+          const dynamicStatus = computeStatus(
+            r.clockInTime ? (r.clockInTime instanceof Date ? r.clockInTime : new Date(r.clockInTime as any)) : null,
+            r.clockOutTime ? (r.clockOutTime instanceof Date ? r.clockOutTime : new Date(r.clockOutTime as any)) : null,
+            matchedShift,
+            r.status ?? null
+          );
+          // 計算實際工作分鐘數
+          let workMinutes = 0;
+          if (r.clockInTime && r.clockOutTime) {
+            const inTime = r.clockInTime instanceof Date ? r.clockInTime : new Date(r.clockInTime as any);
+            const outTime = r.clockOutTime instanceof Date ? r.clockOutTime : new Date(r.clockOutTime as any);
+            workMinutes = Math.max(0, Math.round((outTime.getTime() - inTime.getTime()) / 60000));
+          }
+          if (!dailyMap.has(dateKey)) dailyMap.set(dateKey, []);
+          dailyMap.get(dateKey)!.push({
+            id: r.id,
+            shiftLabel,
+            clockInTime: r.clockInTime,
+            clockOutTime: r.clockOutTime,
+            status: dynamicStatus,
+            workMinutes,
+          });
+        }
+
+        // 建立每日明細列表（按日期降序）
+        const dailyRecords = Array.from(dailyMap.entries())
+          .sort(([a], [b]) => b.localeCompare(a))
+          .map(([dateKey, shifts]) => ({
+            dateKey,
+            shifts,
+            totalWorkMinutes: shifts.reduce((sum, s) => sum + s.workMinutes, 0),
+            hasLate: shifts.some(s => s.status === "late" || s.status === "late_and_early"),
+            hasEarlyLeave: shifts.some(s => s.status === "early_leave" || s.status === "late_and_early"),
+            hasAbsent: shifts.some(s => !s.clockInTime),
+          }));
+
+        // 統計數據
+        const totalWorkMinutes = dailyRecords.reduce((sum, d) => sum + d.totalWorkMinutes, 0);
+        const presentDays = dailyRecords.filter(d => d.shifts.some(s => s.clockInTime)).length;
+        const lateDays = dailyRecords.filter(d => d.hasLate).length;
+        const earlyLeaveDays = dailyRecords.filter(d => d.hasEarlyLeave).length;
+        const absentDays = dailyRecords.filter(d => d.hasAbsent).length;
+
+        // 休假天數：該員工在指定月份有排班且排班中有設定 leaveType 的天數
+        const empSchedules = allSchedules.filter((s: any) => s.employeeId === emp.id);
+        const scheduledLeaveDays = empSchedules.filter((s: any) => s.leaveType && s.leaveMode === "allDay").length;
+
+        // 請假天數：從 leaveRequests 計算（已核准）
+        const empLeaves = monthLeaves.filter((l: any) => l.employeeId === emp.id);
+        const leaveDays = empLeaves.reduce((sum: number, l: any) => {
+          const lStart = new Date(l.startDate as string);
+          const lEnd = new Date(l.endDate as string);
+          const mStart = new Date(startDate);
+          const mEnd = new Date(endDate);
+          const effectiveStart = lStart < mStart ? mStart : lStart;
+          const effectiveEnd = lEnd > mEnd ? mEnd : lEnd;
+          const days = Math.round((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          return sum + Math.max(0, days);
+        }, 0);
+
+        return {
+          employeeId: emp.id,
+          employeeName: emp.fullName,
+          employeeUsername: emp.username,
+          jobTitle: emp.jobTitle ?? emp.role,
+          employeeType: emp.employeeType,
+          totalWorkMinutes,
+          totalWorkHours: parseFloat((totalWorkMinutes / 60).toFixed(1)),
+          presentDays,
+          lateDays,
+          earlyLeaveDays,
+          absentDays,
+          scheduledLeaveDays,
+          leaveDays,
+          dailyRecords,
+        };
+      });
+
+      return result;
+    }),
 });
 
 // ============================================================
