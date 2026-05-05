@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,11 +9,13 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
 import { ConfirmDialog, AlertDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
+import { useDragSort } from "@/hooks/use-drag-sort";
 
 type Employee = {
   id: number;
@@ -25,6 +27,7 @@ type Employee = {
   phone: string | null;
   isActive: boolean;
   needsSetup: boolean;
+  sortOrder?: number;
   tag?: "indoor" | "outdoor" | "supervisor" | null;
 };
 
@@ -132,8 +135,43 @@ export default function AdminEmployeesScreen() {
   const [formError, setFormError] = useState("");
   const [alertDialog, setAlertDialog] = useState<{ title: string; message: string } | null>(null);
   const [confirmDeleteEmp, setConfirmDeleteEmp] = useState<Employee | null>(null);
+  // 排序模式
+  const [sortMode, setSortMode] = useState(false);
+  const [localEmployees, setLocalEmployees] = useState<Employee[]>([]);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const { data: employees, refetch, isLoading } = trpc.employees.list.useQuery();
+  const reorderMutation = trpc.employees.reorder.useMutation({
+    onSuccess: () => {
+      refetch();
+      setSortMode(false);
+      setSavingOrder(false);
+    },
+    onError: () => setSavingOrder(false),
+  });
+
+  // 進入排序模式時，初始化本地列表
+  useEffect(() => {
+    if (sortMode && employees) {
+      setLocalEmployees([...employees].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)));
+    }
+  }, [sortMode, employees]);
+
+  // 拖曳排序 hook
+  const {
+    getCardRef,
+    getHandleHandlersOnly,
+    activeIndex,
+    overActiveIndex,
+    ghostVisible,
+    ghostTop,
+    ghostLabel,
+    ghostSize,
+  } = useDragSort({
+    items: localEmployees,
+    getId: (e) => String(e.id),
+    onReorder: (newItems) => setLocalEmployees(newItems as Employee[]),
+  });
 
   const createMutation = trpc.employees.create.useMutation({
     onSuccess: () => {
@@ -230,11 +268,19 @@ export default function AdminEmployeesScreen() {
     resetPasswordMutation.mutate({ id: selectedEmployee.id, newPassword });
   };
 
+  const handleSaveOrder = () => {
+    setSavingOrder(true);
+    reorderMutation.mutate({ orderedIds: localEmployees.map(e => e.id) });
+  };
+
   const filteredEmployees = (employees ?? []).filter(e =>
     !searchQuery ||
     e.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // 排序模式下的顯示列表（不過濾）
+  const sortedList = localEmployees;
 
   return (
     <ScreenContainer containerClassName="bg-[#F1F5F9]">
@@ -254,42 +300,189 @@ export default function AdminEmployeesScreen() {
         onCancel={() => setConfirmDeleteEmp(null)}
       />
       <AdminHeader title="員工管理" subtitle={`共 ${employees?.length ?? 0} 位員工`} onRefresh={onRefresh} refreshing={refreshing} />
-      {/* Add Button */}
-      <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", alignItems: "flex-end" }}>
-        <TouchableOpacity
-          onPress={() => { setSelectedEmployee(null); setForm(INITIAL_FORM); setFormError(""); setShowModal(true); }}
-          style={{ backgroundColor: "#2563EB", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 }}
-        >
-          <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>+ 新增</Text>
-        </TouchableOpacity>
+
+      {/* Toolbar */}
+      <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", alignItems: "center", gap: 8 }}>
+        {sortMode ? (
+          <>
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 13, color: "#D97706", fontWeight: "600" }}>✦ 排序模式</Text>
+              <Text style={{ fontSize: 12, color: "#94A3B8" }}>
+                {Platform.OS === "web" ? "長按 ☰ 拖曳排序" : "長按 ☰ 拖曳排序"}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setSortMode(false)}
+              style={{ backgroundColor: "#F1F5F9", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 }}
+            >
+              <Text style={{ color: "#64748B", fontWeight: "600", fontSize: 14 }}>取消</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSaveOrder}
+              disabled={savingOrder}
+              style={{ backgroundColor: "#16A34A", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 }}
+            >
+              {savingOrder ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>儲存順序</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              onPress={() => setSortMode(true)}
+              style={{ backgroundColor: "#FFFBEB", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: "#FDE68A" }}
+            >
+              <Text style={{ color: "#D97706", fontWeight: "600", fontSize: 14 }}>⇅ 調整順序</Text>
+            </TouchableOpacity>
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity
+              onPress={() => { setSelectedEmployee(null); setForm(INITIAL_FORM); setFormError(""); setShowModal(true); }}
+              style={{ backgroundColor: "#2563EB", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 }}
+            >
+              <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>+ 新增</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
-      {/* Search Bar */}
-      <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-        <TextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="搜尋員工姓名或帳號..."
-          returnKeyType="search"
-          style={{
-            backgroundColor: "#F8FAFC",
-            borderWidth: 1,
-            borderColor: "#E2E8F0",
-            borderRadius: 10,
-            paddingHorizontal: 12,
-            paddingVertical: 9,
-            fontSize: 14,
-            color: "#1E293B",
-          }}
-          placeholderTextColor="#94A3B8"
-        />
-      </View>
+      {/* Search Bar (only in normal mode) */}
+      {!sortMode && (
+        <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="搜尋員工姓名或帳號..."
+            returnKeyType="search"
+            style={{
+              backgroundColor: "#F8FAFC",
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 9,
+              fontSize: 14,
+              color: "#1E293B",
+            }}
+            placeholderTextColor="#94A3B8"
+          />
+        </View>
+      )}
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color="#2563EB" />
         </View>
+      ) : sortMode ? (
+        // ── 排序模式 ──────────────────────────────────────────────────
+        <View style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 32 }}>
+            {sortedList.map((item, index) => {
+              const isActive = activeIndex === index;
+              const isOver = overActiveIndex === index && activeIndex !== index;
+              const cardId = String(item.id);
+              return (
+                <View
+                  key={item.id}
+                  // @ts-ignore
+                  ref={getCardRef(cardId)}
+                  style={{
+                    marginBottom: 8,
+                    backgroundColor: isActive ? "#EFF6FF" : "white",
+                    borderRadius: 12,
+                    borderWidth: isOver ? 2 : 1,
+                    borderColor: isOver ? "#2563EB" : isActive ? "#93C5FD" : "#E2E8F0",
+                    opacity: isActive ? 0.5 : 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    gap: 12,
+                  }}
+                >
+                  {/* Order number */}
+                  <View style={{ width: 24, alignItems: "center" }}>
+                    <Text style={{ fontSize: 13, color: "#94A3B8", fontWeight: "600" }}>{index + 1}</Text>
+                  </View>
+                  {/* Avatar */}
+                  <View style={{
+                    width: 36, height: 36, borderRadius: 18,
+                    backgroundColor: item.role === "admin" ? "#FEF3C7" : "#EFF6FF",
+                    alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: item.role === "admin" ? "#D97706" : "#2563EB" }}>
+                      {item.fullName[0]}
+                    </Text>
+                  </View>
+                  {/* Info */}
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: item.isActive ? "#1E293B" : "#94A3B8" }}>
+                        {item.fullName}
+                      </Text>
+                      {item.tag && TAG_LABELS[item.tag] && (
+                        <View style={{ backgroundColor: TAG_LABELS[item.tag].bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 }}>
+                          <Text style={{ fontSize: 10, color: TAG_LABELS[item.tag].text, fontWeight: "600" }}>{TAG_LABELS[item.tag].label}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
+                      @{item.username} · {item.employeeType === "part_time" ? "兼職" : "全職"}
+                    </Text>
+                  </View>
+                  {/* Drag Handle */}
+                  <View
+                    style={{ padding: 8, cursor: "grab" } as any}
+                    {...(getHandleHandlersOnly(index, cardId, item.fullName) as any)}
+                  >
+                    <Text style={{ fontSize: 20, color: "#94A3B8", lineHeight: 22 }}>☰</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+
+          {/* Ghost card (web only) */}
+          {ghostVisible && Platform.OS === "web" && (
+            <View
+              style={{
+                position: "absolute" as any,
+                top: ghostTop,
+                left: 14,
+                right: 14,
+                backgroundColor: "white",
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: "#2563EB",
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                shadowColor: "#2563EB",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 8,
+                zIndex: 999,
+                pointerEvents: "none",
+              } as any}
+            >
+              <View style={{ width: 24, alignItems: "center" }}>
+                <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "700" }}>↕</Text>
+              </View>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#2563EB" }}>{ghostLabel?.[0] ?? "?"}</Text>
+              </View>
+              <Text style={{ flex: 1, fontSize: 14, fontWeight: "700", color: "#2563EB" }}>{ghostLabel}</Text>
+              <Text style={{ fontSize: 20, color: "#2563EB" }}>☰</Text>
+            </View>
+          )}
+        </View>
       ) : (
+        // ── 一般模式 ──────────────────────────────────────────────────
         <FlatList
           data={filteredEmployees}
           keyExtractor={(item) => String(item.id)}
@@ -318,8 +511,9 @@ export default function AdminEmployeesScreen() {
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 {/* Avatar */}
                 <View style={{
-                  width: 42, height: 42,
-                  borderRadius: 21,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   backgroundColor: item.role === "admin" ? "#FEF3C7" : "#EFF6FF",
                   alignItems: "center",
                   justifyContent: "center",
@@ -329,7 +523,6 @@ export default function AdminEmployeesScreen() {
                     {item.fullName[0]}
                   </Text>
                 </View>
-
                 {/* Info */}
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -360,7 +553,6 @@ export default function AdminEmployeesScreen() {
                   )}
                 </View>
               </View>
-
               {/* Action Buttons */}
               <View style={{ flexDirection: "row", marginTop: 12, gap: 8 }}>
                 <TouchableOpacity
