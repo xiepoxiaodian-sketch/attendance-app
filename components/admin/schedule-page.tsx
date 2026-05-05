@@ -73,6 +73,15 @@ function WeekTab() {
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState(false);
   const [staffingPopup, setStaffingPopup] = useState<{ dateStr: string; slot: number; names: string[] } | null>(null);
   const [showStaffingView, setShowStaffingView] = useState(true);
+  // 月排班 Modal
+  const [showMonthModal, setShowMonthModal] = useState(false);
+  const [monthModalEmployee, setMonthModalEmployee] = useState<{ id: number; fullName: string } | null>(null);
+  const [monthModalYear, setMonthModalYear] = useState(() => new Date().getFullYear());
+  const [monthModalMonth, setMonthModalMonth] = useState(() => new Date().getMonth());
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+  const [monthScheduleMap, setMonthScheduleMap] = useState<Record<string, ShiftEntry[]>>({});
+  const [monthSaving, setMonthSaving] = useState(false);
+  const [monthAlertMsg, setMonthAlertMsg] = useState<{ title: string; message: string } | null>(null);
 
   const { data: employees } = trpc.employees.list.useQuery();
   const { data: workShifts } = trpc.workShifts.list.useQuery();
@@ -169,6 +178,51 @@ function WeekTab() {
     },
     onError: (err) => setAlertMsg({ title: "錯誤", message: err.message }),
   });
+  const batchUpsertMutation = trpc.schedules.batchUpsert.useMutation({
+    onSuccess: () => {
+      refetchSchedules();
+      invalidateSchedules();
+      setMonthSaving(false);
+      setShowMonthModal(false);
+      setMonthAlertMsg({ title: "成功", message: "月排班已儲存！" });
+    },
+    onError: (err) => { setMonthSaving(false); setMonthAlertMsg({ title: "錯誤", message: err.message }); },
+  });
+
+  // 開啟月排班 Modal
+  const handleOpenMonthModal = (emp: { id: number; fullName: string }) => {
+    setMonthModalEmployee(emp);
+    const now = new Date();
+    setMonthModalYear(now.getFullYear());
+    setMonthModalMonth(now.getMonth());
+    setSelectedDates(new Set());
+    // 建立現有排班的 map
+    const map: Record<string, ShiftEntry[]> = {};
+    const allSchedules = weekSchedules ?? [];
+    for (const s of allSchedules) {
+      if (s.employeeId === emp.id) {
+        const rawDate = s.date as unknown as string | Date;
+        const dateKey = typeof rawDate === "string" ? rawDate.split("T")[0] : toDateStr(rawDate);
+        map[dateKey] = s.shifts as ShiftEntry[];
+      }
+    }
+    setMonthScheduleMap(map);
+    setShowMonthModal(true);
+  };
+
+  // 月排班儲存
+  const handleSaveMonthSchedule = () => {
+    if (!monthModalEmployee) return;
+    const entries = Object.entries(monthScheduleMap)
+      .filter(([, shifts]) => shifts && shifts.length > 0)
+      .map(([date, shifts]) => ({ date, shifts }));
+    if (entries.length === 0) {
+      setMonthAlertMsg({ title: "提示", message: "尚未設定任何班次" });
+      return;
+    }
+    setMonthSaving(true);
+    batchUpsertMutation.mutate({ employeeId: monthModalEmployee.id, entries });
+  };
 
   const handleOpenSchedule = (employeeId: number, date: string) => {
     setSelectedEmployee(employeeId);
@@ -583,12 +637,18 @@ function WeekTab() {
           </View>
         ) : activeEmployees.map((emp) => (
           <View key={emp.id} style={{ backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9", flexDirection: "row", alignItems: "stretch", paddingVertical: 8 }}>
-            <View style={{ width: 60, paddingLeft: 10, justifyContent: "center" }}>
+            <TouchableOpacity
+              onPress={() => handleOpenMonthModal(emp)}
+              style={{ width: 60, paddingLeft: 10, justifyContent: "center", alignItems: "flex-start" }}
+            >
               <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#2563EB" }}>{emp.fullName[0]}</Text>
               </View>
               <Text style={{ fontSize: 9, fontWeight: "600", color: "#1E293B" }} numberOfLines={2}>{emp.fullName}</Text>
-            </View>
+              <View style={{ backgroundColor: "#DBEAFE", borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1, marginTop: 3 }}>
+                <Text style={{ fontSize: 8, color: "#2563EB", fontWeight: "700" }}>月排班</Text>
+              </View>
+            </TouchableOpacity>
             {weekDates.map((d, i) => {
               const dateStr = toDateStr(d);
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -804,6 +864,223 @@ function WeekTab() {
             </TouchableOpacity>
           </ScrollView>
         </View>
+      </Modal>
+
+      {/* 月排班 Modal */}
+      <Modal visible={showMonthModal} animationType="slide" presentationStyle="pageSheet">
+        <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+          {/* Header */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#E2E8F0", backgroundColor: "white" }}>
+            <TouchableOpacity onPress={() => setShowMonthModal(false)}>
+              <Text style={{ color: "#64748B", fontSize: 16 }}>取消</Text>
+            </TouchableOpacity>
+            <View style={{ alignItems: "center" }}>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B" }}>{monthModalEmployee?.fullName} 月排班</Text>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>{monthModalYear}年{monthModalMonth + 1}月</Text>
+            </View>
+            <TouchableOpacity onPress={handleSaveMonthSchedule} disabled={monthSaving}>
+              {monthSaving ? <ActivityIndicator size="small" color="#2563EB" /> : <Text style={{ color: "#2563EB", fontSize: 16, fontWeight: "700" }}>儲存</Text>}
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+            {/* 月份切換 */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <TouchableOpacity
+                onPress={() => { if (monthModalMonth === 0) { setMonthModalYear(y => y - 1); setMonthModalMonth(11); } else setMonthModalMonth(m => m - 1); }}
+                style={{ padding: 8, backgroundColor: "white", borderRadius: 8, borderWidth: 1, borderColor: "#E2E8F0" }}
+              >
+                <Text style={{ fontSize: 16, color: "#2563EB" }}>❮</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>{monthModalYear}年{monthModalMonth + 1}月</Text>
+              <TouchableOpacity
+                onPress={() => { if (monthModalMonth === 11) { setMonthModalYear(y => y + 1); setMonthModalMonth(0); } else setMonthModalMonth(m => m + 1); }}
+                style={{ padding: 8, backgroundColor: "white", borderRadius: 8, borderWidth: 1, borderColor: "#E2E8F0" }}
+              >
+                <Text style={{ fontSize: 16, color: "#2563EB" }}>❯</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 工作時段快選 */}
+            <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: "#E2E8F0" }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B", marginBottom: 10 }}>選擇日期後套用班次</Text>
+              <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 10 }}>先點選下方月曆的日期，再點此處套用班次</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: "row", gap: 8, flexWrap: "nowrap" }}>
+                  {(workShifts ?? []).map(ws => (
+                    <TouchableOpacity
+                      key={ws.id}
+                      onPress={() => {
+                        if (selectedDates.size === 0) {
+                          setMonthAlertMsg({ title: "提示", message: "請先點選月曆上的日期" });
+                          return;
+                        }
+                        const newMap = { ...monthScheduleMap };
+                        selectedDates.forEach(dateStr => {
+                          newMap[dateStr] = [{ startTime: ws.startTime, endTime: ws.endTime, label: ws.name }];
+                        });
+                        setMonthScheduleMap(newMap);
+                        setSelectedDates(new Set());
+                      }}
+                      style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: "#BFDBFE" }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563EB" }}>{ws.name}</Text>
+                      <Text style={{ fontSize: 11, color: "#64748B" }}>{ws.startTime}-{ws.endTime}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (selectedDates.size === 0) {
+                        setMonthAlertMsg({ title: "提示", message: "請先點選月曆上的日期" });
+                        return;
+                      }
+                      const newMap = { ...monthScheduleMap };
+                      selectedDates.forEach(dateStr => { delete newMap[dateStr]; });
+                      setMonthScheduleMap(newMap);
+                      setSelectedDates(new Set());
+                    }}
+                    style={{ backgroundColor: "#FEF2F2", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: "#FECACA" }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}>清除選取</Text>
+                    <Text style={{ fontSize: 11, color: "#EF4444" }}>移除班次</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* 月曆 */}
+            <View style={{ backgroundColor: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#E2E8F0", marginBottom: 16 }}>
+              {/* 星期標題 */}
+              <View style={{ flexDirection: "row", marginBottom: 8 }}>
+                {["日", "一", "二", "三", "四", "五", "六"].map((d, i) => (
+                  <View key={i} style={{ flex: 1, alignItems: "center" }}>
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: i === 0 || i === 6 ? "#EF4444" : "#64748B" }}>{d}</Text>
+                  </View>
+                ))}
+              </View>
+              {/* 日期格子 */}
+              {(() => {
+                const firstDay = new Date(monthModalYear, monthModalMonth, 1).getDay();
+                const daysInMonth = new Date(monthModalYear, monthModalMonth + 1, 0).getDate();
+                const cells: React.ReactElement[] = [];
+                let dayCount = 1;
+                for (let row = 0; row < 6; row++) {
+                  if (dayCount > daysInMonth) break;
+                  const rowCells: React.ReactElement[] = [];
+                  for (let col = 0; col < 7; col++) {
+                    const cellIndex = row * 7 + col;
+                    if (cellIndex < firstDay || dayCount > daysInMonth) {
+                      rowCells.push(<View key={col} style={{ flex: 1 }} />);
+                    } else {
+                      const d = dayCount;
+                      const dateStr = `${monthModalYear}-${String(monthModalMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                      const isSelected = selectedDates.has(dateStr);
+                      const hasSchedule = !!monthScheduleMap[dateStr]?.length;
+                      const isWeekend = col === 0 || col === 6;
+                      const isToday = dateStr === toDateStr(new Date());
+                      rowCells.push(
+                        <TouchableOpacity
+                          key={col}
+                          onPress={() => {
+                            const newSelected = new Set(selectedDates);
+                            if (newSelected.has(dateStr)) newSelected.delete(dateStr);
+                            else newSelected.add(dateStr);
+                            setSelectedDates(newSelected);
+                          }}
+                          style={{
+                            flex: 1, minHeight: 52, margin: 1, borderRadius: 8,
+                            backgroundColor: isSelected ? "#2563EB" : hasSchedule ? "#EFF6FF" : isWeekend ? "#FFF7ED" : "#F8FAFC",
+                            alignItems: "center", justifyContent: "center", padding: 2,
+                            borderWidth: isToday ? 2 : 1,
+                            borderColor: isSelected ? "#1D4ED8" : isToday ? "#2563EB" : "#F1F5F9",
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: isSelected ? "white" : isWeekend ? "#EF4444" : "#1E293B", lineHeight: 18 }}>{d}</Text>
+                          {hasSchedule && !isSelected && (
+                            <View style={{ alignItems: "center" }}>
+                              {monthScheduleMap[dateStr].slice(0, 1).map((sh, si) => (
+                                <Text key={si} style={{ fontSize: 8, color: "#2563EB", lineHeight: 11 }}>{sh.startTime}</Text>
+                              ))}
+                            </View>
+                          )}
+                          {isSelected && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "white", marginTop: 2 }} />}
+                        </TouchableOpacity>
+                      );
+                      dayCount++;
+                    }
+                  }
+                  cells.push(<View key={row} style={{ flexDirection: "row", marginBottom: 2 }}>{rowCells}</View>);
+                }
+                return cells;
+              })()}
+            </View>
+
+            {/* 已選日期提示 */}
+            {selectedDates.size > 0 && (
+              <View style={{ backgroundColor: "#EFF6FF", borderRadius: 10, padding: 12, marginBottom: 16, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "600", flex: 1 }}>已選 {selectedDates.size} 天，請在上方點選班次套用</Text>
+                <TouchableOpacity onPress={() => setSelectedDates(new Set())}>
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>取消選取</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* 快速操作 */}
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  const daysInMonth = new Date(monthModalYear, monthModalMonth + 1, 0).getDate();
+                  const newSelected = new Set<string>();
+                  for (let d = 1; d <= daysInMonth; d++) {
+                    const date = new Date(monthModalYear, monthModalMonth, d);
+                    if (date.getDay() !== 0 && date.getDay() !== 6) {
+                      newSelected.add(`${monthModalYear}-${String(monthModalMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+                    }
+                  }
+                  setSelectedDates(newSelected);
+                }}
+                style={{ flex: 1, backgroundColor: "white", borderRadius: 8, padding: 10, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#1E293B" }}>選全部工作日</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  const daysInMonth = new Date(monthModalYear, monthModalMonth + 1, 0).getDate();
+                  const newSelected = new Set<string>();
+                  for (let d = 1; d <= daysInMonth; d++) {
+                    newSelected.add(`${monthModalYear}-${String(monthModalMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+                  }
+                  setSelectedDates(newSelected);
+                }}
+                style={{ flex: 1, backgroundColor: "white", borderRadius: 8, padding: 10, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#1E293B" }}>選整月</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setMonthScheduleMap({});
+                  setSelectedDates(new Set());
+                }}
+                style={{ flex: 1, backgroundColor: "#FEF2F2", borderRadius: 8, padding: 10, alignItems: "center", borderWidth: 1, borderColor: "#FECACA" }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#EF4444" }}>清空整月</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+        {/* 月排班 Alert */}
+        {monthAlertMsg && (
+          <Modal visible animationType="fade" transparent>
+            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" }}>
+              <View style={{ backgroundColor: "white", borderRadius: 16, padding: 24, width: 280, alignItems: "center" }}>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B", marginBottom: 8 }}>{monthAlertMsg.title}</Text>
+                <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 20 }}>{monthAlertMsg.message}</Text>
+                <TouchableOpacity onPress={() => setMonthAlertMsg(null)} style={{ backgroundColor: "#2563EB", borderRadius: 10, paddingHorizontal: 32, paddingVertical: 10 }}>
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>確定</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        )}
       </Modal>
     </>
   );

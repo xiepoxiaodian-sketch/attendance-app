@@ -1,0 +1,2 @@
+ALTER TABLE `attendance` MODIFY COLUMN `status` enum('normal','late','early_leave','absent','late_and_early') DEFAULT 'normal';--> statement-breakpoint
+ALTER TABLE `schedules` ADD `sortOrder` int DEFAULT 0 NOT NULL;

@@ -120,6 +120,20 @@
       "when": 1775759534167,
       "tag": "0016_complex_ronan",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1777561774923,
+      "tag": "0017_broken_lord_hawal",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1777561899309,
+      "tag": "0018_quick_blacklash",
+      "breakpoints": true
     }
   ]
 }

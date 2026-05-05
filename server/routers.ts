@@ -853,6 +853,44 @@ const schedulesRouter = router({
       await db.deleteSchedule(input.id);
       return { success: true };
     }),
+  batchUpsert: publicProcedure
+    .input(z.object({
+      employeeId: z.number(),
+      entries: z.array(z.object({
+        date: z.string(),
+        shifts: z.array(z.object({
+          startTime: z.string(),
+          endTime: z.string(),
+          label: z.string(),
+        })),
+        leaveType: z.enum(["annual", "sick", "personal", "marriage", "bereavement", "official", "other"]).nullable().optional(),
+        leaveMode: z.enum(["allDay", "partial"]).nullable().optional(),
+        leaveStart: z.string().nullable().optional(),
+        leaveEnd: z.string().nullable().optional(),
+        leaveDuration: z.number().nullable().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      for (const entry of input.entries) {
+        await db.upsertSchedule(input.employeeId, entry.date, entry.shifts, {
+          leaveType: entry.leaveType ?? null,
+          leaveMode: entry.leaveMode ?? null,
+          leaveStart: entry.leaveStart ?? null,
+          leaveEnd: entry.leaveEnd ?? null,
+          leaveDuration: entry.leaveDuration ?? null,
+        });
+      }
+      return { success: true };
+    }),
+  getEmployeeMonth: publicProcedure
+    .input(z.object({ employeeId: z.number(), year: z.number(), month: z.number() }))
+    .query(async ({ input }) => {
+      const startDate = `${input.year}-${String(input.month + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(input.year, input.month + 1, 0).getDate();
+      const endDate = `${input.year}-${String(input.month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const all = await db.getAllSchedulesByDateRange(startDate, endDate);
+      return (all as any[]).filter((s: any) => s.employeeId === input.employeeId);
+    }),
 });
 
 // ============================================================
