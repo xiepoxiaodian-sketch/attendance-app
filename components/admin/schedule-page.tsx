@@ -83,6 +83,25 @@ function WeekTab() {
   const [monthSaving, setMonthSaving] = useState(false);
   const [monthAlertMsg, setMonthAlertMsg] = useState<{ title: string; message: string } | null>(null);
 
+  // 載入整月排班資料
+  const { data: employeeMonthData } = trpc.schedules.getEmployeeMonth.useQuery(
+    { employeeId: monthModalEmployee?.id ?? 0, year: monthModalYear, month: monthModalMonth },
+    { enabled: !!monthModalEmployee && showMonthModal }
+  );
+  // 當整月資料載入後，更新 monthScheduleMap
+  React.useEffect(() => {
+    if (!employeeMonthData || !showMonthModal) return;
+    const map: Record<string, ShiftEntry[]> = {};
+    for (const s of employeeMonthData as any[]) {
+      const rawDate = s.date as unknown as string | Date;
+      const dateKey = typeof rawDate === "string" ? rawDate.split("T")[0] : toDateStr(rawDate);
+      if (s.shifts && (s.shifts as any[]).length > 0) {
+        map[dateKey] = s.shifts as ShiftEntry[];
+      }
+    }
+    setMonthScheduleMap(map);
+  }, [employeeMonthData, showMonthModal]);
+
   const { data: employees } = trpc.employees.list.useQuery();
   const { data: workShifts } = trpc.workShifts.list.useQuery();
   const weekDates = getWeekDates(weekOffset);
@@ -196,17 +215,7 @@ function WeekTab() {
     setMonthModalYear(now.getFullYear());
     setMonthModalMonth(now.getMonth());
     setSelectedDates(new Set());
-    // 建立現有排班的 map
-    const map: Record<string, ShiftEntry[]> = {};
-    const allSchedules = weekSchedules ?? [];
-    for (const s of allSchedules) {
-      if (s.employeeId === emp.id) {
-        const rawDate = s.date as unknown as string | Date;
-        const dateKey = typeof rawDate === "string" ? rawDate.split("T")[0] : toDateStr(rawDate);
-        map[dateKey] = s.shifts as ShiftEntry[];
-      }
-    }
-    setMonthScheduleMap(map);
+    setMonthScheduleMap({});
     setShowMonthModal(true);
   };
 
@@ -886,14 +895,14 @@ function WeekTab() {
             {/* 月份切換 */}
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <TouchableOpacity
-                onPress={() => { if (monthModalMonth === 0) { setMonthModalYear(y => y - 1); setMonthModalMonth(11); } else setMonthModalMonth(m => m - 1); }}
+                onPress={() => { setSelectedDates(new Set()); setMonthScheduleMap({}); if (monthModalMonth === 0) { setMonthModalYear(y => y - 1); setMonthModalMonth(11); } else setMonthModalMonth(m => m - 1); }}
                 style={{ padding: 8, backgroundColor: "white", borderRadius: 8, borderWidth: 1, borderColor: "#E2E8F0" }}
               >
                 <Text style={{ fontSize: 16, color: "#2563EB" }}>❮</Text>
               </TouchableOpacity>
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>{monthModalYear}年{monthModalMonth + 1}月</Text>
               <TouchableOpacity
-                onPress={() => { if (monthModalMonth === 11) { setMonthModalYear(y => y + 1); setMonthModalMonth(0); } else setMonthModalMonth(m => m + 1); }}
+                onPress={() => { setSelectedDates(new Set()); setMonthScheduleMap({}); if (monthModalMonth === 11) { setMonthModalYear(y => y + 1); setMonthModalMonth(0); } else setMonthModalMonth(m => m + 1); }}
                 style={{ padding: 8, backgroundColor: "white", borderRadius: 8, borderWidth: 1, borderColor: "#E2E8F0" }}
               >
                 <Text style={{ fontSize: 16, color: "#2563EB" }}>❯</Text>
