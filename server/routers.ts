@@ -565,6 +565,31 @@ const attendanceRouter = router({
       );
     }),
 
+  // 管理員手動新增打卡紀錄
+  adminInsert: publicProcedure
+    .input(z.object({
+      employeeId: z.number(),
+      date: z.string(), // YYYY-MM-DD
+      clockInTime: z.string(),  // ISO string (UTC)
+      clockOutTime: z.string().optional().nullable(),
+      shiftLabel: z.string().optional(),
+      status: z.enum(["normal", "late", "early_leave", "absent", "late_and_early"]).optional(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const insertData: any = {
+        employeeId: input.employeeId,
+        date: new Date(input.date) as unknown as Date,
+        clockInTime: new Date(input.clockInTime),
+        clockOutTime: input.clockOutTime ? new Date(input.clockOutTime) : null,
+        shiftLabel: input.shiftLabel ?? null,
+        status: input.status ?? "normal",
+        note: input.note ?? null,
+      };
+      const newId = await db.createAttendance(insertData);
+      return { success: true, id: newId };
+    }),
+
   adminUpdate: publicProcedure
     .input(z.object({
       id: z.number(),
