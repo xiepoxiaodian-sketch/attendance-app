@@ -659,9 +659,27 @@ export default function ClockScreen() {
   const shifts = todaySchedule?.shifts
     ? (todaySchedule.shifts as Array<{ startTime: string; endTime: string; label: string }>)
     : [];
-  const displayShifts = shifts.length > 0
-    ? shifts
-    : [{ startTime: "09:00", endTime: "18:00", label: "班次1" }];
+
+  // 判斷今日是否為排休/請假日（leaveType 有值代表排休或請假）
+  const todayLeaveType = (todaySchedule as any)?.leaveType as string | null | undefined;
+  const isLeaveDay = !!todayLeaveType;
+  const LEAVE_LABELS: Record<string, string> = {
+    annual: "年假", sick: "病假", personal: "事假",
+    marriage: "婚假", bereavement: "喪假", official: "公假", other: "排休",
+  };
+  const leaveDayLabel = todayLeaveType ? (LEAVE_LABELS[todayLeaveType] ?? "排休") : "";
+
+  // 正確的顯示逿輯：
+  // 1. 排休日（leaveType 有值）→ 不顯示任何班次卡片，改顯示排休提示
+  // 2. 有排班且有班次 → 顯示實際班次
+  // 3. 完全沒排班（todaySchedule 為 null/undefined）→ 才顯示預設班次
+  const displayShifts = isLeaveDay
+    ? []  // 排休日：不顯示任何班次
+    : shifts.length > 0
+      ? shifts  // 有實際班次
+      : todaySchedule === null || todaySchedule === undefined
+        ? [{ startTime: "09:00", endTime: "18:00", label: "班次1" }]  // 完全沒排班才顯示預設
+        : [];  // 有排班記錄但 shifts 為空（保險）
 
   const timeStr = currentTime.toLocaleTimeString("zh-TW", {
     hour: "2-digit",
@@ -894,8 +912,29 @@ export default function ClockScreen() {
             );
           })}
 
+          {/* 排休/請假提示卡片 */}
+          {isLeaveDay && (
+            <View style={{
+              backgroundColor: "#F0FDF4",
+              borderRadius: 16,
+              padding: 24,
+              borderWidth: 1,
+              borderColor: "#86EFAC",
+              alignItems: "center",
+              gap: 8,
+            }}>
+              <Text style={{ fontSize: 36 }}>🌴</Text>
+              <Text style={{ color: "#15803D", fontSize: 18, fontWeight: "700" }}>
+                今日{leaveDayLabel}
+              </Text>
+              <Text style={{ color: "#166534", fontSize: 13, textAlign: "center", lineHeight: 20 }}>
+                今天是你的{leaveDayLabel}日，好好休息！🌟
+              </Text>
+            </View>
+          )}
+
           {/* No schedule notice */}
-          {shifts.length === 0 && (
+          {!isLeaveDay && shifts.length === 0 && todaySchedule === null && (
             <View style={{ backgroundColor: "#FFFBEB", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#FDE68A" }}>
               <Text style={{ color: "#92400E", fontSize: 13, textAlign: "center" }}>
                 今日尚未排班，顯示預設班次
