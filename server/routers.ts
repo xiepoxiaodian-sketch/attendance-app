@@ -895,7 +895,7 @@ const employeesRouter = router({
       employeeType: z.enum(["full_time", "part_time"]).default("full_time"),
       jobTitle: z.string().optional(),
       phone: z.string().optional(),
-      tag: z.enum(["indoor", "outdoor", "supervisor"]).optional(),
+      tag: z.enum(["indoor", "outdoor", "supervisor", "pt"]).optional(),
     }))
     .mutation(async ({ input }) => {
       const existing = await db.getEmployeeByUsername(input.username);
@@ -914,7 +914,7 @@ const employeesRouter = router({
       jobTitle: z.string().optional(),
       phone: z.string().optional(),
       isActive: z.boolean().optional(),
-      tag: z.enum(["indoor", "outdoor", "supervisor"]).nullable().optional(),
+      tag: z.enum(["indoor", "outdoor", "supervisor", "pt"]).nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const { id, ...data } = input;

@@ -1,0 +1,1 @@
+ALTER TABLE `employees` MODIFY COLUMN `tag` enum('indoor','outdoor','supervisor','pt');

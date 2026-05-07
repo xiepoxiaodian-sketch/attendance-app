@@ -134,6 +134,13 @@
       "when": 1777561899309,
       "tag": "0018_quick_blacklash",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1778140789003,
+      "tag": "0019_jazzy_squadron_sinister",
+      "breakpoints": true
     }
   ]
 }

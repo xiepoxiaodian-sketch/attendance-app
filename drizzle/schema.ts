@@ -46,7 +46,7 @@ export const employees = mysqlTable("employees", {
   needsSetup: boolean("needsSetup").default(true).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
-  tag: mysqlEnum("tag", ["indoor", "outdoor", "supervisor"]),
+  tag: mysqlEnum("tag", ["indoor", "outdoor", "supervisor", "pt"]),
   lineUserId: varchar("lineUserId", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

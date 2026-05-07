@@ -28,13 +28,14 @@ type Employee = {
   isActive: boolean;
   needsSetup: boolean;
   sortOrder?: number;
-  tag?: "indoor" | "outdoor" | "supervisor" | null;
+  tag?: "indoor" | "outdoor" | "supervisor" | "pt" | null;
 };
 
 const TAG_LABELS: Record<string, { label: string; bg: string; text: string }> = {
   indoor:     { label: "內場", bg: "#EFF6FF", text: "#2563EB" },
   outdoor:    { label: "外場", bg: "#F0FDF4", text: "#16A34A" },
   supervisor: { label: "幹部", bg: "#FEF3C7", text: "#D97706" },
+  pt:         { label: "PT",   bg: "#FDF4FF", text: "#9333EA" },
 };
 
 const INITIAL_FORM = {
@@ -45,7 +46,7 @@ const INITIAL_FORM = {
   employeeType: "full_time" as "full_time" | "part_time",
   jobTitle: "",
   phone: "",
-  tag: "" as "" | "indoor" | "outdoor" | "supervisor",
+  tag: "" as "" | "indoor" | "outdoor" | "supervisor" | "pt",
 };
 
 function FormField({
@@ -233,7 +234,7 @@ export default function AdminEmployeesScreen() {
       employeeType: emp.employeeType as "full_time" | "part_time",
       jobTitle: emp.jobTitle || "",
       phone: emp.phone || "",
-      tag: (emp.tag as "" | "indoor" | "outdoor" | "supervisor") || "",
+      tag: (emp.tag as "" | "indoor" | "outdoor" | "supervisor" | "pt") || "",
     });
     setFormError("");
     setShowModal(true);
@@ -685,10 +686,10 @@ export default function AdminEmployeesScreen() {
             <View style={{ marginBottom: 14 }}>
               <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 }}>標籤</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
-                {[{ label: "無", value: "" }, { label: "內場", value: "indoor" }, { label: "外場", value: "outdoor" }, { label: "幹部", value: "supervisor" }].map(opt => (
+                {[{ label: "無", value: "" }, { label: "內場", value: "indoor" }, { label: "外場", value: "outdoor" }, { label: "幹部", value: "supervisor" }, { label: "PT", value: "pt" }].map(opt => (
                   <TouchableOpacity
                     key={opt.value}
-                    onPress={() => setForm(f => ({ ...f, tag: opt.value as "" | "indoor" | "outdoor" | "supervisor" }))}
+                    onPress={() => setForm(f => ({ ...f, tag: opt.value as "" | "indoor" | "outdoor" | "supervisor" | "pt" }))}
                     style={{
                       flex: 1, paddingVertical: 9, alignItems: "center", borderRadius: 10,
                       borderWidth: 1.5,

@@ -73,6 +73,7 @@ function WeekTab() {
   const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState(false);
   const [staffingPopup, setStaffingPopup] = useState<{ dateStr: string; slot: number; names: string[] } | null>(null);
   const [showStaffingView, setShowStaffingView] = useState(true);
+  const [staffingSelectedDate, setStaffingSelectedDate] = useState<string>(() => toDateStr(new Date()));
   // 月排班 Modal
   const [showMonthModal, setShowMonthModal] = useState(false);
   const [monthModalEmployee, setMonthModalEmployee] = useState<{ id: number; fullName: string } | null>(null);
@@ -294,16 +295,15 @@ function WeekTab() {
   // 依 category（indoor/outdoor/pt）分開計算每天每30分鐘時段的在班人數
   // slot = 分鐘數 / 30，動態計算最早到最晚的時間範圍
 
-  // 建立班次名稱 → category 的對照表
-  const shiftCategoryMap = useMemo(() => {
-    const map: Record<string, "indoor" | "outdoor" | "pt"> = {};
-    for (const ws of (workShifts ?? [])) {
-      map[ws.name] = (ws as any).category ?? "indoor";
-    }
-    return map;
-  }, [workShifts]);
+  // 分類定義（依員工 tag 欄位）
+  const STAFFING_CATEGORIES = [
+    { key: "indoor" as const, label: "內場", color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE", heatColors: ["#F3F4F6", "#DBEAFE", "#93C5FD", "#3B82F6", "#1D4ED8"] },
+    { key: "outdoor" as const, label: "外場", color: "#15803D", bg: "#F0FDF4", border: "#BBF7D0", heatColors: ["#F3F4F6", "#DCFCE7", "#86EFAC", "#4ADE80", "#16A34A"] },
+    { key: "supervisor" as const, label: "幹部", color: "#C2410C", bg: "#FFF7ED", border: "#FED7AA", heatColors: ["#F3F4F6", "#FFEDD5", "#FDBA74", "#FB923C", "#EA580C"] },
+    { key: "pt" as const, label: "PT", color: "#D97706", bg: "#FEF3C7", border: "#FDE68A", heatColors: ["#F3F4F6", "#FEF3C7", "#FCD34D", "#F59E0B", "#D97706"] },
+  ];
 
-  // 動態計算本週所有班次的最早開始和最晚結束時間
+  // 動態計算選定日期的最早開始和最晚結束時間
   const { dynSlotStart, dynSlotEnd } = useMemo(() => {
     let minMin = 10 * 60; // 預設 10:00
     let maxMin = 23 * 60; // 預設 23:00
@@ -323,7 +323,6 @@ function WeekTab() {
         }
       }
     }
-    // 向下取整到30分鐘，向上取整到30分鐘
     const start = Math.floor(minMin / 30);
     const end = Math.ceil(maxMin / 30);
     return { dynSlotStart: start, dynSlotEnd: end };
@@ -333,20 +332,12 @@ function WeekTab() {
   const SLOT_END = dynSlotEnd;
   const SLOTS = Array.from({ length: SLOT_END - SLOT_START }, (_, i) => SLOT_START + i);
 
-  // 分類定義
-  const STAFFING_CATEGORIES = [
-    { key: "indoor" as const, label: "內場", color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE", heatColors: ["#F3F4F6", "#DBEAFE", "#93C5FD", "#3B82F6", "#1D4ED8"] },
-    { key: "outdoor" as const, label: "外場", color: "#15803D", bg: "#F0FDF4", border: "#BBF7D0", heatColors: ["#F3F4F6", "#DCFCE7", "#86EFAC", "#4ADE80", "#16A34A"] },
-    { key: "pt" as const, label: "PT", color: "#D97706", bg: "#FEF3C7", border: "#FDE68A", heatColors: ["#F3F4F6", "#FEF3C7", "#FCD34D", "#F59E0B", "#D97706"] },
-  ];
-
-  // 按 category 分開計算每天每時段人力
+  // 按員工 tag 分開計算每天每時段人力
   const staffingByCategory = useMemo(() => {
-    // result[category][dateStr][slot] = [empName, ...]
-    const result: Record<string, Record<string, Record<number, string[]>>> = {
-      indoor: {}, outdoor: {}, pt: {},
-    };
-    for (const cat of ["indoor", "outdoor", "pt"]) {
+    const catKeys = ["indoor", "outdoor", "supervisor", "pt"];
+    const result: Record<string, Record<string, Record<number, string[]>>> = {};
+    for (const cat of catKeys) {
+      result[cat] = {};
       for (const d of weekDates) {
         const dateStr = toDateStr(d);
         result[cat][dateStr] = {};
@@ -354,13 +345,15 @@ function WeekTab() {
       }
     }
     for (const emp of activeEmployees) {
+      // 用員工 tag 決定分類，預設 indoor
+      const empTag = (emp as any).tag ?? "indoor";
+      const cat = catKeys.includes(empTag) ? empTag : "indoor";
       for (const d of weekDates) {
         const dateStr = toDateStr(d);
         const schedule = scheduleMap[emp.id]?.[dateStr];
         if (!schedule?.shifts?.length) continue;
         if (schedule.leaveType && schedule.leaveMode === "allDay") continue;
         for (const shift of schedule.shifts) {
-          const cat = shiftCategoryMap[shift.label] ?? "indoor";
           const [sh, sm] = shift.startTime.split(":").map(Number);
           const [eh, em] = shift.endTime.split(":").map(Number);
           const startMin = sh * 60 + sm;
@@ -377,17 +370,18 @@ function WeekTab() {
       }
     }
     return result;
-  }, [weekSchedules, activeEmployees, weekDates, scheduleMap, shiftCategoryMap, SLOT_START, SLOT_END]);
+  }, [weekSchedules, activeEmployees, weekDates, scheduleMap, SLOT_START, SLOT_END]);
 
-  // 保留舊的 staffingByDayHour（合計所有分類，供 popup 使用）
+  // 合計所有分類（供 popup 使用）
   const staffingByDayHour = useMemo(() => {
+    const catKeys = ["indoor", "outdoor", "supervisor", "pt"];
     const result: Record<string, Record<number, string[]>> = {};
     for (const d of weekDates) {
       const dateStr = toDateStr(d);
       result[dateStr] = {};
       for (let s = SLOT_START; s < SLOT_END; s++) {
         const all = new Set<string>();
-        for (const cat of ["indoor", "outdoor", "pt"]) {
+        for (const cat of catKeys) {
           for (const name of (staffingByCategory[cat]?.[dateStr]?.[s] ?? [])) all.add(name);
         }
         result[dateStr][s] = Array.from(all);
@@ -527,71 +521,112 @@ function WeekTab() {
         </TouchableOpacity>
 
         {showStaffingView && (() => {
-          // 30分鐘一格，動態時間範圍
-          const COL_W = 28;
-          const ROW_H = 32;
-          const LABEL_W = 58;
+          const COL_W = 30;
+          const ROW_H = 34;
+          const LABEL_W = 44;
           const slotToTime = (s: number) => {
             const totalMin = s * 30;
             const h = Math.floor(totalMin / 60);
             const m = totalMin % 60;
             return `${h}:${m === 0 ? "00" : "30"}`;
           };
+          // 確保選定日期在本週範圍內
+          const validSelectedDate = weekDates.some(d => toDateStr(d) === staffingSelectedDate)
+            ? staffingSelectedDate
+            : todayStr;
+          const selDate = new Date(validSelectedDate + "T00:00:00");
+          const selIsWeekend = selDate.getDay() === 0 || selDate.getDay() === 6;
 
           return (
             <View style={{ paddingBottom: 12 }}>
+              {/* 日期選擇列 */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 12, marginBottom: 10 }}>
+                <View style={{ flexDirection: "row", gap: 6, paddingVertical: 4 }}>
+                  {weekDates.map((d, di) => {
+                    const dateStr = toDateStr(d);
+                    const isToday = dateStr === todayStr;
+                    const isSelected = dateStr === validSelectedDate;
+                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                    const dayLabel = ["日","一","二","三","四","五","六"][d.getDay()];
+                    // 計算當天在班人數
+                    const dayTotal = staffingByDayHour[dateStr]
+                      ? Object.values(staffingByDayHour[dateStr]).reduce((max, names) => Math.max(max, names.length), 0)
+                      : 0;
+                    return (
+                      <TouchableOpacity
+                        key={di}
+                        onPress={() => { setStaffingSelectedDate(dateStr); setStaffingPopup(null); }}
+                        style={{
+                          alignItems: "center",
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 10,
+                          backgroundColor: isSelected ? "#1E293B" : isToday ? "#EFF6FF" : "#F8FAFC",
+                          borderWidth: isToday && !isSelected ? 1.5 : 0,
+                          borderColor: "#2563EB",
+                          minWidth: 48,
+                        }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: "600", color: isSelected ? "#94A3B8" : isWeekend ? "#94A3B8" : "#64748B" }}>
+                          {isToday ? "今" : `週${dayLabel}`}
+                        </Text>
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: isSelected ? "white" : isWeekend ? "#94A3B8" : "#1E293B", marginTop: 1 }}>
+                          {d.getDate()}
+                        </Text>
+                        {dayTotal > 0 && (
+                          <View style={{ backgroundColor: isSelected ? "#475569" : "#E2E8F0", borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1, marginTop: 2 }}>
+                            <Text style={{ fontSize: 9, color: isSelected ? "white" : "#64748B", fontWeight: "600" }}>{dayTotal}人</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+
               {/* Popup panel */}
-              {staffingPopup && (() => {
+              {staffingPopup && staffingPopup.dateStr === validSelectedDate && (() => {
                 const slotMin = staffingPopup.slot * 30;
                 const endMin = slotMin + 30;
                 const startLabel = slotToTime(staffingPopup.slot);
                 const endH = Math.floor(endMin / 60);
                 const endM = endMin % 60;
                 const endLabel = `${endH}:${endM === 0 ? "00" : "30"}`;
-                // 將 popup 人名分類
-                const popupCatNames: Record<string, string[]> = { indoor: [], outdoor: [], pt: [] };
+                const popupCatNames: Record<string, string[]> = { indoor: [], outdoor: [], supervisor: [], pt: [] };
                 for (const name of staffingPopup.names) {
-                  // 找出此人在此時段屬於哪個分類
-                  for (const cat of ["indoor", "outdoor", "pt"]) {
+                  for (const cat of ["indoor", "outdoor", "supervisor", "pt"]) {
                     if ((staffingByCategory[cat]?.[staffingPopup.dateStr]?.[staffingPopup.slot] ?? []).includes(name)) {
                       popupCatNames[cat].push(name);
                     }
                   }
                 }
                 return (
-                  <View style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                  <View style={{ marginHorizontal: 12, marginBottom: 10, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                         <View style={{ backgroundColor: "#1E293B", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                          <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>
-                            {startLabel}–{endLabel}
-                          </Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>{startLabel}–{endLabel}</Text>
                         </View>
-                        <Text style={{ fontSize: 13, color: "#475569" }}>
-                          週{["日","一","二","三","四","五","六"][new Date(staffingPopup.dateStr).getDay()]} {staffingPopup.dateStr.slice(5).replace("-", "/")}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                         <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B" }}>{staffingPopup.names.length} 人在班</Text>
-                        <TouchableOpacity onPress={() => setStaffingPopup(null)} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#E2E8F0", alignItems: "center", justifyContent: "center" }}>
-                          <Text style={{ fontSize: 13, color: "#475569", fontWeight: "700" }}>✕</Text>
-                        </TouchableOpacity>
                       </View>
+                      <TouchableOpacity onPress={() => setStaffingPopup(null)} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#E2E8F0", alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ fontSize: 13, color: "#475569", fontWeight: "700" }}>✕</Text>
+                      </TouchableOpacity>
                     </View>
                     {staffingPopup.names.length === 0 ? (
                       <Text style={{ fontSize: 13, color: "#94A3B8" }}>此時段無人排班</Text>
                     ) : (
-                      <View style={{ gap: 8 }}>
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
                         {STAFFING_CATEGORIES.map(cat => {
                           const names = popupCatNames[cat.key] ?? [];
                           if (names.length === 0) return null;
                           return (
-                            <View key={cat.key}>
-                              <Text style={{ fontSize: 11, color: cat.color, fontWeight: "700", marginBottom: 4 }}>{cat.label} {names.length}人</Text>
-                              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                            <View key={cat.key} style={{ minWidth: 80 }}>
+                              <Text style={{ fontSize: 10, color: cat.color, fontWeight: "700", marginBottom: 4 }}>{cat.label} {names.length}人</Text>
+                              <View style={{ gap: 3 }}>
                                 {names.map((name, i) => (
-                                  <View key={i} style={{ backgroundColor: cat.bg, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: cat.border }}>
-                                    <Text style={{ fontSize: 12, color: cat.color, fontWeight: "600" }}>{name}</Text>
+                                  <View key={i} style={{ backgroundColor: cat.bg, borderRadius: 5, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: cat.border }}>
+                                    <Text style={{ fontSize: 11, color: cat.color, fontWeight: "600" }}>{name}</Text>
                                   </View>
                                 ))}
                               </View>
@@ -604,119 +639,71 @@ function WeekTab() {
                 );
               })()}
 
-              {/* Grid - 三個分類各一列 */}
+              {/* Grid - 只顯示選定日期 */}
               <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                <View>
-                  {/* Time header row */}
+                <View style={{ paddingHorizontal: 12 }}>
+                  {/* Time header */}
                   <View style={{ flexDirection: "row", marginBottom: 2 }}>
-                    <View style={{ width: LABEL_W, height: 20 }} />
+                    <View style={{ width: LABEL_W }} />
                     {SLOTS.map(s => {
                       const totalMin = s * 30;
                       const h = Math.floor(totalMin / 60);
                       const m = totalMin % 60;
-                      const showLabel = m === 0;
                       return (
-                        <View key={s} style={{ width: COL_W, height: 20, alignItems: "center", justifyContent: "flex-end", paddingBottom: 1 }}>
-                          {showLabel && (
-                            <Text style={{ fontSize: 9, fontWeight: "700", color: "#374151" }}>{h}時</Text>
-                          )}
+                        <View key={s} style={{ width: COL_W, height: 18, alignItems: "center", justifyContent: "flex-end" }}>
+                          {m === 0 && <Text style={{ fontSize: 9, fontWeight: "700", color: "#374151" }}>{h}時</Text>}
                         </View>
                       );
                     })}
                   </View>
 
-                  {/* 每天 × 三個分類 */}
-                  {weekDates.map((d, di) => {
-                    const dateStr = toDateStr(d);
-                    const isToday = dateStr === todayStr;
-                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                    const dayLabel = ["日","一","二","三","四","五","六"][d.getDay()];
-
+                  {/* 四個分類各一列 */}
+                  {STAFFING_CATEGORIES.map((cat, ci) => {
+                    // 檢查此分類是否有任何人排班
+                    const hasAny = SLOTS.some(s => (staffingByCategory[cat.key]?.[validSelectedDate]?.[s]?.length ?? 0) > 0);
                     return (
-                      <View key={di} style={{ marginBottom: 6 }}>
-                        {STAFFING_CATEGORIES.map((cat, ci) => {
-                          const isFirstRow = ci === 0;
+                      <View key={cat.key} style={{ flexDirection: "row", marginBottom: ci < STAFFING_CATEGORIES.length - 1 ? 3 : 0 }}>
+                        {/* 分類標籤 */}
+                        <View style={{ width: LABEL_W, height: ROW_H, justifyContent: "center", alignItems: "flex-end", paddingRight: 6 }}>
+                          <View style={{ backgroundColor: hasAny ? cat.bg : "#F3F4F6", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1, borderColor: hasAny ? cat.border : "#E5E7EB" }}>
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: hasAny ? cat.color : "#CBD5E1" }}>{cat.label}</Text>
+                          </View>
+                        </View>
+                        {/* Slot cells */}
+                        {SLOTS.map(s => {
+                          const names = staffingByCategory[cat.key]?.[validSelectedDate]?.[s] ?? [];
+                          const count = names.length;
+                          const isActive = staffingPopup?.dateStr === validSelectedDate && staffingPopup?.slot === s;
+                          const m = (s * 30) % 60;
+                          const heatColors = cat.heatColors;
+                          const bg = isActive ? cat.color
+                            : count === 0 ? (selIsWeekend ? "#F9FAFB" : "#F3F4F6")
+                            : count === 1 ? heatColors[1]
+                            : count <= 3 ? heatColors[2]
+                            : count <= 5 ? heatColors[3]
+                            : heatColors[4];
+                          const textColor = isActive || count > 5 ? "white" : count > 0 ? cat.color : "transparent";
                           return (
-                            <View key={cat.key} style={{ flexDirection: "row", marginBottom: 1 }}>
-                              {/* Date label - 只在第一列顯示日期，其他列顯示分類標籤 */}
-                              <View style={{ width: LABEL_W, height: ROW_H, flexDirection: "row", alignItems: "center", gap: 3, paddingRight: 4 }}>
-                                {isFirstRow ? (
-                                  <>
-                                    <View style={{
-                                      width: 26, height: 26, borderRadius: 13,
-                                      backgroundColor: isToday ? "#2563EB" : isWeekend ? "#F1F5F9" : "#F8FAFC",
-                                      alignItems: "center", justifyContent: "center",
-                                    }}>
-                                      <Text style={{ fontSize: 10, fontWeight: "700", color: isToday ? "white" : isWeekend ? "#94A3B8" : "#475569" }}>
-                                        {dayLabel}
-                                      </Text>
-                                    </View>
-                                    <View>
-                                      <Text style={{ fontSize: 10, fontWeight: "600", color: isWeekend ? "#94A3B8" : "#374151", lineHeight: 13 }}>
-                                        {d.getMonth() + 1}/{d.getDate()}
-                                      </Text>
-                                      {isToday && (
-                                        <View style={{ backgroundColor: "#2563EB", borderRadius: 3, paddingHorizontal: 2, paddingVertical: 1, alignSelf: "flex-start" }}>
-                                          <Text style={{ fontSize: 7, color: "white", fontWeight: "700" }}>今天</Text>
-                                        </View>
-                                      )}
-                                    </View>
-                                  </>
-                                ) : (
-                                  <View style={{ flex: 1, alignItems: "flex-end", paddingRight: 4 }}>
-                                    <Text style={{ fontSize: 9, fontWeight: "700", color: cat.color }}>{cat.label}</Text>
-                                  </View>
-                                )}
-                              </View>
-
-                              {/* Slot cells */}
-                              {SLOTS.map(s => {
-                                const names = staffingByCategory[cat.key]?.[dateStr]?.[s] ?? [];
-                                const count = names.length;
-                                const isActive = staffingPopup?.dateStr === dateStr && staffingPopup?.slot === s;
-                                const totalMin = s * 30;
-                                const m = totalMin % 60;
-                                const isHalfHour = m === 30;
-                                // 依 count 選色
-                                const heatColors = cat.heatColors;
-                                const bg = isActive
-                                  ? cat.color
-                                  : count === 0 ? (isWeekend ? "#F9FAFB" : "#F3F4F6")
-                                  : count === 1 ? heatColors[1]
-                                  : count <= 3 ? heatColors[2]
-                                  : count <= 5 ? heatColors[3]
-                                  : heatColors[4];
-                                const textColor = isActive || count > 5 ? "white" : count > 0 ? cat.color : "#D1D5DB";
-
-                                return (
-                                  <TouchableOpacity
-                                    key={s}
-                                    onPress={() => {
-                                      // 將此時段所有分類的人合並
-                                      const allNames = staffingByDayHour[dateStr]?.[s] ?? [];
-                                      setStaffingPopup(isActive ? null : { dateStr, slot: s, names: allNames });
-                                    }}
-                                    style={{
-                                      width: COL_W,
-                                      height: ROW_H,
-                                      backgroundColor: bg,
-                                      borderRadius: 2,
-                                      marginHorizontal: 0.5,
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      borderLeftWidth: isHalfHour ? 1 : 0,
-                                      borderLeftColor: "#E5E7EB",
-                                      borderWidth: isActive ? 1.5 : 0,
-                                      borderColor: cat.color,
-                                    }}
-                                  >
-                                    <Text style={{ fontSize: 11, fontWeight: "700", color: textColor }}>
-                                      {count > 0 ? count : ""}
-                                    </Text>
-                                  </TouchableOpacity>
-                                );
-                              })}
-                            </View>
+                            <TouchableOpacity
+                              key={s}
+                              onPress={() => {
+                                const allNames = staffingByDayHour[validSelectedDate]?.[s] ?? [];
+                                setStaffingPopup(isActive ? null : { dateStr: validSelectedDate, slot: s, names: allNames });
+                              }}
+                              style={{
+                                width: COL_W, height: ROW_H,
+                                backgroundColor: bg,
+                                borderRadius: 3,
+                                marginHorizontal: 0.5,
+                                alignItems: "center", justifyContent: "center",
+                                borderLeftWidth: m === 30 ? 1 : 0,
+                                borderLeftColor: "#E5E7EB",
+                                borderWidth: isActive ? 1.5 : 0,
+                                borderColor: cat.color,
+                              }}
+                            >
+                              <Text style={{ fontSize: 11, fontWeight: "700", color: textColor }}>{count > 0 ? count : ""}</Text>
+                            </TouchableOpacity>
                           );
                         })}
                       </View>
@@ -724,19 +711,14 @@ function WeekTab() {
                   })}
 
                   {/* Legend */}
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, paddingLeft: LABEL_W, paddingTop: 8, paddingBottom: 4 }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, paddingLeft: LABEL_W, paddingTop: 8, paddingBottom: 2 }}>
                     {STAFFING_CATEGORIES.map(cat => (
-                      <View key={cat.key} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <View key={cat.key} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                         <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: cat.color }} />
-                        <Text style={{ fontSize: 10, color: cat.color, fontWeight: "700" }}>{cat.label}</Text>
-                        {[1, 2, 3, 4].map(level => (
-                          <View key={level} style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                            <View style={{ width: 14, height: 14, borderRadius: 2, backgroundColor: cat.heatColors[level] }} />
-                            <Text style={{ fontSize: 9, color: "#9CA3AF" }}>{level === 1 ? "1" : level === 2 ? "2-3" : level === 3 ? "4-5" : "6+"}</Text>
-                          </View>
-                        ))}
+                        <Text style={{ fontSize: 9, color: cat.color, fontWeight: "700" }}>{cat.label}</Text>
                       </View>
                     ))}
+                    <Text style={{ fontSize: 9, color: "#9CA3AF" }}>點擊格子查看詳細</Text>
                   </View>
                 </View>
               </ScrollView>
