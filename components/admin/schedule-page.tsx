@@ -804,51 +804,46 @@ function WeekTab() {
                   <Text style={{ fontSize: 13, fontWeight: "700", color: "#64748B" }}>休假</Text>
                 </TouchableOpacity>
               </View>
-              {/* 依分組顯示班次按鈕 */}
+              {/* 依班次 category 分組顯示快速套用按鈕 */}
               {(() => {
                 const activeShifts = (workShifts ?? []).filter(ws => ws.isActive);
-                const assignedIds = new Set(shiftGroups.flatMap(g => g.shiftIds));
-                const ungrouped = activeShifts.filter(ws => !assignedIds.has(ws.id));
-                const renderShiftBtn = (ws: typeof activeShifts[0]) => (
-                  <TouchableOpacity
-                    key={ws.id}
-                    onPress={() => {
-                      setLeave(p => ({ ...p, enabled: false }));
-                      setShifts(prev => [...prev, { startTime: ws.startTime, endTime: ws.endTime, label: ws.name }]);
-                    }}
-                    style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#2563EB", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#2563EB" }}>{ws.name}</Text>
-                    <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{ws.startTime} ~ {ws.endTime}</Text>
-                  </TouchableOpacity>
-                );
-                const hasGroups = shiftGroups.filter(g => g.name.trim()).length > 0;
+                const CATEGORY_ORDER = [
+                  { key: "indoor", label: "內場", color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE" },
+                  { key: "outdoor", label: "外場", color: "#15803D", bg: "#F0FDF4", border: "#BBF7D0" },
+                  { key: "pt", label: "其他", color: "#D97706", bg: "#FEF3C7", border: "#FDE68A" },
+                ];
+                const renderShiftBtn = (ws: typeof activeShifts[0]) => {
+                  const cat = CATEGORY_ORDER.find(c => c.key === (ws as any).category) ?? CATEGORY_ORDER[2];
+                  return (
+                    <TouchableOpacity
+                      key={ws.id}
+                      onPress={() => {
+                        setLeave(p => ({ ...p, enabled: false }));
+                        setShifts(prev => [...prev, { startTime: ws.startTime, endTime: ws.endTime, label: ws.name }]);
+                      }}
+                      style={{ backgroundColor: cat.bg, borderWidth: 1, borderColor: cat.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignItems: "center" }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: cat.color }}>{ws.name}</Text>
+                      <Text style={{ fontSize: 11, color: cat.color, opacity: 0.7, marginTop: 2 }}>{ws.startTime} ~ {ws.endTime}</Text>
+                    </TouchableOpacity>
+                  );
+                };
                 return (
                   <>
-                    {shiftGroups.filter(g => g.name.trim()).map(group => {
-                      const groupShifts = activeShifts.filter(ws => group.shiftIds.includes(ws.id));
-                      if (groupShifts.length === 0) return null;
+                    {CATEGORY_ORDER.map(cat => {
+                      const catShifts = activeShifts.filter(ws => ((ws as any).category ?? "indoor") === cat.key);
+                      if (catShifts.length === 0) return null;
                       return (
-                        <View key={group.id} style={{ marginBottom: 8 }}>
-                          <Text style={{ fontSize: 11, color: "#94A3B8", fontWeight: "600", marginBottom: 6 }}>{group.name}</Text>
+                        <View key={cat.key} style={{ marginBottom: 8 }}>
+                          <Text style={{ fontSize: 11, color: cat.color, fontWeight: "700", marginBottom: 6 }}>{cat.label}</Text>
                           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                             <View style={{ flexDirection: "row", gap: 8 }}>
-                              {groupShifts.map(renderShiftBtn)}
+                              {catShifts.map(renderShiftBtn)}
                             </View>
                           </ScrollView>
                         </View>
                       );
                     })}
-                    {ungrouped.length > 0 && (
-                      <View style={{ marginBottom: 4 }}>
-                        {hasGroups && <Text style={{ fontSize: 11, color: "#94A3B8", fontWeight: "600", marginBottom: 6 }}>其他</Text>}
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          <View style={{ flexDirection: "row", gap: 8 }}>
-                            {ungrouped.map(renderShiftBtn)}
-                          </View>
-                        </ScrollView>
-                      </View>
-                    )}
                   </>
                 );
               })()}
@@ -909,51 +904,71 @@ function WeekTab() {
               </TouchableOpacity>
             </View>
 
-            {/* 工作時段快選 */}
+            {/* 工作時段快選 - 依 category 分組 */}
             <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: "#E2E8F0" }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B", marginBottom: 10 }}>選擇日期後套用班次</Text>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B", marginBottom: 6 }}>選擇日期後套用班次</Text>
               <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 10 }}>先點選下方月曆的日期，再點此處套用班次</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={{ flexDirection: "row", gap: 8, flexWrap: "nowrap" }}>
-                  {(workShifts ?? []).map(ws => (
+              {(() => {
+                const activeShifts = (workShifts ?? []).filter(ws => ws.isActive);
+                const CATEGORY_ORDER = [
+                  { key: "indoor", label: "內場", color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE" },
+                  { key: "outdoor", label: "外場", color: "#15803D", bg: "#F0FDF4", border: "#BBF7D0" },
+                  { key: "pt", label: "其他", color: "#D97706", bg: "#FEF3C7", border: "#FDE68A" },
+                ];
+                return (
+                  <>
+                    {CATEGORY_ORDER.map(cat => {
+                      const catShifts = activeShifts.filter(ws => ((ws as any).category ?? "indoor") === cat.key);
+                      if (catShifts.length === 0) return null;
+                      return (
+                        <View key={cat.key} style={{ marginBottom: 8 }}>
+                          <Text style={{ fontSize: 11, color: cat.color, fontWeight: "700", marginBottom: 6 }}>{cat.label}</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            <View style={{ flexDirection: "row", gap: 8 }}>
+                              {catShifts.map(ws => (
+                                <TouchableOpacity
+                                  key={ws.id}
+                                  onPress={() => {
+                                    if (selectedDates.size === 0) {
+                                      setMonthAlertMsg({ title: "提示", message: "請先點選月曆上的日期" });
+                                      return;
+                                    }
+                                    const newMap = { ...monthScheduleMap };
+                                    selectedDates.forEach(dateStr => {
+                                      newMap[dateStr] = [{ startTime: ws.startTime, endTime: ws.endTime, label: ws.name }];
+                                    });
+                                    setMonthScheduleMap(newMap);
+                                    setSelectedDates(new Set());
+                                  }}
+                                  style={{ backgroundColor: cat.bg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: cat.border }}
+                                >
+                                  <Text style={{ fontSize: 12, fontWeight: "700", color: cat.color }}>{ws.name}</Text>
+                                  <Text style={{ fontSize: 11, color: cat.color, opacity: 0.7 }}>{ws.startTime}-{ws.endTime}</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          </ScrollView>
+                        </View>
+                      );
+                    })}
                     <TouchableOpacity
-                      key={ws.id}
                       onPress={() => {
                         if (selectedDates.size === 0) {
                           setMonthAlertMsg({ title: "提示", message: "請先點選月曆上的日期" });
                           return;
                         }
                         const newMap = { ...monthScheduleMap };
-                        selectedDates.forEach(dateStr => {
-                          newMap[dateStr] = [{ startTime: ws.startTime, endTime: ws.endTime, label: ws.name }];
-                        });
+                        selectedDates.forEach(dateStr => { delete newMap[dateStr]; });
                         setMonthScheduleMap(newMap);
                         setSelectedDates(new Set());
                       }}
-                      style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: "#BFDBFE" }}
+                      style={{ backgroundColor: "#FEF2F2", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: "#FECACA", alignSelf: "flex-start", marginTop: 4 }}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563EB" }}>{ws.name}</Text>
-                      <Text style={{ fontSize: 11, color: "#64748B" }}>{ws.startTime}-{ws.endTime}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}>清除選取日期班次</Text>
                     </TouchableOpacity>
-                  ))}
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (selectedDates.size === 0) {
-                        setMonthAlertMsg({ title: "提示", message: "請先點選月曆上的日期" });
-                        return;
-                      }
-                      const newMap = { ...monthScheduleMap };
-                      selectedDates.forEach(dateStr => { delete newMap[dateStr]; });
-                      setMonthScheduleMap(newMap);
-                      setSelectedDates(new Set());
-                    }}
-                    style={{ backgroundColor: "#FEF2F2", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: "#FECACA" }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}>清除選取</Text>
-                    <Text style={{ fontSize: 11, color: "#EF4444" }}>移除班次</Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
+                  </>
+                );
+              })()}
             </View>
 
             {/* 月曆 */}
