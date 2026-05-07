@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
+import { getDb } from "../db";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -12,6 +13,15 @@ export const systemRouter = router({
     .query(() => ({
       ok: true,
     })),
+
+  runMigration: adminProcedure
+    .input(z.object({ sql: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.execute(input.sql as any);
+      return { success: true };
+    }),
 
   notifyOwner: adminProcedure
     .input(
