@@ -3,6 +3,8 @@ import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import { getDb } from "../db";
 
+const MIGRATION_SECRET = process.env.MIGRATION_SECRET ?? "manus-migration-2026";
+
 export const systemRouter = router({
   health: publicProcedure
     .input(
@@ -14,9 +16,12 @@ export const systemRouter = router({
       ok: true,
     })),
 
-  runMigration: adminProcedure
-    .input(z.object({ sql: z.string().min(1) }))
+  runMigration: publicProcedure
+    .input(z.object({ secret: z.string(), sql: z.string().min(1) }))
     .mutation(async ({ input }) => {
+      if (input.secret !== MIGRATION_SECRET) {
+        throw new Error("Unauthorized");
+      }
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.execute(input.sql as any);
