@@ -16,6 +16,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
+import { DatePickerModal } from "@/components/ui/date-picker-modal";
 
 function formatTime(date: any): string {
   if (!date) return "--:--";
@@ -172,6 +173,8 @@ export default function AdminAttendanceScreen() {
   const weekAgo = new Date(Date.now() + 8 * 60 * 60 * 1000 - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(weekAgo);
   const [endDate, setEndDate] = useState(today);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
   const { data: groupedData, refetch, isLoading } = trpc.attendance.getGrouped.useQuery({ startDate, endDate });
 
@@ -251,15 +254,37 @@ export default function AdminAttendanceScreen() {
         <View style={{ flexDirection: "row", gap: 8 }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", marginBottom: 4 }}>開始日期</Text>
-            <TextInput value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" returnKeyType="done"
-              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }} />
+            <TouchableOpacity
+              onPress={() => setShowStartDatePicker(true)}
+              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 }}
+            >
+              <Text style={{ fontSize: 13, color: startDate ? "#1E293B" : "#94A3B8" }}>{startDate || "YYYY-MM-DD"}</Text>
+            </TouchableOpacity>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", marginBottom: 4 }}>結束日期</Text>
-            <TextInput value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" returnKeyType="done"
-              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }} />
+            <TouchableOpacity
+              onPress={() => setShowEndDatePicker(true)}
+              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 }}
+            >
+              <Text style={{ fontSize: 13, color: endDate ? "#1E293B" : "#94A3B8" }}>{endDate || "YYYY-MM-DD"}</Text>
+            </TouchableOpacity>
           </View>
         </View>
+        <DatePickerModal
+          visible={showStartDatePicker}
+          value={startDate}
+          title="選擇開始日期"
+          onConfirm={(d) => { setStartDate(d); setShowStartDatePicker(false); }}
+          onCancel={() => setShowStartDatePicker(false)}
+        />
+        <DatePickerModal
+          visible={showEndDatePicker}
+          value={endDate}
+          title="選擇結束日期"
+          onConfirm={(d) => { setEndDate(d); setShowEndDatePicker(false); }}
+          onCancel={() => setShowEndDatePicker(false)}
+        />
         {/* Name search */}
         <TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="搜尋員工姓名..."
           returnKeyType="search"

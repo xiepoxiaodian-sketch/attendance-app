@@ -17,6 +17,8 @@ import { ScreenContainer } from "@/components/screen-container";
 import { AdminHeader } from "@/components/admin-header";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
+import { DatePickerModal } from "@/components/ui/date-picker-modal";
+import { TimePickerModal } from "@/components/ui/time-picker-modal";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -104,6 +106,8 @@ const STATUS_OPTIONS = [
 function EditModal({ visible, record, employeeName, onClose, onSave, saving, workShifts = [] }: EditModalProps) {
   const [clockIn, setClockIn] = useState("");
   const [clockOut, setClockOut] = useState("");
+  const [showClockInPicker, setShowClockInPicker] = useState(false);
+  const [showClockOutPicker, setShowClockOutPicker] = useState(false);
   const [note, setNote] = useState("");
   const [statusOverride, setStatusOverride] = useState<string>("normal");
   const [selectedShiftLabel, setSelectedShiftLabel] = useState<string>("");
@@ -178,24 +182,58 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving, wor
             </View>
           )}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 14 }}>實際打卡時間（格式：HH:MM）</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 14 }}>實際打卡時間</Text>
             <View style={{ flexDirection: "row", gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 11, fontWeight: "600", color: "#22C55E", marginBottom: 6 }}>上班時間</Text>
-                <TextInput value={clockIn} onChangeText={setClockIn} placeholder="08:30" keyboardType="numbers-and-punctuation" returnKeyType="done" maxLength={5}
-                  style={{ borderWidth: 1.5, borderColor: "#BBF7D0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, fontSize: 22, fontWeight: "700", color: "#16A34A", textAlign: "center", backgroundColor: "#F0FDF4" }} />
+                <TouchableOpacity
+                  onPress={() => setShowClockInPicker(true)}
+                  style={{ borderWidth: 1.5, borderColor: "#BBF7D0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: "#F0FDF4", alignItems: "center" }}
+                >
+                  <Text style={{ fontSize: 22, fontWeight: "700", color: clockIn ? "#16A34A" : "#94A3B8" }}>{clockIn || "--:--"}</Text>
+                </TouchableOpacity>
               </View>
               <View style={{ alignItems: "center", justifyContent: "flex-end", paddingBottom: 12 }}>
                 <Text style={{ fontSize: 20, color: "#94A3B8" }}>→</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 11, fontWeight: "600", color: "#3B82F6", marginBottom: 6 }}>下班時間</Text>
-                <TextInput value={clockOut} onChangeText={setClockOut} placeholder="17:30" keyboardType="numbers-and-punctuation" returnKeyType="done" maxLength={5}
-                  style={{ borderWidth: 1.5, borderColor: "#BFDBFE", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, fontSize: 22, fontWeight: "700", color: "#2563EB", textAlign: "center", backgroundColor: "#EFF6FF" }} />
+                <TouchableOpacity
+                  onPress={() => setShowClockOutPicker(true)}
+                  style={{ borderWidth: 1.5, borderColor: "#BFDBFE", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: "#EFF6FF", alignItems: "center" }}
+                >
+                  <Text style={{ fontSize: 22, fontWeight: "700", color: clockOut ? "#2563EB" : "#94A3B8" }}>{clockOut || "--:--"}</Text>
+                </TouchableOpacity>
               </View>
             </View>
-            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 10, textAlign: "center" }}>留空表示清除該欄位的打卡記錄</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 8, justifyContent: "center" }}>
+              {clockIn ? (
+                <TouchableOpacity onPress={() => setClockIn("")} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: "#FEE2E2" }}>
+                  <Text style={{ fontSize: 11, color: "#DC2626" }}>清除上班時間</Text>
+                </TouchableOpacity>
+              ) : null}
+              {clockOut ? (
+                <TouchableOpacity onPress={() => setClockOut("")} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: "#FEE2E2" }}>
+                  <Text style={{ fontSize: 11, color: "#DC2626" }}>清除下班時間</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 6, textAlign: "center" }}>點擊時間選擇，清除按鈕可移除打卡記錄</Text>
           </View>
+          <TimePickerModal
+            visible={showClockInPicker}
+            value={clockIn}
+            title="選擇上班時間"
+            onConfirm={(t) => { setClockIn(t); setShowClockInPicker(false); }}
+            onCancel={() => setShowClockInPicker(false)}
+          />
+          <TimePickerModal
+            visible={showClockOutPicker}
+            value={clockOut}
+            title="選擇下班時間"
+            onConfirm={(t) => { setClockOut(t); setShowClockOutPicker(false); }}
+            onCancel={() => setShowClockOutPicker(false)}
+          />
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 10 }}>出勤狀態</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -303,6 +341,8 @@ export default function AdminAttendanceScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: number } | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
   const today = new Date().toISOString().split("T")[0];
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -433,15 +473,37 @@ export default function AdminAttendanceScreen() {
         <View style={{ flexDirection: "row", gap: 8 }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", marginBottom: 4 }}>開始日期</Text>
-            <TextInput value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" returnKeyType="done"
-              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }} />
+            <TouchableOpacity
+              onPress={() => setShowStartDatePicker(true)}
+              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 }}
+            >
+              <Text style={{ fontSize: 13, color: startDate ? "#1E293B" : "#94A3B8" }}>{startDate || "YYYY-MM-DD"}</Text>
+            </TouchableOpacity>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", marginBottom: 4 }}>結束日期</Text>
-            <TextInput value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" returnKeyType="done"
-              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }} />
+            <TouchableOpacity
+              onPress={() => setShowEndDatePicker(true)}
+              style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 }}
+            >
+              <Text style={{ fontSize: 13, color: endDate ? "#1E293B" : "#94A3B8" }}>{endDate || "YYYY-MM-DD"}</Text>
+            </TouchableOpacity>
           </View>
         </View>
+        <DatePickerModal
+          visible={showStartDatePicker}
+          value={startDate}
+          title="選擇開始日期"
+          onConfirm={(d) => { setStartDate(d); setShowStartDatePicker(false); }}
+          onCancel={() => setShowStartDatePicker(false)}
+        />
+        <DatePickerModal
+          visible={showEndDatePicker}
+          value={endDate}
+          title="選擇結束日期"
+          onConfirm={(d) => { setEndDate(d); setShowEndDatePicker(false); }}
+          onCancel={() => setShowEndDatePicker(false)}
+        />
 
         {/* Row 2: Date quick buttons + Excel export */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>

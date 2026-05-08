@@ -15,6 +15,7 @@ import { AdminHeader } from "@/components/admin-header";
 import { ConfirmDialog, AlertDialog } from "@/components/confirm-dialog";
 import { trpc } from "@/lib/trpc";
 import { useEmployeeAuth } from "@/lib/employee-auth";
+import { TimePickerModal } from "@/components/ui/time-picker-modal";
 
 type TabKey = "system" | "shifts" | "leave";
 
@@ -283,6 +284,8 @@ function ShiftsSettings() {
   const [form, setForm] = useState<ShiftFormState>(SHIFT_INITIAL_FORM);
   const [alertMsg, setAlertMsg] = useState<{ title: string; message: string } | null>(null);
   const [confirmDeleteShift, setConfirmDeleteShift] = useState<{ id: number; name: string } | null>(null);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   const createMutation = trpc.workShifts.create.useMutation({
     onSuccess: () => { refetch(); setShowModal(false); setAlertMsg({ title: "成功", message: "工作時段已建立" }); },
@@ -413,23 +416,54 @@ function ShiftsSettings() {
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16 }}>
-            {[
-              { label: "名稱", key: "name", placeholder: "例：早班、正常班" },
-              { label: "上班時間 (HH:MM)", key: "startTime", placeholder: "09:00" },
-              { label: "下班時間 (HH:MM)", key: "endTime", placeholder: "18:00" },
-            ].map((f, i) => (
-              <View key={i} style={{ marginBottom: 14 }}>
-                <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 6 }}>{f.label}</Text>
-                <TextInput
-                  value={(form as any)[f.key]}
-                  onChangeText={(v) => setForm(prev => ({ ...prev, [f.key]: v }))}
-                  placeholder={f.placeholder}
-                  returnKeyType="next"
-                  style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15, color: "#1E293B" }}
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
-            ))}
+            {/* 名稱欄位 */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 6 }}>名稱</Text>
+              <TextInput
+                value={form.name}
+                onChangeText={(v) => setForm(prev => ({ ...prev, name: v }))}
+                placeholder="例：早班、正常班"
+                returnKeyType="next"
+                style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15, color: "#1E293B" }}
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+            {/* 上班時間 */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 6 }}>上班時間</Text>
+              <TouchableOpacity
+                onPress={() => setShowStartTimePicker(true)}
+                style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
+              >
+                <Text style={{ fontSize: 15, color: form.startTime ? "#1E293B" : "#94A3B8" }}>{form.startTime || "請選擇上班時間"}</Text>
+                <Text style={{ fontSize: 11, color: "#94A3B8" }}>點擊選擇</Text>
+              </TouchableOpacity>
+            </View>
+            {/* 下班時間 */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 6 }}>下班時間</Text>
+              <TouchableOpacity
+                onPress={() => setShowEndTimePicker(true)}
+                style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
+              >
+                <Text style={{ fontSize: 15, color: form.endTime ? "#1E293B" : "#94A3B8" }}>{form.endTime || "請選擇下班時間"}</Text>
+                <Text style={{ fontSize: 11, color: "#94A3B8" }}>點擊選擇</Text>
+              </TouchableOpacity>
+            </View>
+            <TimePickerModal
+              visible={showStartTimePicker}
+              value={form.startTime}
+              title="選擇上班時間"
+              onConfirm={(t) => { setForm(f => ({ ...f, startTime: t })); setShowStartTimePicker(false); }}
+              onCancel={() => setShowStartTimePicker(false)}
+            />
+            <TimePickerModal
+              visible={showEndTimePicker}
+              value={form.endTime}
+              title="選擇下班時間"
+              onConfirm={(t) => { setForm(f => ({ ...f, endTime: t })); setShowEndTimePicker(false); }}
+              onCancel={() => setShowEndTimePicker(false)}
+            />
 
             {/* Category Selection */}
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 8 }}>分類</Text>

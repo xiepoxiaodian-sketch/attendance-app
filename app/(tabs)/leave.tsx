@@ -14,6 +14,7 @@ import {
 import { ScreenContainer } from "@/components/screen-container";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
+import { DatePickerModal } from "@/components/ui/date-picker-modal";
 
 const LEAVE_TYPES = [
   { value: "annual", label: "年假", icon: "🌴" },
@@ -53,6 +54,8 @@ export default function LeaveScreen() {
     reason: "",
   });
   const [formError, setFormError] = useState("");
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
   const { data: leaveRequests, refetch, isLoading } = trpc.leave.getByEmployee.useQuery(
     { employeeId: employee?.id ?? 0 },
@@ -281,11 +284,8 @@ export default function LeaveScreen() {
             <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 }}>開始日期</Text>
-                <TextInput
-                  value={form.startDate}
-                  onChangeText={(v) => setForm(f => ({ ...f, startDate: v }))}
-                  placeholder="YYYY-MM-DD"
-                  returnKeyType="next"
+                <TouchableOpacity
+                  onPress={() => setShowStartDatePicker(true)}
                   style={{
                     backgroundColor: "white",
                     borderWidth: 1,
@@ -293,19 +293,17 @@ export default function LeaveScreen() {
                     borderRadius: 10,
                     paddingHorizontal: 12,
                     paddingVertical: 11,
-                    fontSize: 14,
-                    color: "#1E293B",
                   }}
-                  placeholderTextColor="#94A3B8"
-                />
+                >
+                  <Text style={{ fontSize: 14, color: form.startDate ? "#1E293B" : "#94A3B8" }}>
+                    {form.startDate || "請選擇日期"}
+                  </Text>
+                </TouchableOpacity>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 }}>結束日期</Text>
-                <TextInput
-                  value={form.endDate}
-                  onChangeText={(v) => setForm(f => ({ ...f, endDate: v }))}
-                  placeholder="YYYY-MM-DD"
-                  returnKeyType="next"
+                <TouchableOpacity
+                  onPress={() => setShowEndDatePicker(true)}
                   style={{
                     backgroundColor: "white",
                     borderWidth: 1,
@@ -313,13 +311,28 @@ export default function LeaveScreen() {
                     borderRadius: 10,
                     paddingHorizontal: 12,
                     paddingVertical: 11,
-                    fontSize: 14,
-                    color: "#1E293B",
                   }}
-                  placeholderTextColor="#94A3B8"
-                />
+                >
+                  <Text style={{ fontSize: 14, color: form.endDate ? "#1E293B" : "#94A3B8" }}>
+                    {form.endDate || "請選擇日期"}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
+            <DatePickerModal
+              visible={showStartDatePicker}
+              value={form.startDate}
+              title="選擇開始日期"
+              onConfirm={(d) => { setForm(f => ({ ...f, startDate: d })); setShowStartDatePicker(false); }}
+              onCancel={() => setShowStartDatePicker(false)}
+            />
+            <DatePickerModal
+              visible={showEndDatePicker}
+              value={form.endDate}
+              title="選擇結束日期"
+              onConfirm={(d) => { setForm(f => ({ ...f, endDate: d })); setShowEndDatePicker(false); }}
+              onCancel={() => setShowEndDatePicker(false)}
+            />
 
             {/* Reason */}
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 }}>請假原因（選填）</Text>

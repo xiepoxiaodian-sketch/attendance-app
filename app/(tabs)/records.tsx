@@ -17,6 +17,8 @@ import * as ImagePicker from "expo-image-picker";
 import { ScreenContainer } from "@/components/screen-container";
 import { useEmployeeAuth } from "@/lib/employee-auth";
 import { trpc } from "@/lib/trpc";
+import { DatePickerModal } from "@/components/ui/date-picker-modal";
+import { TimePickerModal } from "@/components/ui/time-picker-modal";
 
 // Get today's date string in Taiwan timezone (UTC+8)
 function getTWDateStr(offsetDays = 0): string {
@@ -131,9 +133,12 @@ function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
   onSuccess: () => void;
 }) {
   const [date, setDate] = useState(getTWDateStr());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [type, setType] = useState<"clock_in" | "clock_out" | "both">("clock_in");
   const [clockIn, setClockIn] = useState("09:00");
+  const [showClockInPicker, setShowClockInPicker] = useState(false);
   const [clockOut, setClockOut] = useState("18:00");
+  const [showClockOutPicker, setShowClockOutPicker] = useState(false);
   const [reason, setReason] = useState("");
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -204,12 +209,18 @@ function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
           {/* Date */}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
             <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>補打日期</Text>
-            <TextInput
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 10 }}
+            >
+              <Text style={{ fontSize: 15, color: date ? "#1E293B" : "#94A3B8" }}>{date || "請選擇日期"}</Text>
+            </TouchableOpacity>
+            <DatePickerModal
+              visible={showDatePicker}
               value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
-              style={{ fontSize: 15, color: "#1E293B", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 10 }}
-              returnKeyType="done"
+              title="選擇補打日期"
+              onConfirm={(d) => { setDate(d); setShowDatePicker(false); }}
+              onCancel={() => setShowDatePicker(false)}
             />
           </View>
           {/* Type */}
@@ -227,17 +238,47 @@ function PunchCorrectionModal({ visible, onClose, employeeId, onSuccess }: {
           {/* Time Pickers */}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
             <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 12 }}>補打時間</Text>
-            <View style={{ gap: 20 }}>
+            <View style={{ gap: 12 }}>
               {(type === "clock_in" || type === "both") && (
-                <TimePicker label="上班時間" value={clockIn} onChange={setClockIn} />
+                <View>
+                  <Text style={{ fontSize: 12, color: "#475569", marginBottom: 6 }}>上班時間</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowClockInPicker(true)}
+                    style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 12, backgroundColor: "#F0FDF4", alignItems: "center" }}
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: "700", color: "#16A34A" }}>{clockIn || "--:--"}</Text>
+                  </TouchableOpacity>
+                </View>
               )}
               {type === "both" && (
                 <View style={{ height: 1, backgroundColor: "#E2E8F0" }} />
               )}
               {(type === "clock_out" || type === "both") && (
-                <TimePicker label="下班時間" value={clockOut} onChange={setClockOut} />
+                <View>
+                  <Text style={{ fontSize: 12, color: "#475569", marginBottom: 6 }}>下班時間</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowClockOutPicker(true)}
+                    style={{ borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 8, padding: 12, backgroundColor: "#EFF6FF", alignItems: "center" }}
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: "700", color: "#2563EB" }}>{clockOut || "--:--"}</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
+            <TimePickerModal
+              visible={showClockInPicker}
+              value={clockIn}
+              title="選擇上班時間"
+              onConfirm={(t) => { setClockIn(t); setShowClockInPicker(false); }}
+              onCancel={() => setShowClockInPicker(false)}
+            />
+            <TimePickerModal
+              visible={showClockOutPicker}
+              value={clockOut}
+              title="選擇下班時間"
+              onConfirm={(t) => { setClockOut(t); setShowClockOutPicker(false); }}
+              onCancel={() => setShowClockOutPicker(false)}
+            />
           </View>
           {/* Reason */}
           <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
