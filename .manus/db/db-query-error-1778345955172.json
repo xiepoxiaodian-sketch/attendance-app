@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, name, role, employee_type FROM employees WHERE name LIKE '%謝%' OR name LIKE '%杜%' ORDER BY name;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3qN2dnvpzcdXRKZ.6d8de67b0577 --database dvHycosbPvRvBSsW7DJCxS --execute SELECT id, name, role, employee_type FROM employees WHERE name LIKE '%謝%' OR name LIKE '%杜%' ORDER BY name;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'name' in 'where clause'"
+  ]
+}
