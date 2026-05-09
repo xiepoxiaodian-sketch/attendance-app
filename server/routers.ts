@@ -271,14 +271,23 @@ const attendanceRouter = router({
         }
       }
       const today = getTodayTW();
+      // Also compute yesterday in TW timezone to handle cross-midnight clock-out
+      // (e.g., employee clocked in at 16:48 on 5/9, clocking out at 00:21 on 5/10)
+      const yesterdayDate = new Date(Date.now() + 8 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000);
+      const yesterday = yesterdayDate.toISOString().split("T")[0];
       const now = new Date();
       const records = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
+      // Also fetch yesterday's records to handle cross-midnight shifts
+      const yesterdayRecords = await db.getAttendanceByEmployeeAndDate(input.employeeId, yesterday);
       let record;
       if (input.attendanceId) {
-        record = records.find(r => r.id === input.attendanceId);
+        record = records.find(r => r.id === input.attendanceId)
+          ?? yesterdayRecords.find(r => r.id === input.attendanceId);
       } else {
         const shiftLabel = input.shiftLabel || "班次1";
-        record = records.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
+        // First try today's records, then fall back to yesterday's (cross-midnight case)
+        record = records.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime)
+          ?? yesterdayRecords.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
       }
       if (!record) throw new Error("找不到對應的打卡紀錄，請先打上班卡");
 
@@ -404,8 +413,14 @@ const attendanceRouter = router({
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input }) => {
       const today = getTodayTW();
-      const result = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
-      return result ?? [];
+      const todayRecords = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
+      // Also include yesterday's records that are still open (cross-midnight shifts)
+      // so the employee can see their pending clock-out on the home screen
+      const yesterdayDate = new Date(Date.now() + 8 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000);
+      const yesterday = yesterdayDate.toISOString().split("T")[0];
+      const yesterdayRecords = await db.getAttendanceByEmployeeAndDate(input.employeeId, yesterday);
+      const openYesterdayRecords = yesterdayRecords.filter(r => r.clockInTime && !r.clockOutTime);
+      return [...openYesterdayRecords, ...(todayRecords ?? [])];
     }),
 
   getHistory: publicProcedure
@@ -1029,8 +1044,20 @@ const schedulesRouter = router({
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input }) => {
       const today = getTodayTW();
-      const result = await db.getScheduleByEmployeeAndDate(input.employeeId, today);
-      return result ?? null;
+      const todaySchedule = await db.getScheduleByEmployeeAndDate(input.employeeId, today);
+      if (todaySchedule) return todaySchedule;
+      // Cross-midnight fallback: if no today schedule, check if employee has an open
+      // clock-in from yesterday (e.g., late-night shift that hasn't been clocked out yet)
+      const yesterdayDate = new Date(Date.now() + 8 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000);
+      const yesterday = yesterdayDate.toISOString().split("T")[0];
+      const openYesterdayRecords = await db.getAttendanceByEmployeeAndDate(input.employeeId, yesterday);
+      const hasOpenShift = openYesterdayRecords.some(r => r.clockInTime && !r.clockOutTime);
+      if (hasOpenShift) {
+        // Return yesterday's schedule so the home screen shows the correct shift card
+        const yesterdaySchedule = await db.getScheduleByEmployeeAndDate(input.employeeId, yesterday);
+        return yesterdaySchedule ?? null;
+      }
+      return null;
     }),
 
   upsert: publicProcedure
