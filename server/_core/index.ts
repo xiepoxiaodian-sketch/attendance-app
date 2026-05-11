@@ -312,6 +312,22 @@ async function startServer() {
   // Serve static frontend files in production
   const distWebPath = path.join(process.cwd(), "dist-web");
   if (process.env.NODE_ENV === "production") {
+    // Pre-compressed .gz handler: serve .gz files directly when client supports gzip
+    // This bypasses Railway edge proxy limitations with dynamic compression
+    app.get("/_expo/static/js/**/*.js", (req, res, next) => {
+      const acceptEncoding = req.headers['accept-encoding'] || '';
+      if (acceptEncoding.includes('gzip')) {
+        const gzPath = path.join(distWebPath, req.path + '.gz');
+        if (fs.existsSync(gzPath)) {
+          res.setHeader('Content-Encoding', 'gzip');
+          res.setHeader('Content-Type', 'application/javascript');
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          return res.sendFile(gzPath);
+        }
+      }
+      next();
+    });
+
     // JS/CSS assets have content-hash in filename → long cache (1 year, immutable)
     app.use("/_expo", express.static(path.join(distWebPath, "_expo"), {
       maxAge: "1y",
