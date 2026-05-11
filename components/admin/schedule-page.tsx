@@ -81,6 +81,7 @@ function WeekTab() {
   const [monthModalMonth, setMonthModalMonth] = useState(() => new Date().getMonth());
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [monthScheduleMap, setMonthScheduleMap] = useState<Record<string, ShiftEntry[]>>({});
+  const [monthDayOffSet, setMonthDayOffSet] = useState<Set<string>>(new Set());
   const [monthSaving, setMonthSaving] = useState(false);
   const [monthAlertMsg, setMonthAlertMsg] = useState<{ title: string; message: string } | null>(null);
 
@@ -89,18 +90,23 @@ function WeekTab() {
     { employeeId: monthModalEmployee?.id ?? 0, year: monthModalYear, month: monthModalMonth },
     { enabled: !!monthModalEmployee && showMonthModal }
   );
-  // 當整月資料載入後，更新 monthScheduleMap
+  // 當整月資料載入後，更新 monthScheduleMap 和 monthDayOffSet
   React.useEffect(() => {
     if (!employeeMonthData || !showMonthModal) return;
     const map: Record<string, ShiftEntry[]> = {};
+    const offSet = new Set<string>();
     for (const s of employeeMonthData as any[]) {
       const rawDate = s.date as unknown as string | Date;
       const dateKey = typeof rawDate === "string" ? rawDate.split("T")[0] : toDateStr(rawDate);
       if (s.shifts && (s.shifts as any[]).length > 0) {
         map[dateKey] = s.shifts as ShiftEntry[];
       }
+      if (s.leaveType === "other" && s.leaveMode === "allDay") {
+        offSet.add(dateKey);
+      }
     }
     setMonthScheduleMap(map);
+    setMonthDayOffSet(offSet);
   }, [employeeMonthData, showMonthModal]);
 
   const { data: employees } = trpc.employees.list.useQuery();
@@ -223,11 +229,15 @@ function WeekTab() {
   // 月排班儲存
   const handleSaveMonthSchedule = () => {
     if (!monthModalEmployee) return;
-    const entries = Object.entries(monthScheduleMap)
+    const shiftEntries = Object.entries(monthScheduleMap)
       .filter(([, shifts]) => shifts && shifts.length > 0)
-      .map(([date, shifts]) => ({ date, shifts }));
+      .map(([date, shifts]) => ({ date, shifts, leaveType: null, leaveMode: null, leaveStart: null, leaveEnd: null, leaveDuration: null }));
+    const dayOffEntries = Array.from(monthDayOffSet)
+      .filter(date => !monthScheduleMap[date]?.length) // 排休日不能有班次
+      .map(date => ({ date, shifts: [], leaveType: "other" as const, leaveMode: "allDay" as const, leaveStart: null, leaveEnd: null, leaveDuration: 8 }));
+    const entries = [...shiftEntries, ...dayOffEntries];
     if (entries.length === 0) {
-      setMonthAlertMsg({ title: "提示", message: "尚未設定任何班次" });
+      setMonthAlertMsg({ title: "提示", message: "尚未設定任何班次或排休" });
       return;
     }
     setMonthSaving(true);
@@ -1040,6 +1050,29 @@ function WeekTab() {
                         </View>
                       );
                     })}
+                    {/* 排休按鈕 */}
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (selectedDates.size === 0) {
+                          setMonthAlertMsg({ title: "提示", message: "請先點選月曆上的日期" });
+                          return;
+                        }
+                        // 排休日期：清除班次，加入 dayOffSet
+                        const newMap = { ...monthScheduleMap };
+                        const newOffSet = new Set(monthDayOffSet);
+                        selectedDates.forEach(dateStr => {
+                          delete newMap[dateStr];
+                          newOffSet.add(dateStr);
+                        });
+                        setMonthScheduleMap(newMap);
+                        setMonthDayOffSet(newOffSet);
+                        setSelectedDates(new Set());
+                      }}
+                      style={{ backgroundColor: "#F0FDF4", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: "#86EFAC", alignSelf: "flex-start", marginTop: 4 }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#16A34A" }}>✓ 設為排休</Text>
+                    </TouchableOpacity>
+                    {/* 清除選取日期班次按鈕 */}
                     <TouchableOpacity
                       onPress={() => {
                         if (selectedDates.size === 0) {
@@ -1047,8 +1080,13 @@ function WeekTab() {
                           return;
                         }
                         const newMap = { ...monthScheduleMap };
-                        selectedDates.forEach(dateStr => { delete newMap[dateStr]; });
+                        const newOffSet = new Set(monthDayOffSet);
+                        selectedDates.forEach(dateStr => {
+                          delete newMap[dateStr];
+                          newOffSet.delete(dateStr); // 一併清除排休
+                        });
                         setMonthScheduleMap(newMap);
+                        setMonthDayOffSet(newOffSet);
                         setSelectedDates(new Set());
                       }}
                       style={{ backgroundColor: "#FEF2F2", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: "#FECACA", alignSelf: "flex-start", marginTop: 4 }}
@@ -1088,6 +1126,7 @@ function WeekTab() {
                       const dateStr = `${monthModalYear}-${String(monthModalMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
                       const isSelected = selectedDates.has(dateStr);
                       const hasSchedule = !!monthScheduleMap[dateStr]?.length;
+                      const isDayOff = monthDayOffSet.has(dateStr) && !hasSchedule;
                       const isWeekend = col === 0 || col === 6;
                       const isToday = dateStr === toDateStr(new Date());
                       rowCells.push(
@@ -1101,10 +1140,10 @@ function WeekTab() {
                           }}
                           style={{
                             flex: 1, minHeight: 52, margin: 1, borderRadius: 8,
-                            backgroundColor: isSelected ? "#2563EB" : hasSchedule ? "#EFF6FF" : isWeekend ? "#FFF7ED" : "#F8FAFC",
+                            backgroundColor: isSelected ? "#2563EB" : isDayOff ? "#DCFCE7" : hasSchedule ? "#EFF6FF" : isWeekend ? "#FFF7ED" : "#F8FAFC",
                             alignItems: "center", justifyContent: "center", padding: 2,
                             borderWidth: isToday ? 2 : 1,
-                            borderColor: isSelected ? "#1D4ED8" : isToday ? "#2563EB" : "#F1F5F9",
+                            borderColor: isSelected ? "#1D4ED8" : isDayOff ? "#86EFAC" : isToday ? "#2563EB" : "#F1F5F9",
                           }}
                         >
                           <Text style={{ fontSize: 13, fontWeight: "700", color: isSelected ? "white" : isWeekend ? "#EF4444" : "#1E293B", lineHeight: 18 }}>{d}</Text>
@@ -1114,6 +1153,9 @@ function WeekTab() {
                                 <Text key={si} style={{ fontSize: 8, color: "#2563EB", lineHeight: 11 }}>{sh.startTime}</Text>
                               ))}
                             </View>
+                          )}
+                          {isDayOff && !isSelected && (
+                            <Text style={{ fontSize: 9, color: "#16A34A", fontWeight: "700", lineHeight: 12 }}>休</Text>
                           )}
                           {isSelected && <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "white", marginTop: 2 }} />}
                         </TouchableOpacity>
@@ -1130,7 +1172,7 @@ function WeekTab() {
             {/* 已選日期提示 */}
             {selectedDates.size > 0 && (
               <View style={{ backgroundColor: "#EFF6FF", borderRadius: 10, padding: 12, marginBottom: 16, flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "600", flex: 1 }}>已選 {selectedDates.size} 天，請在上方點選班次套用</Text>
+                <Text style={{ fontSize: 13, color: "#2563EB", fontWeight: "600", flex: 1 }}>已選 {selectedDates.size} 天，點上方班次套用或設為排休</Text>
                 <TouchableOpacity onPress={() => setSelectedDates(new Set())}>
                   <Text style={{ fontSize: 12, color: "#64748B" }}>取消選取</Text>
                 </TouchableOpacity>
