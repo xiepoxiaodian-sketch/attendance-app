@@ -1,0 +1,9 @@
+{
+  "query": "\nSELECT \n  a.id,\n  a.employeeId,\n  e.fullName,\n  a.date,\n  a.clockInTime,\n  a.clockOutTime,\n  a.shiftLabel,\n  a.status\nFROM attendance a\nLEFT JOIN employees e ON a.employeeId = e.id\nWHERE DATE(a.date) = '2026-05-09'\n  AND a.clockInTime IS NOT NULL\n  AND a.clockOutTime IS NULL\nORDER BY a.employeeId, a.clockInTime;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3qN2dnvpzcdXRKZ.6d8de67b0577 --database dvHycosbPvRvBSsW7DJCxS --execute \nSELECT \n  a.id,\n  a.employeeId,\n  e.fullName,\n  a.date,\n  a.clockInTime,\n  a.clockOutTime,\n  a.shiftLabel,\n  a.status\nFROM attendance a\nLEFT JOIN employees e ON a.employeeId = e.id\nWHERE DATE(a.date) = '2026-05-09'\n  AND a.clockInTime IS NOT NULL\n  AND a.clockOutTime IS NULL\nORDER BY a.employeeId, a.clockInTime;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1726
+}

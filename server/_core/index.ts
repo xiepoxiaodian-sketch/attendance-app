@@ -4,6 +4,7 @@ import { createServer } from "http";
 import fs from "fs";
 import net from "net";
 import path from "path";
+import compression from "compression";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
@@ -33,6 +34,20 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // Enable keep-alive for better connection reuse
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
+
+  // Enable gzip/brotli compression for all responses (reduces JS bundle from 2.9MB → ~800KB)
+  app.use(compression({
+    level: 6,
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) return false;
+      return compression.filter(req, res);
+    },
+  }));
 
   // Enable CORS for all routes - reflect the request origin to support credentials
   app.use((req, res, next) => {
@@ -297,13 +312,21 @@ async function startServer() {
   // Serve static frontend files in production
   const distWebPath = path.join(process.cwd(), "dist-web");
   if (process.env.NODE_ENV === "production") {
-    // JS/CSS assets have content-hash in filename → long cache
+    // JS/CSS assets have content-hash in filename → long cache (1 year, immutable)
     app.use("/_expo", express.static(path.join(distWebPath, "_expo"), {
       maxAge: "1y",
       immutable: true,
+      etag: true,
+      lastModified: true,
+    }));
+    // Other static assets (fonts, images) → 7 days cache
+    app.use("/assets", express.static(path.join(distWebPath, "assets"), {
+      maxAge: "7d",
+      etag: true,
     }));
     // HTML pages must NOT be cached so new deploys take effect immediately
     app.use(express.static(distWebPath, {
+      etag: true,
       setHeaders(res, filePath) {
         if (filePath.endsWith(".html")) {
           res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -367,3 +390,11 @@ startServer().catch(console.error);
 
 // Start cron jobs for push notifications
 startCronJobs();
+
+// Global uncaught exception handlers to prevent server crash
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
