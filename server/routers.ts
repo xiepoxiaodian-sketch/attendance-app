@@ -527,7 +527,17 @@ const attendanceRouter = router({
         }
         if (clockOut) {
           const outMin = toTWMinutes(clockOut instanceof Date ? clockOut : new Date(clockOut));
-          if (outMin < shiftEnd - 1) isEarlyLeave = true;
+          // Handle overnight shifts: if shift ends before 6am (e.g. 01:00), it's a cross-midnight shift
+          // If clock-out is in early morning (<6am) but shift end is in daytime, treat clock-out as next-day
+          const isOvernightShift = shiftEnd < 360; // shift ends before 6am
+          let effectiveOut = outMin;
+          let effectiveEnd = shiftEnd;
+          if (!isOvernightShift && outMin < 360) {
+            // Clock-out is early morning but shift end is daytime -> overnight case
+            // Add 1440 to make clock-out comparable (next day context)
+            effectiveOut = outMin + 1440;
+          }
+          if (effectiveOut < effectiveEnd - 1) isEarlyLeave = true;
         }
         if (isLate && isEarlyLeave) return "late_and_early";
         if (isLate) return "late";
@@ -689,7 +699,13 @@ const attendanceRouter = router({
                 if (actualClockOut) {
                   const outMin = actualClockOut.getUTCHours() * 60 + actualClockOut.getUTCMinutes() + 8 * 60;
                   const normalizedOut = outMin % (24 * 60);
-                  if (normalizedOut < shiftEndMin - 1) isEarlyLeave2 = true;
+                  // Handle overnight: if shift ends before 6am it's overnight; if clock-out is early morning but shift ends in daytime, add 1440
+                  const isOvernightShift2 = shiftEndMin < 360;
+                  let effectiveOut2 = normalizedOut;
+                  if (!isOvernightShift2 && normalizedOut < 360) {
+                    effectiveOut2 = normalizedOut + 1440;
+                  }
+                  if (effectiveOut2 < shiftEndMin - 1) isEarlyLeave2 = true;
                 }
                 let newStatus: "normal" | "late" | "early_leave" | "absent" | "late_and_early" = "normal";
                 if (isLate2 && isEarlyLeave2) newStatus = "late_and_early";
@@ -803,7 +819,14 @@ const attendanceRouter = router({
         }
         if (clockOut) {
           const outMin = toTWMinutes(clockOut instanceof Date ? clockOut : new Date(clockOut));
-          if (outMin < shiftEnd - 1) isEarlyLeave = true;
+          // Handle overnight shifts: if shift ends before 6am, it's a cross-midnight shift
+          // If clock-out is early morning but shift end is daytime, treat clock-out as next-day
+          const isOvernightShift = shiftEnd < 360;
+          let effectiveOut = outMin;
+          if (!isOvernightShift && outMin < 360) {
+            effectiveOut = outMin + 1440; // next-day context
+          }
+          if (effectiveOut < shiftEnd - 1) isEarlyLeave = true;
         }
         if (isLate && isEarlyLeave) return "late_and_early";
         if (isLate) return "late";
