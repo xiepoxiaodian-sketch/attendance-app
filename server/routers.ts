@@ -289,7 +289,23 @@ const attendanceRouter = router({
         record = records.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime)
           ?? yesterdayRecords.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
       }
-      if (!record) throw new Error("找不到對應的打卡紀錄，請先打上班卡");
+      if (!record) {
+        // Employee chose to clock out without a clock-in record (forgot to clock in)
+        // Create a new attendance record with no clockInTime, mark as absent
+        const shiftLabel = input.shiftLabel || "班次1";
+        const newId = await db.createAttendance({
+          employeeId: input.employeeId,
+          date: new Date(today) as unknown as Date,
+          clockInTime: null as any,
+          clockOutTime: now,
+          shiftLabel,
+          status: "absent",
+          clockOutLat: input.lat ?? null,
+          clockOutLng: input.lng ?? null,
+          clockOutPhoto: input.photoBase64 ? (input.photoBase64.length > 600000 ? null : input.photoBase64) : null,
+        } as any);
+        return { success: true, status: "absent", note: "已補打下班卡（無上班記錄，標記為缺勤）" };
+      }
 
       // ── IP Whitelist check ─────────────────────────────────────────────────
       const requireIpOut = await db.getSetting("require_ip_whitelist");

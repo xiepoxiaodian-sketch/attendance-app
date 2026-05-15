@@ -353,6 +353,8 @@ export default function ClockScreen() {
     success: null,
   });
   const [refreshing, setRefreshing] = useState(false);
+  // Track which shift label has its mode dropdown open
+  const [modeMenuOpen, setModeMenuOpen] = useState<string | null>(null);
 
   // Camera modal state
   const [cameraVisible, setCameraVisible] = useState(false);
@@ -878,30 +880,136 @@ export default function ClockScreen() {
 
                 {/* Clock Button */}
                 {!isCompleted && (
-                  <TouchableOpacity
-                    onPress={() => handleClock(shift.label, !isClockedIn)}
-                    disabled={isClocking}
-                    style={{
-                      backgroundColor: isClockedIn ? "#2563EB" : "#1E3A8A",
-                      borderRadius: 12,
-                      paddingVertical: 14,
-                      alignItems: "center",
-                      opacity: isClocking ? 0.7 : 1,
-                    }}
-                  >
-                    {isClocking ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <View>
-                        <Text style={{ color: "white", fontSize: 16, fontWeight: "700", textAlign: "center" }}>
-                          {isClockedIn ? "下班打卡" : "上班打卡"}
+                  <View>
+                    {/* Main button row: [clock button] + [▼ dropdown trigger] */}
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {/* Main clock button */}
+                      <TouchableOpacity
+                        onPress={() => {
+                          setModeMenuOpen(null);
+                          handleClock(shift.label, !isClockedIn);
+                        }}
+                        disabled={isClocking}
+                        style={{
+                          flex: 1,
+                          backgroundColor: isClockedIn ? "#2563EB" : "#1E3A8A",
+                          borderRadius: 12,
+                          paddingVertical: 14,
+                          alignItems: "center",
+                          opacity: isClocking ? 0.7 : 1,
+                        }}
+                      >
+                        {isClocking ? (
+                          <ActivityIndicator color="white" />
+                        ) : (
+                          <View>
+                            <Text style={{ color: "white", fontSize: 16, fontWeight: "700", textAlign: "center" }}>
+                              {isClockedIn ? "下班打卡" : "上班打卡"}
+                            </Text>
+                            <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, textAlign: "center", marginTop: 2 }}>
+                              {Platform.OS !== "web" ? "生物識別 + 定位" : "📷 即時拍照 + 定位"}
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                      {/* Dropdown trigger button */}
+                      <TouchableOpacity
+                        onPress={() => setModeMenuOpen(modeMenuOpen === shift.label ? null : shift.label)}
+                        disabled={isClocking}
+                        style={{
+                          backgroundColor: isClockedIn ? "#1D4ED8" : "#1e3a8a",
+                          borderRadius: 12,
+                          paddingHorizontal: 14,
+                          justifyContent: "center",
+                          alignItems: "center",
+                          opacity: isClocking ? 0.7 : 1,
+                        }}
+                      >
+                        <Text style={{ color: "white", fontSize: 16 }}>
+                          {modeMenuOpen === shift.label ? "▲" : "▼"}
                         </Text>
-                        <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, textAlign: "center", marginTop: 2 }}>
-                          {Platform.OS !== "web" ? "生物識別 + 定位" : "📷 即時拍照 + 定位"}
-                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {/* Dropdown menu */}
+                    {modeMenuOpen === shift.label && (
+                      <View style={{
+                        marginTop: 6,
+                        backgroundColor: "white",
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 8,
+                        elevation: 4,
+                        overflow: "hidden",
+                      }}>
+                        {/* Clock-in option */}
+                        <TouchableOpacity
+                          onPress={() => {
+                            setModeMenuOpen(null);
+                            handleClock(shift.label, true);
+                          }}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            paddingVertical: 14,
+                            paddingHorizontal: 16,
+                            borderBottomWidth: 1,
+                            borderBottomColor: "#F1F5F9",
+                            backgroundColor: !isClockedIn ? "#EFF6FF" : "white",
+                          }}
+                        >
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#22C55E", marginRight: 10 }} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>上班打卡</Text>
+                            {record?.clockInTime ? (
+                              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>已打卡：{formatTime(record.clockInTime)}</Text>
+                            ) : (
+                              <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 1 }}>尚未打卡</Text>
+                            )}
+                          </View>
+                          {!isClockedIn && !record?.clockInTime && (
+                            <View style={{ backgroundColor: "#2563EB", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                              <Text style={{ color: "white", fontSize: 11, fontWeight: "600" }}>預設</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                        {/* Clock-out option */}
+                        <TouchableOpacity
+                          onPress={() => {
+                            setModeMenuOpen(null);
+                            handleClock(shift.label, false);
+                          }}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            paddingVertical: 14,
+                            paddingHorizontal: 16,
+                            backgroundColor: isClockedIn ? "#EFF6FF" : "white",
+                          }}
+                        >
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#3B82F6", marginRight: 10 }} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>下班打卡</Text>
+                            {record?.clockOutTime ? (
+                              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>已打卡：{formatTime(record.clockOutTime)}</Text>
+                            ) : !record?.clockInTime ? (
+                              <Text style={{ fontSize: 12, color: "#F59E0B", marginTop: 1 }}>⚠️ 忘打上班卡，仍可補打</Text>
+                            ) : (
+                              <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 1 }}>尚未打卡</Text>
+                            )}
+                          </View>
+                          {isClockedIn && (
+                            <View style={{ backgroundColor: "#2563EB", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                              <Text style={{ color: "white", fontSize: 11, fontWeight: "600" }}>預設</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
                       </View>
                     )}
-                  </TouchableOpacity>
+                  </View>
                 )}
 
                 {isCompleted && (
