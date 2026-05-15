@@ -778,6 +778,23 @@ export default function ClockScreen() {
             const record = todayAttendance?.find((r) => r.shiftLabel === shift.label);
             const isClockedIn = !!record?.clockInTime && !record?.clockOutTime;
             const isCompleted = !!record?.clockInTime && !!record?.clockOutTime;
+            // 跨日判斷：若打卡記錄的日期不是今天（台灣時間），表示是昨天上班、今天凌晨下班
+            const isOvernight = (() => {
+              if (!record?.clockInTime) return false;
+              const now = new Date();
+              const twNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+              const todayStr = twNow.toISOString().split("T")[0];
+              if (record.date) {
+                const rd = record.date instanceof Date ? record.date : new Date(record.date as any);
+                if (!isNaN(rd.getTime())) {
+                  const y = rd.getFullYear();
+                  const mo = String(rd.getMonth() + 1).padStart(2, "0");
+                  const dy = String(rd.getDate()).padStart(2, "0");
+                  return `${y}-${mo}-${dy}` !== todayStr;
+                }
+              }
+              return false;
+            })();
 
             return (
               <View
@@ -798,6 +815,11 @@ export default function ClockScreen() {
                 {/* Shift Header */}
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <View>
+                    {isOvernight && (
+                      <View style={{ backgroundColor: "#FEF3C7", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, alignSelf: "flex-start", marginBottom: 4 }}>
+                        <Text style={{ fontSize: 11, color: "#92400E", fontWeight: "600" }}>🌙 跨日班次（昨日上班）</Text>
+                      </View>
+                    )}
                     <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B" }}>{shift.label}</Text>
                     <Text style={{ fontSize: 13, color: "#64748B", marginTop: 3 }}>
                       {shift.startTime} – {shift.endTime}

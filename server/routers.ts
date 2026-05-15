@@ -325,22 +325,51 @@ const attendanceRouter = router({
       const nowTW_out = new Date(now.getTime() + TZ_OFFSET_OUT * 60 * 1000);
       const nowTWMinutes_out = nowTW_out.getUTCHours() * 60 + nowTW_out.getUTCMinutes();
       let status = record.status;
-      const schedule = await db.getScheduleByEmployeeAndDate(input.employeeId, today);
+      // For cross-midnight shifts: the attendance record's date tells us which day the shift belongs to
+      // We need to fetch the schedule for that date, not necessarily "today"
+      let recordDateStr = today;
+      if (record.date) {
+        const rd = record.date instanceof Date ? record.date : new Date(record.date as any);
+        if (!isNaN(rd.getTime())) {
+          const y = rd.getFullYear();
+          const mo = String(rd.getMonth() + 1).padStart(2, "0");
+          const dy = String(rd.getDate()).padStart(2, "0");
+          recordDateStr = `${y}-${mo}-${dy}`;
+        }
+      }
+      const schedule = await db.getScheduleByEmployeeAndDate(input.employeeId, recordDateStr);
       if (schedule && schedule.shifts) {
         const shifts = schedule.shifts as Array<{ startTime: string; endTime: string; label: string }>;
         // Match by shiftLabel from the attendance record for accurate multi-shift handling
         const currentShift = shifts.find(s => s.label === record.shiftLabel) ||
           shifts.find(s => {
-            // Fallback: find shift whose end time is closest to now
+            // Fallback: find shift whose end time is closest to now (accounting for overnight)
             const [eh, em] = s.endTime.split(":").map(Number);
-            return Math.abs(eh * 60 + em - nowTWMinutes_out) < 120; // within 2 hours
+            const shiftEndMin = eh * 60 + em;
+            // Handle overnight: if shift end is past midnight (e.g. 01:00 = 60), add 1440 for comparison
+            const adjustedEnd = shiftEndMin < 360 ? shiftEndMin + 1440 : shiftEndMin; // <6am treated as next day
+            const adjustedNow = nowTWMinutes_out < 360 ? nowTWMinutes_out + 1440 : nowTWMinutes_out;
+            return Math.abs(adjustedEnd - adjustedNow) < 120; // within 2 hours
           }) || shifts[0];
         if (currentShift) {
           const [h, m] = currentShift.endTime.split(":").map(Number);
           const shiftEndMinutes = h * 60 + m;
           const wasLate = record.status === "late" || record.status === "late_and_early";
+          // Handle overnight shifts: if shift end is before 6am, treat it as next-day time
+          // e.g. shift ends at 01:00 (60 min), clock-out at 00:50 (50 min) → both are "next day"
+          const isOvernightShift = shiftEndMinutes < 360; // shift ends before 6am
+          let effectiveNow = nowTWMinutes_out;
+          let effectiveEnd = shiftEndMinutes;
+          if (isOvernightShift) {
+            // Both now and shift end are in the early morning (next day context)
+            // No adjustment needed — compare directly
+          } else if (nowTWMinutes_out < 360) {
+            // Clock-out is early morning but shift end is not → overnight case
+            // Treat now as nowTWMinutes_out + 1440 to compare correctly
+            effectiveNow = nowTWMinutes_out + 1440;
+          }
           // Early leave: clocked out more than 1 minute before shift end
-          if (nowTWMinutes_out < shiftEndMinutes - 1) {
+          if (effectiveNow < effectiveEnd - 1) {
             // If already late, mark as both late and early leave
             status = wasLate ? "late_and_early" : "early_leave";
           } else {
