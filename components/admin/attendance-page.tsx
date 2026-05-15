@@ -106,15 +106,37 @@ const STATUS_OPTIONS = [
 function EditModal({ visible, record, employeeName, onClose, onSave, saving, workShifts = [] }: EditModalProps) {
   const [clockIn, setClockIn] = useState("");
   const [clockOut, setClockOut] = useState("");
+  // 0 = same day as record.dateKey, 1 = next day (for cross-midnight shifts)
+  const [clockOutDateOffset, setClockOutDateOffset] = useState(0);
   const [showClockInPicker, setShowClockInPicker] = useState(false);
   const [showClockOutPicker, setShowClockOutPicker] = useState(false);
   const [note, setNote] = useState("");
   const [statusOverride, setStatusOverride] = useState<string>("normal");
   const [selectedShiftLabel, setSelectedShiftLabel] = useState<string>("");
 
+  // Compute the actual clock-out date string based on offset
+  const getClockOutDateStr = (baseDate: string, offset: number): string => {
+    const d = new Date(baseDate + "T00:00:00+08:00");
+    d.setDate(d.getDate() + offset);
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const dy = String(d.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${dy}`;
+  };
+
   const initValues = useCallback(() => {
     setClockIn(record ? toTimeStr(record.clockInTime) : "");
+    // Detect if existing clockOut is next day relative to record.dateKey
+    let initialOffset = 0;
+    if (record?.clockOutTime && record?.dateKey) {
+      const outDate = new Date(record.clockOutTime);
+      // Convert to TW date string
+      const outTW = new Date(outDate.getTime() + 8 * 60 * 60 * 1000);
+      const outDateStr = outTW.toISOString().split("T")[0];
+      if (outDateStr > record.dateKey) initialOffset = 1;
+    }
     setClockOut(record ? toTimeStr(record.clockOutTime) : "");
+    setClockOutDateOffset(initialOffset);
     setNote(record?.note ?? "");
     setStatusOverride(record?.status ?? "normal");
     setSelectedShiftLabel(record?.shiftLabel ?? "");
@@ -129,8 +151,9 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving, wor
   const handleSave = () => {
     if (!record) return;
     const dateStr = record.dateKey;
+    const clockOutDateStr = getClockOutDateStr(dateStr, clockOutDateOffset);
     const newClockIn = clockIn ? buildDateTime(dateStr, clockIn) : null;
-    const newClockOut = clockOut ? buildDateTime(dateStr, clockOut) : null;
+    const newClockOut = clockOut ? buildDateTime(clockOutDateStr, clockOut) : null;
     onSave({ clockInTime: newClockIn, clockOutTime: newClockOut, note, status: statusOverride, shiftLabel: selectedShiftLabel || undefined });
   };
 
@@ -197,12 +220,32 @@ function EditModal({ visible, record, employeeName, onClose, onSave, saving, wor
                 <Text style={{ fontSize: 20, color: "#94A3B8" }}>→</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, fontWeight: "600", color: "#3B82F6", marginBottom: 6 }}>下班時間</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: "#3B82F6" }}>下班時間</Text>
+                  {/* Day offset toggle: 當日 / 次日 */}
+                  <View style={{ flexDirection: "row", borderRadius: 8, overflow: "hidden", borderWidth: 1, borderColor: "#BFDBFE" }}>
+                    <TouchableOpacity
+                      onPress={() => setClockOutDateOffset(0)}
+                      style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: clockOutDateOffset === 0 ? "#2563EB" : "#EFF6FF" }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: clockOutDateOffset === 0 ? "white" : "#3B82F6" }}>當日</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setClockOutDateOffset(1)}
+                      style={{ paddingHorizontal: 8, paddingVertical: 3, backgroundColor: clockOutDateOffset === 1 ? "#2563EB" : "#EFF6FF" }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: clockOutDateOffset === 1 ? "white" : "#3B82F6" }}>次日</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
                 <TouchableOpacity
                   onPress={() => setShowClockOutPicker(true)}
-                  style={{ borderWidth: 1.5, borderColor: "#BFDBFE", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: "#EFF6FF", alignItems: "center" }}
+                  style={{ borderWidth: 1.5, borderColor: clockOutDateOffset === 1 ? "#FCD34D" : "#BFDBFE", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: clockOutDateOffset === 1 ? "#FFFBEB" : "#EFF6FF", alignItems: "center" }}
                 >
-                  <Text style={{ fontSize: 22, fontWeight: "700", color: clockOut ? "#2563EB" : "#94A3B8" }}>{clockOut || "--:--"}</Text>
+                  <Text style={{ fontSize: 22, fontWeight: "700", color: clockOut ? (clockOutDateOffset === 1 ? "#D97706" : "#2563EB") : "#94A3B8" }}>{clockOut || "--:--"}</Text>
+                  {clockOutDateOffset === 1 && record?.dateKey && (
+                    <Text style={{ fontSize: 10, color: "#D97706", marginTop: 2, fontWeight: "600" }}>次日 {getClockOutDateStr(record.dateKey, 1)}</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
