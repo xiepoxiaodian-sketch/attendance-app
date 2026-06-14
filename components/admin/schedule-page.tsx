@@ -1332,6 +1332,71 @@ function MonthTab() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const handlePrintBlank = () => {
+    if (Platform.OS !== 'web') return;
+    const daysCount = getDaysInMonth(year, month);
+    const printEmployees = activeEmployees.filter(e => e.fullName !== '系統管理員');
+    const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+    const days = Array.from({ length: daysCount }, (_, i) => {
+      const d = i + 1;
+      const dow = new Date(year, month, d).getDay();
+      return { d, dow, label: WEEKDAY_LABELS[dow], isWeekend: dow === 0 || dow === 6 };
+    });
+    // A4 橫印，每頁最多 16 天
+    const COLS_PER_PAGE = 16;
+    const segments: number[][] = [];
+    for (let i = 0; i < daysCount; i += COLS_PER_PAGE) {
+      segments.push(Array.from({ length: Math.min(COLS_PER_PAGE, daysCount - i) }, (_, j) => i + j));
+    }
+    const nameColW = 72;
+    const dayColW = 40;
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>${year}年${month + 1}月 空白班表</title>
+<style>
+  @page { size: A4 landscape; margin: 10mm; }
+  body { font-family: 'Microsoft JhengHei', 'PingFang TC', Arial, sans-serif; font-size: 11px; margin: 0; }
+  h2 { text-align: center; margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+  .hint { text-align: center; font-size: 10px; color: #555; margin-bottom: 10px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 18px; }
+  th, td { border: 1px solid #aaa; text-align: center; padding: 2px 1px; height: 30px; }
+  th { background: #e8f0fe; font-weight: 700; }
+  .name-col { width: ${nameColW}px; min-width: ${nameColW}px; text-align: left; padding-left: 6px; font-weight: 600; }
+  .day-col { width: ${dayColW}px; min-width: ${dayColW}px; }
+  .weekend-h { background: #ffe4e4; color: #c00; }
+  .weekend-c { background: #fff5f5; }
+  .day-num { font-size: 12px; font-weight: 700; line-height: 1.2; }
+  .day-dow { font-size: 9px; line-height: 1.2; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<h2>${year} 年 ${month + 1} 月　空白班表（請假申請）</h2>
+<p class="hint">請在對應日期格內填寫假別：特休／病假／事假／婚假／喪假／公假／休假</p>
+`;
+    for (const seg of segments) {
+      html += `<table><thead><tr><th class="name-col">姓名</th>`;
+      for (const idx of seg) {
+        const { d, label, isWeekend } = days[idx];
+        html += `<th class="day-col${isWeekend ? ' weekend-h' : ''}">`;
+        html += `<div class="day-num">${d}</div><div class="day-dow">${label}</div></th>`;
+      }
+      html += `</tr></thead><tbody>`;
+      for (const emp of printEmployees) {
+        html += `<tr><td class="name-col">${emp.fullName}</td>`;
+        for (const idx of seg) {
+          const { isWeekend } = days[idx];
+          html += `<td class="day-col${isWeekend ? ' weekend-c' : ''}"></td>`;
+        }
+        html += `</tr>`;
+      }
+      html += `</tbody></table>`;
+    }
+    html += `</body></html>`;
+    const win = window.open('', '_blank', 'width=1100,height=750');
+    if (!win) { alert('請允許流覽器開啟即時視窗'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => { win.focus(); win.print(); };
+  };
+
   const daysInMonth = getDaysInMonth(year, month);
   const firstDow = getFirstDow(year, month);
   const todayStr = today.toISOString().slice(0, 10);
@@ -1355,9 +1420,14 @@ function MonthTab() {
           <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>{year} 年 {month + 1} 月</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             {Platform.OS === "web" && (
-              <TouchableOpacity onPress={handleMonthPrint} style={{ backgroundColor: "#2563EB", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Text style={{ fontSize: 12, color: "white", fontWeight: "600" }}>⬇️ 下載 Excel</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity onPress={handlePrintBlank} style={{ backgroundColor: "#059669", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 12, color: "white", fontWeight: "600" }}>🖨️ 空白班表</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleMonthPrint} style={{ backgroundColor: "#2563EB", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 12, color: "white", fontWeight: "600" }}>⬇️ 下載 Excel</Text>
+                </TouchableOpacity>
+              </>
             )}
             <TouchableOpacity onPress={nextMonth} style={{ padding: 8 }}>
               <Text style={{ fontSize: 20, color: "#2563EB" }}>›</Text>
