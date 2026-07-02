@@ -1,0 +1,9 @@
+{
+  "query": "\nSELECT e.fullName, a.date, a.shiftLabel, a.clockInTime, a.clockOutTime, a.status\nFROM attendance a\nJOIN employees e ON e.id = a.employeeId\nWHERE e.fullName LIKE '%張喆翔%'\n  AND a.date >= '2026-06-30'\nORDER BY a.date DESC, a.clockInTime DESC\nLIMIT 10;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3qN2dnvpzcdXRKZ.6d8de67b0577 --database dvHycosbPvRvBSsW7DJCxS --execute \nSELECT e.fullName, a.date, a.shiftLabel, a.clockInTime, a.clockOutTime, a.status\nFROM attendance a\nJOIN employees e ON e.id = a.employeeId\nWHERE e.fullName LIKE '%張喆翔%'\n  AND a.date >= '2026-06-30'\nORDER BY a.date DESC, a.clockInTime DESC\nLIMIT 10;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2002
+}

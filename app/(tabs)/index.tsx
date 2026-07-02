@@ -671,17 +671,15 @@ export default function ClockScreen() {
   };
   const leaveDayLabel = todayLeaveType ? (LEAVE_LABELS[todayLeaveType] ?? "排休") : "";
 
-  // 正確的顯示逿輯：
+  // 顯示邏輯：
   // 1. 排休日（leaveType 有值）→ 不顯示任何班次卡片，改顯示排休提示
   // 2. 有排班且有班次 → 顯示實際班次
-  // 3. 完全沒排班（todaySchedule 為 null/undefined）→ 才顯示預設班次
+  // 3. 沒排班 → 不顯示任何班次（避免員工誤打預設班次產生髒資料）
   const displayShifts = isLeaveDay
     ? []  // 排休日：不顯示任何班次
     : shifts.length > 0
       ? shifts  // 有實際班次
-      : todaySchedule === null || todaySchedule === undefined
-        ? [{ startTime: "09:00", endTime: "18:00", label: "班次1" }]  // 完全沒排班才顯示預設
-        : [];  // 有排班記錄但 shifts 為空（保險）
+      : [];  // 沒排班：不顯示預設班次
 
   const timeStr = currentTime.toLocaleTimeString("zh-TW", {
     hour: "2-digit",
@@ -1064,10 +1062,12 @@ export default function ClockScreen() {
           )}
 
           {/* No schedule notice */}
-          {!isLeaveDay && shifts.length === 0 && todaySchedule === null && (
-            <View style={{ backgroundColor: "#FFFBEB", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#FDE68A" }}>
-              <Text style={{ color: "#92400E", fontSize: 13, textAlign: "center" }}>
-                今日尚未排班，顯示預設班次
+          {!isLeaveDay && shifts.length === 0 && (
+            <View style={{ backgroundColor: "#FFFBEB", borderRadius: 16, padding: 24, borderWidth: 1, borderColor: "#FDE68A", alignItems: "center", gap: 8 }}>
+              <Text style={{ fontSize: 28 }}>📋</Text>
+              <Text style={{ color: "#92400E", fontSize: 16, fontWeight: "700" }}>今日尚未排班</Text>
+              <Text style={{ color: "#78350F", fontSize: 13, textAlign: "center", lineHeight: 20 }}>
+                請聯絡管理員確認您的班表
               </Text>
             </View>
           )}
