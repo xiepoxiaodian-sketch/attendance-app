@@ -6,7 +6,6 @@ import AdminAttendanceScreen from "@/components/admin/attendance-page";
 import AdminLeaveReviewScreen from "@/components/admin/leave-review-page";
 import AdminPunchCorrectionScreen from "@/components/admin/punch-correction-page";
 import AdminReportsScreen from "@/components/admin/reports-page";
-import AdminDevicesScreen from "@/components/admin/devices-page";
 import AdminWorkShiftsScreen from "@/components/admin/work-shifts-page";
 import AdminSettingsScreen from "@/components/admin/settings-page";
 import AdminFeedbackScreen from "@/components/admin/feedback-page";
@@ -27,8 +26,6 @@ function AdminContent() {
       return <AdminPunchCorrectionScreen />;
     case "reports":
       return <AdminReportsScreen />;
-    case "devices":
-      return <AdminDevicesScreen />;
     case "work-shifts":
       return <AdminWorkShiftsScreen />;
     case "settings":

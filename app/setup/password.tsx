@@ -24,7 +24,7 @@ export default function SetupPasswordScreen() {
 
   const changePasswordMutation = trpc.employee.changePassword.useMutation({
     onSuccess: () => {
-      router.replace("/setup/device" as any);
+      router.replace("/setup/biometric" as any);
     },
     onError: (err) => {
       setError(err.message || "修改密碼失敗");
@@ -66,14 +66,14 @@ export default function SetupPasswordScreen() {
           <View className="flex-1 px-6 pt-8">
             {/* Progress */}
             <View className="flex-row items-center justify-center mb-8">
-              {[1, 2, 3, 4].map((step) => (
+              {[1, 2, 3].map((step) => (
                 <View key={step} className="flex-row items-center">
                   <View
                     style={{
                       width: 32,
                       height: 32,
                       borderRadius: 16,
-                      backgroundColor: step === 1 ? "#1E40AF" : step < 1 ? "#1E40AF" : "#E2E8F0",
+                      backgroundColor: step === 1 ? "#1E40AF" : "#E2E8F0",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
@@ -82,12 +82,12 @@ export default function SetupPasswordScreen() {
                       {step}
                     </Text>
                   </View>
-                  {step < 4 && (
+                  {step < 3 && (
                     <View
                       style={{
                         width: 40,
                         height: 2,
-                        backgroundColor: step < 1 ? "#1E40AF" : "#E2E8F0",
+                        backgroundColor: "#E2E8F0",
                         marginHorizontal: 4,
                       }}
                     />

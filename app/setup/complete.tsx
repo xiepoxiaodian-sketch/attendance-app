@@ -25,32 +25,32 @@ export default function SetupCompleteScreen() {
       <View className="flex-1 px-6 pt-8 items-center justify-center">
         {/* Progress */}
         <View className="flex-row items-center justify-center mb-12">
-          {[1, 2, 3, 4].map((step) => (
-            <View key={step} className="flex-row items-center">
+        {[1, 2, 3].map((step) => (
+          <View key={step} className="flex-row items-center">
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: "#1E40AF",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: "white", fontWeight: "600" }}>✓</Text>
+            </View>
+            {step < 3 && (
               <View
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: 40,
+                  height: 2,
                   backgroundColor: "#1E40AF",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  marginHorizontal: 4,
                 }}
-              >
-                <Text style={{ color: "white", fontWeight: "600" }}>✓</Text>
-              </View>
-              {step < 4 && (
-                <View
-                  style={{
-                    width: 40,
-                    height: 2,
-                    backgroundColor: "#1E40AF",
-                    marginHorizontal: 4,
-                  }}
-                />
-              )}
-            </View>
-          ))}
+              />
+            )}
+          </View>
+        ))}
         </View>
 
         {/* Success Icon */}
@@ -78,7 +78,6 @@ export default function SetupCompleteScreen() {
           <Text className="font-semibold text-foreground mb-4">已完成設定</Text>
           {[
             { icon: "✅", text: "修改登入密碼" },
-            { icon: "✅", text: "綁定打卡裝置" },
             { icon: "✅", text: "設定生物識別驗證" },
           ].map((item, i) => (
             <View key={i} className="flex-row items-center mb-2">

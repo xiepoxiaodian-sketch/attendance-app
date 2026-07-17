@@ -96,32 +96,32 @@ export default function SetupBiometricScreen() {
       <View className="flex-1 px-6 pt-8">
         {/* Progress */}
         <View className="flex-row items-center justify-center mb-8">
-          {[1, 2, 3, 4].map((step) => (
+          {[1, 2, 3].map((step) => (
             <View key={step} className="flex-row items-center">
               <View
                 style={{
                   width: 32,
                   height: 32,
                   borderRadius: 16,
-                  backgroundColor: step <= 3 ? "#1E40AF" : "#E2E8F0",
+                  backgroundColor: step <= 2 ? "#1E40AF" : "#E2E8F0",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                {step < 3 ? (
+                {step < 2 ? (
                   <Text style={{ color: "white", fontWeight: "600" }}>✓</Text>
                 ) : (
-                  <Text style={{ color: step <= 3 ? "white" : "#94A3B8", fontWeight: "600" }}>
+                  <Text style={{ color: step <= 2 ? "white" : "#94A3B8", fontWeight: "600" }}>
                     {step}
                   </Text>
                 )}
               </View>
-              {step < 4 && (
+              {step < 3 && (
                 <View
                   style={{
                     width: 40,
                     height: 2,
-                    backgroundColor: step < 3 ? "#1E40AF" : "#E2E8F0",
+                    backgroundColor: step < 2 ? "#1E40AF" : "#E2E8F0",
                     marginHorizontal: 4,
                   }}
                 />
