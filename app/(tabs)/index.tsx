@@ -375,12 +375,12 @@ export default function ClockScreen() {
 
   const { data: todayAttendance, refetch: refetchAttendance } = trpc.attendance.getToday.useQuery(
     { employeeId: employee?.id ?? 0 },
-    { enabled: !!employee }
+    { enabled: !!employee, staleTime: 0 }
   );
 
-  const { data: todaySchedule } = trpc.schedules.getToday.useQuery(
+  const { data: todaySchedule, refetch: refetchSchedule } = trpc.schedules.getToday.useQuery(
     { employeeId: employee?.id ?? 0 },
-    { enabled: !!employee }
+    { enabled: !!employee, staleTime: 0 }
   );
 
   const { data: settings } = trpc.settings.getAll.useQuery();
@@ -430,6 +430,7 @@ export default function ClockScreen() {
   const clockInMutation = trpc.attendance.clockIn.useMutation({
     onSuccess: () => {
       refetchAttendance();
+      refetchSchedule();
       const now = new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
       showSuccess(`上班打卡完成！\n打卡時間：${now}`);
     },
@@ -460,6 +461,7 @@ export default function ClockScreen() {
   const clockOutMutation = trpc.attendance.clockOut.useMutation({
     onSuccess: () => {
       refetchAttendance();
+      refetchSchedule();
       const now = new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
       showSuccess(`下班打卡完成！\n打卡時間：${now}`);
     },
@@ -489,7 +491,7 @@ export default function ClockScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetchAttendance();
+    await Promise.all([refetchAttendance(), refetchSchedule()]);
     setRefreshing(false);
   }, []);
 
@@ -637,6 +639,7 @@ export default function ClockScreen() {
         lastClockInParams.current = clockInParams;
         clockInMutation.mutate(clockInParams);
       } else {
+        // todayAttendance 已包含昨日未關閉的跨日記錄（後端 getToday 會合並昨日未完成記錄）
         const record = todayAttendance?.find(
           (r) => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime
         );
@@ -775,9 +778,14 @@ export default function ClockScreen() {
         {/* Shift Cards */}
         <View style={{ padding: 14, marginTop: -20, gap: 12 }}>
           {displayShifts.map((shift) => {
-            const record = todayAttendance?.find((r) => r.shiftLabel === shift.label);
-            const isClockedIn = !!record?.clockInTime && !record?.clockOutTime;
-            const isCompleted = !!record?.clockInTime && !!record?.clockOutTime;
+            // 優先找「已打上班卡但尚未打下班卡」的記錄（上班中）
+            // 若無，再找「已完成（有下班卡）」的記錄
+            // 避免同 shiftLabel 有多筆時選到已完成的舊記錄，導致按鈕顯示「上班打卡」
+            const openRecord = todayAttendance?.find((r) => r.shiftLabel === shift.label && r.clockInTime && !r.clockOutTime);
+            const completedRecord = todayAttendance?.find((r) => r.shiftLabel === shift.label && r.clockInTime && r.clockOutTime);
+            const record = openRecord ?? completedRecord ?? todayAttendance?.find((r) => r.shiftLabel === shift.label);
+            const isClockedIn = !!openRecord;
+            const isCompleted = !openRecord && !!completedRecord;
             // 跨日判斷：若打卡記錄的日期不是今天（台灣時間），表示是昨天上班、今天凌晨下班
             const isOvernight = (() => {
               if (!record?.clockInTime) return false;

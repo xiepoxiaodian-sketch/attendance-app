@@ -123,7 +123,12 @@ const attendanceRouter = router({
       const today = getTodayTW();
       const existing = await db.getAttendanceByEmployeeAndDate(input.employeeId, today);
       const shiftLabel = input.shiftLabel || "班次1";
-      const alreadyClockedIn = existing.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
+      // 也檢查昨日未關閉的記錄（跨日班次）
+      const yesterdayDateCI = new Date(Date.now() + 8 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000);
+      const yesterdayCI = yesterdayDateCI.toISOString().split("T")[0];
+      const yesterdayExisting = await db.getAttendanceByEmployeeAndDate(input.employeeId, yesterdayCI);
+      const alreadyClockedIn = existing.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime)
+        ?? yesterdayExisting.find(r => r.shiftLabel === shiftLabel && r.clockInTime && !r.clockOutTime);
       if (alreadyClockedIn) throw new Error("已打上班卡，請先打下班卡");
 
       // ── IP Whitelist check ─────────────────────────────────────────────────
@@ -1113,13 +1118,33 @@ const schedulesRouter = router({
     .query(async ({ input }) => {
       const today = getTodayTW();
       const todaySchedule = await db.getScheduleByEmployeeAndDate(input.employeeId, today);
-      if (todaySchedule) return todaySchedule;
-      // Cross-midnight fallback: if no today schedule, check if employee has an open
-      // clock-in from yesterday (e.g., late-night shift that hasn't been clocked out yet)
+      // 檢查昨日是否有未關閉的跨日記錄
       const yesterdayDate = new Date(Date.now() + 8 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000);
       const yesterday = yesterdayDate.toISOString().split("T")[0];
       const openYesterdayRecords = await db.getAttendanceByEmployeeAndDate(input.employeeId, yesterday);
-      const hasOpenShift = openYesterdayRecords.some(r => r.clockInTime && !r.clockOutTime);
+      const openYesterdayShifts = openYesterdayRecords.filter(r => r.clockInTime && !r.clockOutTime);
+      if (todaySchedule) {
+        // 有今日排班時，若同時昨日有未完成的跨日班次，將昨日未完成的班次也合並到今日排班中顯示
+        if (openYesterdayShifts.length > 0) {
+          const yesterdaySchedule = await db.getScheduleByEmployeeAndDate(input.employeeId, yesterday);
+          if (yesterdaySchedule && yesterdaySchedule.shifts) {
+            const yShifts = yesterdaySchedule.shifts as Array<{ startTime: string; endTime: string; label: string }>;
+            // 只取昨日有未完成記錄的班次
+            const openLabels = new Set(openYesterdayShifts.map(r => r.shiftLabel));
+            const pendingYShifts = yShifts.filter(s => openLabels.has(s.label));
+            if (pendingYShifts.length > 0) {
+              const todayShifts = (todaySchedule.shifts as Array<{ startTime: string; endTime: string; label: string }>) || [];
+              return {
+                ...todaySchedule,
+                shifts: [...pendingYShifts, ...todayShifts],
+              };
+            }
+          }
+        }
+        return todaySchedule;
+      }
+      // 沒有今日排班：若昨日有未完成跨日班次，回傳昨日排班讓首頁顯示正確班次卡片
+      const hasOpenShift = openYesterdayShifts.length > 0;
       if (hasOpenShift) {
         // Return yesterday's schedule so the home screen shows the correct shift card
         const yesterdaySchedule = await db.getScheduleByEmployeeAndDate(input.employeeId, yesterday);
