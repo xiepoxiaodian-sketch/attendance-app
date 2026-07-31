@@ -1006,7 +1006,7 @@ function WeekTab() {
             {/* 工作時段快選 - 依 category 分組 */}
             <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: "#E2E8F0" }}>
               <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B", marginBottom: 6 }}>選擇日期後套用班次</Text>
-              <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 10 }}>先點選下方月曆的日期，再點此處套用班次</Text>
+              <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 10 }}>先點選下方月曆的日期，再點班次套用（可多選班次，點已選的班次可取消）</Text>
               {(() => {
                 const activeShifts = (workShifts ?? []).filter(ws => ws.isActive);
                 const CATEGORY_ORDER = [
@@ -1032,17 +1032,37 @@ function WeekTab() {
                                       setMonthAlertMsg({ title: "提示", message: "請先點選月曆上的日期" });
                                       return;
                                     }
+                                    const newShift = { startTime: ws.startTime, endTime: ws.endTime, label: ws.name };
                                     const newMap = { ...monthScheduleMap };
                                     selectedDates.forEach(dateStr => {
-                                      newMap[dateStr] = [{ startTime: ws.startTime, endTime: ws.endTime, label: ws.name }];
+                                      const existing = newMap[dateStr] ?? [];
+                                      const alreadyIdx = existing.findIndex(s => s.label === ws.name && s.startTime === ws.startTime && s.endTime === ws.endTime);
+                                      if (alreadyIdx >= 0) {
+                                        // 已有此班次 → 移除（切換取消）
+                                        newMap[dateStr] = existing.filter((_, i) => i !== alreadyIdx);
+                                      } else {
+                                        // 新增班次（累加，支援兩段班）
+                                        newMap[dateStr] = [...existing, newShift];
+                                      }
                                     });
                                     setMonthScheduleMap(newMap);
-                                    setSelectedDates(new Set());
+                                    // 不清除 selectedDates，讓管理員可以繼續加其他班次
                                   }}
-                                  style={{ backgroundColor: cat.bg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: cat.border }}
+                                  style={(() => {
+                                    // 判斷目前選取的日期中，是否有任何一天已套用此班次
+                                    const anyApplied = selectedDates.size > 0 && [...selectedDates].some(d => (monthScheduleMap[d] ?? []).some(s => s.label === ws.name && s.startTime === ws.startTime && s.endTime === ws.endTime));
+                                    return { backgroundColor: anyApplied ? cat.color : cat.bg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: cat.border };
+                                  })()}
                                 >
-                                  <Text style={{ fontSize: 12, fontWeight: "700", color: cat.color }}>{ws.name}</Text>
-                                  <Text style={{ fontSize: 11, color: cat.color, opacity: 0.7 }}>{ws.startTime}-{ws.endTime}</Text>
+                                  {(() => {
+                                    const anyApplied = selectedDates.size > 0 && [...selectedDates].some(d => (monthScheduleMap[d] ?? []).some(s => s.label === ws.name && s.startTime === ws.startTime && s.endTime === ws.endTime));
+                                    return (
+                                      <>
+                                        <Text style={{ fontSize: 12, fontWeight: "700", color: anyApplied ? "white" : cat.color }}>{anyApplied ? "✓ " : ""}{ws.name}</Text>
+                                        <Text style={{ fontSize: 11, color: anyApplied ? "rgba(255,255,255,0.8)" : cat.color, opacity: anyApplied ? 1 : 0.7 }}>{ws.startTime}-{ws.endTime}</Text>
+                                      </>
+                                    );
+                                  })()}
                                 </TouchableOpacity>
                               ))}
                             </View>
