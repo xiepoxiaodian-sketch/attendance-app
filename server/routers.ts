@@ -1014,10 +1014,12 @@ const employeesRouter = router({
     .input(z.object({
       id: z.number(),
       newPassword: z.string().min(6),
+      needsSetup: z.boolean().optional(), // 預設 true，管理員可傳 false 跳過初始設定
     }))
     .mutation(async ({ input }) => {
       const hashed = await bcrypt.hash(input.newPassword, 10);
-      await db.updateEmployee(input.id, { password: hashed, needsSetup: true });
+      const needsSetup = input.needsSetup !== undefined ? input.needsSetup : true;
+      await db.updateEmployee(input.id, { password: hashed, needsSetup });
       return { success: true };
     }),
 
