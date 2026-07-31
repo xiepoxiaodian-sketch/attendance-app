@@ -484,6 +484,12 @@ function MonthTab() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
 
+  // ── 月排班編輯 Modal 狀態 ──
+  const [editModal, setEditModal] = useState<{ employeeId: number; date: string; employeeName: string } | null>(null);
+  const [editShifts, setEditShifts] = useState<ShiftEntry[]>([]);
+  const [editLeave, setEditLeave] = useState<{ enabled: boolean; type: LeaveTypeValue; mode: "allDay" | "partial"; start: string; end: string }>({ enabled: false, type: "annual", mode: "allDay", start: "09:00", end: "18:00" });
+  const [editConfirmDelete, setEditConfirmDelete] = useState(false);
+
   const startDate = `${year}-${String(month + 1).padStart(2, "0")}-01`;
   const lastDay = getDaysInMonth(year, month);
   const endDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
@@ -504,6 +510,51 @@ function MonthTab() {
     }
     return map;
   }, [allSchedules]);
+
+  const { data: workShifts } = trpc.workShifts.list.useQuery();
+  const upsertMutation = trpc.schedules.upsert.useMutation({
+    onSuccess: () => { setEditModal(null); refetchMonth(); },
+  });
+  const deleteMutation = trpc.schedules.delete.useMutation({
+    onSuccess: () => { setEditModal(null); setEditConfirmDelete(false); refetchMonth(); },
+  });
+
+  const openEditModal = (emp: { id: number; fullName: string }, date: string) => {
+    const existing = scheduleMap[date]?.[emp.id];
+    setEditShifts(existing?.shifts?.length ? existing.shifts : []);
+    if (existing?.leaveType) {
+      setEditLeave({ enabled: true, type: existing.leaveType as LeaveTypeValue, mode: (existing.leaveMode ?? "allDay") as "allDay" | "partial", start: "09:00", end: "18:00" });
+    } else {
+      setEditLeave({ enabled: false, type: "annual", mode: "allDay", start: "09:00", end: "18:00" });
+    }
+    setEditModal({ employeeId: emp.id, date, employeeName: emp.fullName });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editModal) return;
+    const leavePayload = editLeave.enabled ? {
+      leaveType: editLeave.type, leaveMode: editLeave.mode,
+      leaveStart: editLeave.mode === "partial" ? editLeave.start : null,
+      leaveEnd: editLeave.mode === "partial" ? editLeave.end : null,
+      leaveDuration: editLeave.mode === "allDay" ? 8 : calcDuration(editLeave.start, editLeave.end),
+    } : { leaveType: null, leaveMode: null, leaveStart: null, leaveEnd: null, leaveDuration: null };
+    upsertMutation.mutate({ employeeId: editModal.employeeId, date: editModal.date, shifts: editShifts, ...leavePayload });
+  };
+
+  const handleDeleteEdit = () => {
+    if (!editModal) return;
+    const existing = scheduleMap[editModal.date]?.[editModal.employeeId];
+    if (!existing) { setEditModal(null); return; }
+    // find schedule id from allSchedules
+    const found = (allSchedules ?? []).find((s: { date: string | Date; employeeId: number; id: number }) => {
+      const d = typeof s.date === "string" ? s.date.slice(0, 10) : new Date(s.date as Date).toISOString().slice(0, 10);
+      return d === editModal.date && s.employeeId === editModal.employeeId;
+    });
+    if (found) deleteMutation.mutate({ id: (found as { id: number }).id });
+    else setEditModal(null);
+  };
+
+  const editLeaveDuration = calcDuration(editLeave.start, editLeave.end);
 
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); setSelectedDate(null); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); setSelectedDate(null); };
@@ -734,7 +785,7 @@ function MonthTab() {
             const hasShift = dayData?.shifts?.length > 0;
             const leaveInfo = dayData?.leaveType ? LEAVE_TYPES.find(lt => lt.value === dayData.leaveType) : null;
             return (
-              <View key={emp.id} style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: i < filteredEmployees.length - 1 ? 1 : 0, borderBottomColor: "#F8FAFC", flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <TouchableOpacity key={emp.id} onPress={() => openEditModal(emp, selectedDate!)} style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: i < filteredEmployees.length - 1 ? 1 : 0, borderBottomColor: "#F8FAFC", flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: hasShift ? "#EFF6FF" : "#F8FAFC", alignItems: "center", justifyContent: "center" }}>
                   <Text style={{ fontSize: 14, fontWeight: "700", color: hasShift ? "#2563EB" : "#CBD5E1" }}>{emp.fullName[0]}</Text>
                 </View>
@@ -767,7 +818,8 @@ function MonthTab() {
                     {leaveInfo ? leaveInfo.label : hasShift ? "排班中" : "未排班"}
                   </Text>
                 </View>
-              </View>
+                <Text style={{ fontSize: 18, color: "#CBD5E1" }}>›</Text>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -808,6 +860,151 @@ function MonthTab() {
         })}
       </View>
     </ScrollView>
+
+    {/* 月排班編輯 Modal */}
+    <Modal visible={!!editModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditModal(null)}>
+      <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+        {/* Header */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+          <TouchableOpacity onPress={() => setEditModal(null)}>
+            <Text style={{ fontSize: 15, color: "#2563EB", fontWeight: "600" }}>取消</Text>
+          </TouchableOpacity>
+          <View style={{ alignItems: "center" }}>
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{editModal?.employeeName}</Text>
+            <Text style={{ fontSize: 12, color: "#64748B" }}>{editModal?.date}</Text>
+          </View>
+          <TouchableOpacity onPress={handleSaveEdit} disabled={upsertMutation.isPending}>
+            <Text style={{ fontSize: 15, color: "#2563EB", fontWeight: "700" }}>{upsertMutation.isPending ? "儲存中..." : "儲存"}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}>
+          {/* 快速套用班次 */}
+          {(workShifts ?? []).filter(ws => ws.isActive).length > 0 && (
+            <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569", marginBottom: 10 }}>快速套用班次</Text>
+              <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 8 }}>點擊可加入（支援多段班，可同時選多個）</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {(workShifts ?? []).filter(ws => ws.isActive).map(ws => {
+                  const alreadyAdded = editShifts.some(s => s.label === ws.name && s.startTime === ws.startTime && s.endTime === ws.endTime);
+                  return (
+                    <TouchableOpacity
+                      key={ws.id}
+                      onPress={() => {
+                        if (alreadyAdded) {
+                          setEditShifts(prev => prev.filter(s => !(s.label === ws.name && s.startTime === ws.startTime && s.endTime === ws.endTime)));
+                        } else {
+                          setEditShifts(prev => [...prev, { startTime: ws.startTime, endTime: ws.endTime, label: ws.name }]);
+                        }
+                      }}
+                      style={{ backgroundColor: alreadyAdded ? "#2563EB" : "white", borderWidth: 1.5, borderColor: alreadyAdded ? "#2563EB" : "#CBD5E1", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, alignItems: "center" }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: alreadyAdded ? "white" : "#2563EB" }}>{ws.name}</Text>
+                      <Text style={{ fontSize: 11, color: alreadyAdded ? "#BFDBFE" : "#64748B", marginTop: 2 }}>{ws.startTime} ~ {ws.endTime}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* 已選班次列表 */}
+          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569" }}>班次設定</Text>
+              <TouchableOpacity onPress={() => setEditShifts(prev => [...prev, { startTime: "09:00", endTime: "18:00", label: `班次${prev.length + 1}` }])} style={{ backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
+                <Text style={{ fontSize: 12, color: "#2563EB", fontWeight: "600" }}>+ 新增班次</Text>
+              </TouchableOpacity>
+            </View>
+            {editShifts.length === 0 ? (
+              <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                <Text style={{ fontSize: 13, color: "#CBD5E1" }}>尚未設定班次，請從上方快速套用或手動新增</Text>
+              </View>
+            ) : editShifts.map((shift, i) => (
+              <View key={i} style={{ backgroundColor: "#F8FAFC", borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <TextInput
+                    value={shift.label}
+                    onChangeText={v => setEditShifts(prev => prev.map((s, idx) => idx === i ? { ...s, label: v } : s))}
+                    style={{ fontSize: 14, fontWeight: "700", color: "#1E293B", flex: 1, borderBottomWidth: 1, borderBottomColor: "#E2E8F0", paddingBottom: 2 }}
+                    returnKeyType="done"
+                  />
+                  <TouchableOpacity onPress={() => setEditShifts(prev => prev.filter((_, idx) => idx !== i))} style={{ marginLeft: 10 }}>
+                    <Text style={{ color: "#EF4444", fontSize: 13, fontWeight: "500" }}>移除</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={{ flexDirection: "row", gap: 12, justifyContent: "center" }}>
+                  <TimePickerWheel label="上班時間" value={shift.startTime} onChange={v => setEditShifts(prev => prev.map((s, idx) => idx === i ? { ...s, startTime: v } : s))} />
+                  <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 20 }}>
+                    <Text style={{ fontSize: 18, color: "#94A3B8" }}>→</Text>
+                  </View>
+                  <TimePickerWheel label="下班時間" value={shift.endTime} onChange={v => setEditShifts(prev => prev.map((s, idx) => idx === i ? { ...s, endTime: v } : s))} />
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* 請假設定 */}
+          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569" }}>請假設定</Text>
+              <Switch value={editLeave.enabled} onValueChange={v => setEditLeave(p => ({ ...p, enabled: v }))} />
+            </View>
+            {editLeave.enabled && (
+              <>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", marginBottom: 8 }}>請假種類</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {LEAVE_TYPES.map(lt => (
+                      <TouchableOpacity key={lt.value} onPress={() => setEditLeave(p => ({ ...p, type: lt.value }))} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: editLeave.type === lt.value ? lt.bg : "#F8FAFC", borderWidth: 1.5, borderColor: editLeave.type === lt.value ? lt.color : "#E2E8F0" }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: editLeave.type === lt.value ? lt.color : "#94A3B8" }}>{lt.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+                <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                  {[{ value: "allDay", label: "整天（8小時）" }, { value: "partial", label: "指定時段" }].map(m => (
+                    <TouchableOpacity key={m.value} onPress={() => setEditLeave(p => ({ ...p, mode: m.value as "allDay" | "partial" }))} style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: editLeave.mode === m.value ? "#EFF6FF" : "#F8FAFC", borderWidth: 1.5, borderColor: editLeave.mode === m.value ? "#2563EB" : "#E2E8F0", alignItems: "center" }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: editLeave.mode === m.value ? "#2563EB" : "#94A3B8" }}>{m.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {editLeave.mode === "partial" && (
+                  <View style={{ flexDirection: "row", gap: 12, justifyContent: "center", marginBottom: 10 }}>
+                    <TimePickerWheel label="開始時間" value={editLeave.start} onChange={v => setEditLeave(p => ({ ...p, start: v }))} />
+                    <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 20 }}><Text style={{ fontSize: 18, color: "#94A3B8" }}>→</Text></View>
+                    <TimePickerWheel label="結束時間" value={editLeave.end} onChange={v => setEditLeave(p => ({ ...p, end: v }))} />
+                  </View>
+                )}
+                <View style={{ backgroundColor: "#F0FDF4", borderRadius: 8, padding: 10, alignItems: "center" }}>
+                  <Text style={{ fontSize: 13, color: "#16A34A", fontWeight: "600" }}>
+                    {editLeave.mode === "allDay" ? "請假時長：整天（8 小時）" : `請假時長：${editLeaveDuration > 0 ? editLeaveDuration + " 小時" : "請確認時間設定"}`}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+
+          {/* 刪除排班 */}
+          {scheduleMap[editModal?.date ?? ""]?.[editModal?.employeeId ?? 0] && (
+            <TouchableOpacity onPress={() => setEditConfirmDelete(true)} style={{ backgroundColor: "#FEF2F2", borderRadius: 12, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: "#FECACA" }}>
+              <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 14 }}>刪除此日排班</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </View>
+
+      {/* 確認刪除 */}
+      <ConfirmDialog
+        visible={editConfirmDelete}
+        title="刪除排班"
+        message={`確定要刪除 ${editModal?.employeeName} 在 ${editModal?.date} 的排班嗎？`}
+        confirmText="刪除"
+        confirmStyle="destructive"
+        onConfirm={handleDeleteEdit}
+        onCancel={() => setEditConfirmDelete(false)}
+      />
+    </Modal>
     </>
   );
 }
