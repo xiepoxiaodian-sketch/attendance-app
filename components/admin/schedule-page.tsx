@@ -327,7 +327,8 @@ function WeekTab() {
           const [sh, sm] = shift.startTime.split(":").map(Number);
           const [eh, em] = shift.endTime.split(":").map(Number);
           const sMin = sh * 60 + sm;
-          const eMin = eh * 60 + em;
+          let eMin = eh * 60 + em;
+          if (eMin <= sMin) eMin += 24 * 60; // 跨日班次修正
           if (sMin < minMin) minMin = sMin;
           if (eMin > maxMin) maxMin = eMin;
         }
@@ -367,7 +368,8 @@ function WeekTab() {
           const [sh, sm] = shift.startTime.split(":").map(Number);
           const [eh, em] = shift.endTime.split(":").map(Number);
           const startMin = sh * 60 + sm;
-          const endMin = eh * 60 + em;
+          let endMin = eh * 60 + em;
+          if (endMin <= startMin) endMin += 24 * 60; // 跨日班次修正
           for (let s = SLOT_START; s < SLOT_END; s++) {
             const slotStart = s * 30;
             const slotEnd = (s + 1) * 30;
