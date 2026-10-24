@@ -131,6 +131,11 @@ if [ -f "public/sw.js" ]; then
   echo "✅ sw.js 已更新到 dist-web"
 fi
 
+# 預先壓縮 JS 檔：Railway 正式環境優先提供 .gz，避免即時壓縮造成手機長時間空白載入
+echo "🗜️ 產生預壓縮 JavaScript 資源..."
+find dist-web/_expo/static/js -type f -name '*.js' -exec gzip -9 -k -f {} \;
+echo "✅ 預壓縮資源已產生"
+
 # Step 4: 推送到 GitHub
 echo ""
 echo "📤 [4/4] 推送到 GitHub..."
