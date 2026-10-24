@@ -17,6 +17,8 @@ RUN pnpm build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+RUN apk add --no-cache tzdata
+ENV TZ=Asia/Taipei
 RUN npm install -g pnpm@9.12.0
 
 COPY package.json pnpm-lock.yaml* ./
